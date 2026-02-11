@@ -1,0 +1,39 @@
+{
+  "schema_version": "1.0",
+  "model": {
+    "name": "biomodels_sbml",
+    "version": "0.1.0",
+    "artifact": {
+      "type": "biomodels",
+      "biomodels_id": "BIOMD0000000001"
+    }
+  },
+  "runner": {
+    "mode": "local_process",
+    "resources": { "cpus": 1, "mem_gb": 2, "walltime_min": 5 }
+  },
+  "io_schema": {
+    "inputs": [
+      { "name": "k1", "type": "float", "units": "a.u.", "support": [0.1, 2.0] }
+    ],
+    "outputs": [
+      { "name": "time_series", "type": "array", "dims": ["time", "var"], "units": "a.u." }
+    ],
+    "time_grid": { "t0": 0.0, "t1": 10.0, "dt": 0.1 }
+  },
+  "design": {
+    "strategy": "grid",
+    "grid": { "k1": [0.1, 0.5, 1.0] }
+  },
+  "adapter": {
+    "id": "biomodels_sbml_adapter_v1",
+    "input_mapping": [
+      { "var": "k1", "to": { "kind": "sbml_parameter", "key": "k1" } }
+    ],
+    "output_mapping": [
+      { "var": "time_series", "from": { "kind": "generated", "key": "timeseries" } }
+    ]
+  },
+  "reproducibility": { "seed": 123 },
+  "storage": { "root": "examples/biomodels/store" }
+}

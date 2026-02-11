@@ -1,0 +1,27 @@
+# Project-scoped Codex configuration
+# Codex loads project-scoped config only when you trust the project. Keep it in-repo for reproducibility.
+# See: Configuration Reference (developers.openai.com)
+
+# Safety posture: prompt for approvals on request; allow workspace writes, not full access.
+approval_policy = "on-request"
+
+# Prefer stable sandboxing for command execution.
+# (Exact behavior also depends on CLI flags; keep this as baseline.)
+sandbox = "workspace-write"
+
+# Keep logs and history inside CODEX_HOME (recommended: set CODEX_HOME=$(pwd)/.codex)
+log_dir = ".codex/log"
+
+[history]
+persistence = "save-all"
+max_bytes = 104857600
+
+# Reduce noise in logs by default; override if you want more visibility
+hide_agent_reasoning = true
+
+# Make instruction discovery more robust if you also keep a Claude.md or other files
+project_doc_fallback_filenames = ["Claude.md", "TEAM_GUIDE.md", ".agents.md"]
+project_doc_max_bytes = 65536
+
+# Optional: external notification hook on turn completion
+# notify = ["python3", "tmp/notify.py"]
