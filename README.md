@@ -30,6 +30,14 @@ This repository is currently in planning/scaffold phase. The code implementation
 - `examples/surrogates/surrogate.toy.pymc_gp.json`: toy surrogate training spec.
 - `examples/metamodels/metamodel.simple.json`: coupled metamodel spec for sampling flow.
 
+## Optional Surrogate Backends
+The surrogate interface is backend-neutral, but some backends require optional dependencies.
+
+- Install PyMC backend support in the project conda environment:
+  - `conda install -n py314_metamodeling -c conda-forge pymc arviz`
+  - or `pip install -e '.[pymc]'`
+- If `pymc_gp` is selected without PyMC installed, `mm surrogate fit` raises an actionable install error.
+
 ## Reliability policy
 - No silent downsampling/subsampling.
 - Every run must store seed, spec digest, artifact digest, stdout, and stderr.

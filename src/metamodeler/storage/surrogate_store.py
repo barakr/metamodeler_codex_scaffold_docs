@@ -38,7 +38,11 @@ def list_surrogate_artifacts() -> list[dict[str, str]]:
 
 
 def persist_surrogate_artifact(
-    *, spec: SurrogateSpec, dataset_digest: str, payload_path: Path
+    *,
+    spec: SurrogateSpec,
+    dataset_digest: str,
+    payload_path: Path,
+    dependency_versions: dict[str, str] | None = None,
 ) -> dict[str, str]:
     artifact_id = uuid4().hex
     artifact_dir = Path("tmp/surrogate_artifacts") / artifact_id
@@ -48,6 +52,13 @@ def persist_surrogate_artifact(
     backend_payload_path.write_text(payload_path.read_text())
 
     spec_payload = spec.model_dump(mode="json")
+    versions = {
+        "python": platform.python_version(),
+        "platform": platform.platform(),
+    }
+    if dependency_versions:
+        versions.update(dependency_versions)
+
     artifact_json = {
         "artifact_id": artifact_id,
         "spec_name": spec.name,
@@ -56,10 +67,7 @@ def persist_surrogate_artifact(
         "dataset_digest": hashlib.sha256(dataset_digest.encode("utf-8")).hexdigest(),
         "variable_lists": {"inputs": spec.inputs, "outputs": spec.outputs},
         "seed": spec.seed,
-        "dependency_versions": {
-            "python": platform.python_version(),
-            "platform": platform.platform(),
-        },
+        "dependency_versions": versions,
         "backend_payload": str(backend_payload_path),
         "created_at": datetime.now(UTC).isoformat(),
     }

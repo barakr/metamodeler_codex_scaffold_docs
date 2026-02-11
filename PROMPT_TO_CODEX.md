@@ -300,6 +300,117 @@ Acceptance:
 - `make fast` passes.
 - Commit message: "chore: ux and reproducibility hardening"
 
+### Prompt 11: implement real PyMC-backed surrogate learning (`pymc_gp`)
+You are Codex working in this repository.
+Read AGENTS.md and follow it strictly.
+Do implementation in small, reviewable commits.
+Never change sampling resolution, dataset size, DOE cardinality, or runtime shortcuts unless explicitly requested.
+Always persist run provenance including seed, spec digest, artifact digest, stdout, and stderr.
+After each meaningful change: update Status.md with what changed, why, and decision notes.
+Before commit: run `ruff format .`, `ruff check .`, `pytest -q -m "not slow"`.
+If fast tests fail, do not commit.
+
+Task: replace the current placeholder implementation for backend `pymc_gp` with a real model implemented using the `pymc` package.
+
+Requirements:
+1) Dependencies and configuration:
+   - Add optional project extras for `pymc` backend dependencies in `pyproject.toml`.
+   - Add clear runtime error messages when `pymc` is unavailable (how to install in conda env).
+   - Keep `mm` interface unchanged.
+2) Backend implementation:
+   - Implement a real `pymc_gp` fit path in `src/metamodeler/surrogates/backends.py`.
+   - Use a probabilistic model in PyMC (minimum: Bayesian linear Gaussian; preferred: GP if feasible with current interface).
+   - Preserve backend-neutral `sample`, `log_prob`, and `summary` behavior.
+3) Artifact persistence:
+   - Persist backend payload in a stable format (JSON/NPZ/etc.) and include dependency/version metadata.
+   - Ensure loading works across CLI sessions (`mm surrogate eval` after `mm surrogate fit`).
+4) Tests:
+   - Add focused tests for real PyMC fit/eval behavior.
+   - Tests must skip gracefully when `pymc` is not installed, not fail.
+   - Keep tests deterministic with explicit seeds.
+5) Docs:
+   - Update `README.md` and `TUTORIAL.md` with PyMC backend usage and install notes.
+   - Update `Status.md`.
+
+Constraints:
+- One commit only for this prompt.
+Acceptance:
+- `make fast` passes.
+- Commit message: "feat: real pymc surrogate backend"
+
+### Prompt 12: implement real SBI-backed surrogate learning (`sbi_npe`)
+You are Codex working in this repository.
+Read AGENTS.md and follow it strictly.
+Do implementation in small, reviewable commits.
+Never change sampling resolution, dataset size, DOE cardinality, or runtime shortcuts unless explicitly requested.
+Always persist run provenance including seed, spec digest, artifact digest, stdout, and stderr.
+After each meaningful change: update Status.md with what changed, why, and decision notes.
+Before commit: run `ruff format .`, `ruff check .`, `pytest -q -m "not slow"`.
+If fast tests fail, do not commit.
+
+Task: replace the current placeholder implementation for backend `sbi_npe` with a real implementation using the `sbi` package.
+
+Requirements:
+1) Dependencies and configuration:
+   - Add optional project extras for `sbi`/`torch` backend dependencies in `pyproject.toml`.
+   - Add explicit runtime error messages when dependencies are missing.
+   - Keep user-facing JSON schema unchanged.
+2) Backend implementation:
+   - Implement real `sbi_npe` fit path using `sbi` NPE training API.
+   - Implement backend-neutral `sample`, `log_prob`, and `summary` using trained posterior/density estimator.
+   - Keep deterministic seeding where supported and document any unavoidable stochasticity.
+3) Artifact persistence:
+   - Persist model payload (state dict/config/scalers) so `mm surrogate eval` can load without retraining.
+   - Record dependency versions in surrogate artifact metadata.
+4) Tests:
+   - Add focused tests for `sbi_npe` fit/eval behavior.
+   - Tests must skip gracefully when `sbi`/`torch` are not installed.
+   - Add at least one synthetic quality check (finite log_prob + reasonable predictive mean error).
+5) Docs:
+   - Update `README.md` and `TUTORIAL.md` with SBI backend usage and install notes.
+   - Update `Status.md`.
+
+Constraints:
+- One commit only for this prompt.
+Acceptance:
+- `make fast` passes.
+- Commit message: "feat: real sbi surrogate backend"
+
+### Prompt 13: backend integration hardening and CLI validation
+You are Codex working in this repository.
+Read AGENTS.md and follow it strictly.
+Do implementation in small, reviewable commits.
+Never change sampling resolution, dataset size, DOE cardinality, or runtime shortcuts unless explicitly requested.
+Always persist run provenance including seed, spec digest, artifact digest, stdout, and stderr.
+After each meaningful change: update Status.md with what changed, why, and decision notes.
+Before commit: run `ruff format .`, `ruff check .`, `pytest -q -m "not slow"`.
+If fast tests fail, do not commit.
+
+Task: harden backend selection and artifact compatibility across `pymc_gp` and `sbi_npe`.
+
+Requirements:
+1) Validation:
+   - Validate backend-specific `backend_config` keys with actionable errors.
+   - Fail fast when artifact backend and requested backend mismatch.
+2) CLI robustness:
+   - Improve `mm surrogate fit` / `mm surrogate eval` error messages for missing artifacts, missing dependencies, and malformed input payloads.
+   - Keep command signatures unchanged.
+3) Compatibility checks:
+   - Ensure artifacts include enough metadata to prevent wrong-input ordering or output-name mismatch.
+   - Add strict checks for `inputs`/`outputs` list compatibility at load/eval time.
+4) Tests:
+   - Add fast tests for mismatch/error paths and artifact compatibility guards.
+   - Add one optional integration test path that runs both backends when dependencies are present.
+5) Docs:
+   - Update troubleshooting section in `README.md`.
+   - Update `Status.md`.
+
+Constraints:
+- One commit only for this prompt.
+Acceptance:
+- `make fast` passes.
+- Commit message: "chore: surrogate backend hardening"
+
 ## Stop conditions
 - If Codex proposes implicit downsampling or data reduction: reject and preserve full requested computation.
 - If assumptions are needed for model semantics: pause and request clarification in Status.md and prompt output.

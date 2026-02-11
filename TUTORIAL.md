@@ -15,6 +15,14 @@ Optional editable install:
 pip install -e .
 ```
 
+Optional PyMC backend support:
+
+```bash
+conda install -n py314_metamodeling -c conda-forge pymc arviz
+# or
+pip install -e '.[pymc]'
+```
+
 Without install, use module mode:
 
 ```bash
@@ -147,6 +155,7 @@ pytest -q -m "not slow"
 
 ## 10) Current baseline limitations
 
-- Backend implementations are pragmatic baselines that match interfaces/artifact contracts; they are not full production PyMC/SBI/NumPyro inference stacks yet.
+- `pymc_gp` now uses a real PyMC probabilistic backend (Bayesian linear model) and persists posterior payload for reuse.
+- `sbi_npe` is still a pragmatic placeholder baseline and will be replaced in the next prompt.
 - Run logs are currently written under `_active` paths; immutable finalized log placement is still a hardening target.
 - BioModels runtime depends on environment availability of `libroadrunner`.

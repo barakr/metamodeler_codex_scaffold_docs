@@ -1,8 +1,8 @@
 # Status: Metamodeling Automation Framework
 
 ## High level state
-- Stage: Prompt 10 implementation complete (UX and reproducibility hardening)
-- Current focus: prompts 0-10 complete at current baseline
+- Stage: Prompt 11 implementation complete (real PyMC backend for `pymc_gp`)
+- Current focus: execute Prompt 12 next (real `sbi_npe`) after explicit approval
 
 ## Folder structure
 - src/metamodeler/: library code
@@ -185,6 +185,21 @@
     - `mm surrogate list`
     - `mm meta list`
     - real surrogate fit/eval and metamodel build/sample flow
+- Prompt 11 implemented:
+  - Replaced placeholder `pymc_gp` backend with a real PyMC probabilistic fit path in:
+    - `src/metamodeler/surrogates/backends.py`
+  - Added posterior-based surrogate methods (`sample`, `log_prob`, `summary`) backed by PyMC posterior draws.
+  - Added actionable missing-dependency error for `pymc_gp` with conda/pip install guidance.
+  - Added backend dependency version capture and persistence into surrogate artifacts:
+    - `src/metamodeler/surrogates/service.py`
+    - `src/metamodeler/storage/surrogate_store.py`
+  - Added optional dependency extra for PyMC:
+    - `pyproject.toml`
+  - Updated tests for real PyMC backend behavior and graceful skip/error handling:
+    - `tests/test_surrogate_backends.py`
+  - Updated user docs with backend install and behavior notes:
+    - `README.md`
+    - `TUTORIAL.md`
 
 ## Provenance log (design verification runs)
 - BioModels sample source used:
@@ -210,9 +225,9 @@
   - `tmp/run_logs/biomodel_sim_lever.stderr.log`
 
 ## Next steps, ordered
-1) Replace pragmatic backend baselines with full PyMC / SBI / NumPyro implementations
-2) Persist immutable run logs inside finalized run artifact directories
-3) Add schema artifacts for SurrogateSpec and MetaModelSpec
+1) Execute Prompt 12: real `sbi_npe` backend implementation and tests
+2) Execute Prompt 13: backend compatibility hardening and CLI robustness
+3) Persist immutable run logs inside finalized run artifact directories
 4) Expand slow integration coverage for real BioModels + metamodel sampling
 5) Push branch to origin and open review
 
@@ -236,9 +251,11 @@
 - 2026-02-11: Prompt 9 enabled backend switching (`pymc`/`numpyro`) without changing metamodel JSON interface.
 - 2026-02-11: Prompt 10 added UX commands and reproducibility metadata guarantees for emitted artifacts.
 - 2026-02-11: Tutorial and README backend notes updated to remove stale placeholder/stub language.
+- 2026-02-11: Added prompts 11-13 in `PROMPT_TO_CODEX.md` to implement real `pymc_gp` and `sbi_npe` backends plus compatibility hardening.
+- 2026-02-11: Prompt 11 implemented real PyMC-backed surrogate learning for `pymc_gp` with persisted posterior payload and optional dependency handling.
 
 ## Open issues
-- Need final confirmation on first probabilistic backend target for post-v1 (`PyMC` candidate documented; benchmark gate pending).
-- `mm` currently exposes scaffold help/version only; domain commands are pending by design.
+- `sbi_npe` remains a placeholder backend pending Prompt 12.
+- PyMC backend tests skip automatically when `pymc` is not installed in the active environment.
 - `py312` environment currently has dependency conflicts due direct `pip` install of `libroadrunner`; this was used for design verification only and should be isolated before production workflows.
 - `libroadrunner` may not be available in the py314 environment; slow BioModels test is expected to skip when dependency is absent.

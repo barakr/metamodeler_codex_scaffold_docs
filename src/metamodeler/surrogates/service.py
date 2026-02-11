@@ -14,6 +14,7 @@ from metamodeler.storage.surrogate_store import (
 )
 from metamodeler.surrogates.backends import (
     fit_backend_model,
+    get_backend_dependency_versions,
     load_backend_model,
     save_backend_payload,
 )
@@ -29,14 +30,20 @@ def fit_surrogate(spec: SurrogateSpec) -> dict[str, str]:
         y=y,
         input_names=spec.inputs,
         output_name=spec.outputs[0],
+        backend_config=spec.backend_config,
+        seed=spec.seed,
     )
 
     tmp_payload = Path("tmp") / "_surrogate_backend_payload.json"
     tmp_payload.parent.mkdir(parents=True, exist_ok=True)
     save_backend_payload(model, tmp_payload)
+    dependency_versions = get_backend_dependency_versions(spec.backend)
 
     return persist_surrogate_artifact(
-        spec=spec, dataset_digest=dataset_digest, payload_path=tmp_payload
+        spec=spec,
+        dataset_digest=dataset_digest,
+        payload_path=tmp_payload,
+        dependency_versions=dependency_versions,
     )
 
 

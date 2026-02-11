@@ -23,7 +23,7 @@ def _surrogate_spec_payload(run_store_root: Path) -> dict:
         "kind": "conditional",
         "inputs": ["a", "b"],
         "outputs": ["y"],
-        "backend": "pymc_gp",
+        "backend": "sbi_npe",
         "backend_config": {},
         "dataset_ref": {"run_store_root": str(run_store_root)},
         "seed": 11,

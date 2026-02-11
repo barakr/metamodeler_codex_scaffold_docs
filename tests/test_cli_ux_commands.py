@@ -25,7 +25,7 @@ def _spec(store: Path) -> SurrogateSpec:
             "kind": "conditional",
             "inputs": ["a", "b"],
             "outputs": ["y"],
-            "backend": "pymc_gp",
+            "backend": "sbi_npe",
             "backend_config": {},
             "dataset_ref": {"run_store_root": str(store)},
             "seed": 1,

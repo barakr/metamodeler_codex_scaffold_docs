@@ -2,8 +2,10 @@ import json
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 import metamodeler.storage.surrogate_store as surrogate_store
+import metamodeler.surrogates.backends as backends
 from metamodeler.spec import SurrogateSpec
 from metamodeler.surrogates import eval_surrogate, fit_surrogate
 from metamodeler.surrogates.backends import load_backend_model
@@ -23,7 +25,12 @@ def _write_linear_run_store(root: Path, noise: float = 0.0) -> None:
         (run_dir / "outputs.json").write_text(json.dumps({"y": y}))
 
 
-def _spec(backend: str, store_root: Path, seed: int = 123) -> SurrogateSpec:
+def _spec(
+    backend: str,
+    store_root: Path,
+    seed: int = 123,
+    backend_config: dict | None = None,
+) -> SurrogateSpec:
     return SurrogateSpec.model_validate(
         {
             "schema_version": "1.0",
@@ -32,7 +39,7 @@ def _spec(backend: str, store_root: Path, seed: int = 123) -> SurrogateSpec:
             "inputs": ["a", "b"],
             "outputs": ["y"],
             "backend": backend,
-            "backend_config": {},
+            "backend_config": backend_config or {},
             "dataset_ref": {"run_store_root": str(store_root)},
             "seed": seed,
         }
@@ -47,16 +54,26 @@ def _artifact_payload_path(registry_path: Path) -> Path:
 
 
 def test_pymc_gp_backend_fit_sample_and_logprob(monkeypatch, tmp_path):
+    pytest.importorskip("pymc")
+
     registry = tmp_path / "reg_pymc.json"
     monkeypatch.setattr(surrogate_store, "SURROGATE_REGISTRY_PATH", registry)
 
     store = tmp_path / "store_pymc"
     _write_linear_run_store(store, noise=0.05)
 
-    spec = _spec("pymc_gp", store)
+    spec = _spec(
+        "pymc_gp",
+        store,
+        backend_config={"draws": 80, "tune": 80, "chains": 1, "target_accept": 0.9},
+    )
     artifact = fit_surrogate(spec)
 
     payload_path = Path(artifact["backend_payload"])
+    payload = json.loads(payload_path.read_text())
+    assert payload["model_type"] == "pymc_bayesian_linear"
+    assert len(payload["posterior_sigma"]) > 0
+
     model = load_backend_model("pymc_gp", payload_path)
     inputs = {"a": np.array([0.1, 0.5]), "b": np.array([0.0, -0.2])}
     outputs = {"y": np.array([0.4, 1.4])}
@@ -66,6 +83,24 @@ def test_pymc_gp_backend_fit_sample_and_logprob(monkeypatch, tmp_path):
 
     assert draws.shape == (2, 32)
     assert np.isfinite(logp).all()
+
+
+def test_pymc_gp_backend_missing_dependency_has_actionable_error(monkeypatch, tmp_path):
+    registry = tmp_path / "reg_missing_pymc.json"
+    monkeypatch.setattr(surrogate_store, "SURROGATE_REGISTRY_PATH", registry)
+
+    store = tmp_path / "store_missing_pymc"
+    _write_linear_run_store(store, noise=0.05)
+
+    spec = _spec("pymc_gp", store, backend_config={"draws": 5, "tune": 5, "chains": 1})
+
+    def _raise_missing():
+        raise RuntimeError("Backend 'pymc_gp' requires 'pymc'. Install in your conda env.")
+
+    monkeypatch.setattr(backends, "_require_pymc", _raise_missing)
+
+    with pytest.raises(RuntimeError, match="requires 'pymc'"):
+        fit_surrogate(spec)
 
 
 def test_sbi_npe_backend_fit_sample_and_logprob(monkeypatch, tmp_path):
@@ -102,9 +137,14 @@ def test_backend_specific_fit_quality_increasing_difficulty(monkeypatch, tmp_pat
     _write_linear_run_store(store_med, noise=0.1)
     _write_linear_run_store(store_hard, noise=0.2)
 
+    has_pymc = backends.get_backend_dependency_versions("pymc_gp").get("pymc") != "not_installed"
+    backend_order = ["pymc_gp", "sbi_npe", "pymc_gp"] if has_pymc else ["sbi_npe"] * 3
+
     mse_values = []
     for idx, store in enumerate([store_easy, store_med, store_hard]):
-        spec = _spec("pymc_gp" if idx % 2 == 0 else "sbi_npe", store, seed=idx + 1)
+        backend = backend_order[idx]
+        config = {"draws": 60, "tune": 60, "chains": 1} if backend == "pymc_gp" else {}
+        spec = _spec(backend, store, seed=idx + 1, backend_config=config)
         fit_surrogate(spec)
 
         eval_result = eval_surrogate(
