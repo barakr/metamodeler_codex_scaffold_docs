@@ -1,8 +1,8 @@
 # Status: Metamodeling Automation Framework
 
 ## High level state
-- Stage: Prompt 3 implementation complete (local execution pipeline)
-- Current focus: move to Prompt 4 (BioModels adapter milestone)
+- Stage: Prompt 4 implementation complete (BioModels adapter milestone)
+- Current focus: move to Prompt 5 (surrogate/meta interface placeholders)
 
 ## Folder structure
 - src/metamodeler/: library code
@@ -69,6 +69,16 @@
     - `examples/toy_program/run.py`
   - Added fast end-to-end integration test:
     - `tests/test_run_pipeline.py`
+- Prompt 4 implemented:
+  - Added BioModels SBML adapter baseline:
+    - `src/metamodeler/adapters/biomodels_sbml.py`
+  - Added SBML worker script for simulation:
+    - `src/metamodeler/adapters/biomodels_worker.py`
+  - Adapter registry now resolves `biomodels_sbml_adapter_v1`.
+  - Added BioModels example spec:
+    - `examples/biomodels/spec.prompt4.model1907260003.json`
+  - Added slow integration test:
+    - `tests/test_biomodels_slow.py`
 
 ## Provenance log (design verification runs)
 - BioModels sample source used:
@@ -94,10 +104,10 @@
   - `tmp/run_logs/biomodel_sim_lever.stderr.log`
 
 ## Next steps, ordered
-1) Prepare BioModels adapter milestone as slow/integration path
-2) Add slow BioModels integration test marker coverage
-3) Add surrogate/meta interface placeholders with CLI wiring
-4) Keep run provenance fields complete as features expand
+1) Add surrogate/meta interface placeholders with CLI wiring
+2) Add tests for surrogate/meta CLI wiring and placeholder behavior
+3) Keep run provenance fields complete as features expand
+4) Revisit BioModels dependency isolation for py314 environment
 5) Push accumulated commits to origin after user confirmation
 
 ## Decisions log
@@ -111,8 +121,10 @@
 - 2026-02-11: Prompt 1 implemented using Pydantic v2 contracts and explicit schema artifact generation.
 - 2026-02-11: Prompt 2 implemented with deterministic DOE planning for `grid` and `sobol`.
 - 2026-02-11: Prompt 3 implemented with adapter/runner/storage separation and run registry CLI.
+- 2026-02-11: Prompt 4 implemented with BioModels SBML adapter baseline and slow integration test path.
 
 ## Open issues
 - Need final confirmation on first probabilistic backend target for post-v1 (`PyMC` candidate documented; benchmark gate pending).
 - `mm` currently exposes scaffold help/version only; domain commands are pending by design.
 - `py312` environment currently has dependency conflicts due direct `pip` install of `libroadrunner`; this was used for design verification only and should be isolated before production workflows.
+- `libroadrunner` may not be available in the py314 environment; slow BioModels test is expected to skip when dependency is absent.
