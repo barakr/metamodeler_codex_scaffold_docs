@@ -1,8 +1,8 @@
 # Status: Metamodeling Automation Framework
 
 ## High level state
-- Stage: Prompt 7 implementation complete (surrogate backend implementations)
-- Current focus: move to Prompt 8 metamodel coupling and sampling
+- Stage: Prompt 8 implementation complete (metamodel coupling and sampling baseline)
+- Current focus: move to Prompt 9 NumPyro backend parity
 
 ## Folder structure
 - src/metamodeler/: library code
@@ -130,6 +130,26 @@
   - Added fast tests:
     - `tests/test_surrogate_backends.py`
     - updated `tests/test_surrogate_meta_placeholders.py` for real fit/eval flow
+- Prompt 8 implemented:
+  - Added MetamodelSpec v1 fields in `src/metamodeler/spec/metamodel.py`:
+    - `ppl_backend`, `surrogate_refs`, `variables`, `couplings`, `priors`
+  - Updated IR builder to load surrogate artifacts and include surrogate likelihood factors:
+    - `src/metamodeler/meta/builder.py`
+  - Added metamodel sampling module and artifacts:
+    - `src/metamodeler/meta/sampling.py`
+    - stores `inference_data.json` and canonical `samples_dataset.json`
+    - registry: `tmp/metamodel_samples_registry.json`
+  - Updated CLI:
+    - `mm meta build metamodel.json`
+    - `mm meta sample metamodel.json --draws D --tune T --chains C --seed S`
+    - backend behavior:
+      - `pymc`: sampling path implemented
+      - `numpyro`: explicit `NotImplementedError` pending Prompt 9
+  - Added example metamodel specs/artifacts:
+    - `examples/metamodels/metamodel.simple.json`
+    - `examples/coupled/spec.three_model_coupling.json` updated to v1 structure
+  - Added fast synthetic integration test:
+    - `tests/test_metamodel_sampling.py`
 - Documentation update:
   - Added user-facing usage tutorial:
     - `TUTORIAL.md`
@@ -160,11 +180,11 @@
   - `tmp/run_logs/biomodel_sim_lever.stderr.log`
 
 ## Next steps, ordered
-1) Implement MetamodelSpec v1 for joint coupling + backend selection
-2) Implement `mm meta sample` with backend-specific execution path
-3) Store canonical sample artifacts and metamodel run provenance
-4) Add fast synthetic coupling integration tests
-5) Continue to Prompt 9 for NumPyro backend parity
+1) Implement NumPyro compiler path and sampling mode with same spec interface
+2) Ensure canonical sample storage compatibility between backends
+3) Add backend-switch integration tests (`pymc` vs `numpyro`)
+4) Document backend selection in README
+5) Continue to Prompt 10 UX and reproducibility hardening
 
 ## Decisions log
 - 2026-02-11: Prioritize execution/reproducibility core before advanced Bayesian coupling.
@@ -182,6 +202,7 @@
 - 2026-02-11: Added tutorial-first usage guide to reduce onboarding friction before full implementation.
 - 2026-02-11: Prompt 6 added backend-neutral IR and compiler boundary before binding runtime inference backends.
 - 2026-02-11: Prompt 7 introduced concrete backend names and artifact contracts while keeping user-facing surrogate interface stable.
+- 2026-02-11: Prompt 8 implemented metamodel build/sample flow with backend-gated behavior and canonical sample artifacts.
 
 ## Open issues
 - Need final confirmation on first probabilistic backend target for post-v1 (`PyMC` candidate documented; benchmark gate pending).

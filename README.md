@@ -28,6 +28,7 @@ This repository is currently in planning/scaffold phase. The code implementation
 - `examples/toy_program/spec.toy_program.json`: local CLI toy model.
 - `examples/biomodels/spec.biomodels.json`: BioModels SBML model by BioModels id.
 - `examples/surrogates/surrogate.toy.pymc_gp.json`: toy surrogate training spec.
+- `examples/metamodels/metamodel.simple.json`: coupled metamodel spec for sampling flow.
 
 ## Reliability policy
 - No silent downsampling/subsampling.

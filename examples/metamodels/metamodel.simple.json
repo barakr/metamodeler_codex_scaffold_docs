@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "name": "three_model_coupling_demo",
+  "name": "metamodel_simple",
   "ppl_backend": "pymc",
   "surrogate_refs": [
     "examples/coupled/artifacts/surrogate_A.artifact.json",
@@ -14,11 +14,11 @@
   ],
   "couplings": [
     {
-      "kind": "gaussian_link",
+      "kind": "equality_soft",
       "source": "y",
       "target": "C",
       "transform": {"kind": "identity"},
-      "sigma": 0.2
+      "sigma": 0.15
     },
     {
       "kind": "deterministic",

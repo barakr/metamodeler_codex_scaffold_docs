@@ -1,37 +1,37 @@
-"""Typed placeholder specs for metamodel build workflows."""
+"""Typed metamodel specs for coupling and sampling."""
 
 from __future__ import annotations
+
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class CoupledModelRefSpec(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    id: str = Field(min_length=1)
-    surrogate_artifact: str = Field(min_length=1)
-
-
-class CouplingVariableSpec(BaseModel):
+class MetamodelVariableSpec(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(min_length=1)
-    distribution: dict
+    type: Literal["scalar", "vector", "matrix"] = "scalar"
+    shape: list[int] = Field(default_factory=list)
+    support: list[float] | None = None
+    units: str | None = None
 
 
-class CouplingLinkEndpointSpec(BaseModel):
+class MetamodelCouplingSpec(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    model: str = Field(min_length=1)
-    var: str = Field(min_length=1)
+    kind: Literal["gaussian_link", "equality_soft", "deterministic"]
+    source: str = Field(min_length=1)
+    target: str = Field(min_length=1)
+    transform: dict[str, Any] = Field(default_factory=lambda: {"kind": "identity"})
+    sigma: float | None = None
 
 
-class CouplingLinkSpec(BaseModel):
+class MetamodelPriorSpec(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    from_: CouplingLinkEndpointSpec = Field(alias="from")
-    to: CouplingLinkEndpointSpec
-    relation: dict
+    variable: str = Field(min_length=1)
+    distribution: dict[str, Any]
 
 
 class MetaModelSpec(BaseModel):
@@ -39,7 +39,8 @@ class MetaModelSpec(BaseModel):
 
     schema_version: str = Field(min_length=1)
     name: str = Field(min_length=1)
-    models: list[CoupledModelRefSpec] = Field(min_length=1)
-    coupling_variables: list[CouplingVariableSpec] = Field(default_factory=list)
-    links: list[CouplingLinkSpec] = Field(default_factory=list)
-    constraints: list[dict] = Field(default_factory=list)
+    ppl_backend: Literal["pymc", "numpyro"]
+    surrogate_refs: list[str] = Field(min_length=1)
+    variables: list[MetamodelVariableSpec] = Field(default_factory=list)
+    couplings: list[MetamodelCouplingSpec] = Field(default_factory=list)
+    priors: list[MetamodelPriorSpec] = Field(default_factory=list)

@@ -11,7 +11,7 @@ from pydantic import ValidationError
 
 from metamodeler.adapters import resolve_adapter
 from metamodeler.designs import DOEPlanError, plan_points, render_plan_preview
-from metamodeler.meta import build_ir_from_metamodel_spec
+from metamodeler.meta import build_ir_from_metamodel_spec, sample_metamodel
 from metamodeler.runners import LocalProcessRunner
 from metamodeler.spec import (
     MetaModelSpec,
@@ -113,6 +113,12 @@ def build_parser() -> argparse.ArgumentParser:
     meta_subparsers = meta_parser.add_subparsers(dest="meta_command")
     meta_build = meta_subparsers.add_parser("build", help="Build metamodel IR artifact")
     meta_build.add_argument("spec", help="Path to MetaModelSpec JSON")
+    meta_sample = meta_subparsers.add_parser("sample", help="Sample from metamodel")
+    meta_sample.add_argument("spec", help="Path to MetaModelSpec JSON")
+    meta_sample.add_argument("--draws", type=int, required=True)
+    meta_sample.add_argument("--tune", type=int, default=0)
+    meta_sample.add_argument("--chains", type=int, default=1)
+    meta_sample.add_argument("--seed", type=int, default=0)
 
     return parser
 
@@ -267,6 +273,32 @@ def _meta_build_command(spec_path: Path) -> int:
     return 0
 
 
+def _meta_sample_command(spec_path: Path, *, draws: int, tune: int, chains: int, seed: int) -> int:
+    spec, code = _load_and_validate_metamodel(spec_path)
+    if code != 0:
+        return code
+
+    ir = build_ir_from_metamodel_spec(spec)
+    try:
+        artifact = sample_metamodel(
+            spec=spec,
+            ir=ir,
+            draws=draws,
+            tune=tune,
+            chains=chains,
+            seed=seed,
+        )
+    except NotImplementedError as exc:
+        print(str(exc))
+        return 1
+
+    print(
+        "Metamodel sample stored: "
+        f"sample_id={artifact['sample_id']} dataset={artifact['samples_dataset_path']}"
+    )
+    return 0
+
+
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
@@ -291,6 +323,14 @@ def main() -> int:
         return _surrogate_eval_command(Path(args.spec), args.inputs, args.n)
     if args.command == "meta" and args.meta_command == "build":
         return _meta_build_command(Path(args.spec))
+    if args.command == "meta" and args.meta_command == "sample":
+        return _meta_sample_command(
+            Path(args.spec),
+            draws=args.draws,
+            tune=args.tune,
+            chains=args.chains,
+            seed=args.seed,
+        )
 
     parser.print_help()
     return 0
