@@ -12,6 +12,7 @@ This repository is currently in planning/scaffold phase. The code implementation
 - Product requirements: `/Users/barak/Downloads/metamodeler_codex_scaffold_docs/PRD.md`
 - Technical design: `/Users/barak/Downloads/metamodeler_codex_scaffold_docs/TechSpec.md`
 - Code design validation: `/Users/barak/Downloads/metamodeler_codex_scaffold_docs/CodeDesign.md`
+- User tutorial: `/Users/barak/Downloads/metamodeler_codex_scaffold_docs/TUTORIAL.md`
 - Project execution status and decisions: `/Users/barak/Downloads/metamodeler_codex_scaffold_docs/Status.md`
 - Prompt workflow for Codex: `/Users/barak/Downloads/metamodeler_codex_scaffold_docs/PROMPT_TO_CODEX.md`
 - Agent operating constraints: `/Users/barak/Downloads/metamodeler_codex_scaffold_docs/AGENTS.md`

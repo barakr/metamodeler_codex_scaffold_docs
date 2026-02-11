@@ -90,6 +90,11 @@
     - `mm meta build <spec>`
   - Added fast tests for placeholder CLI wiring:
     - `tests/test_surrogate_meta_placeholders.py`
+- Documentation update:
+  - Added user-facing usage tutorial:
+    - `TUTORIAL.md`
+  - Linked tutorial from:
+    - `README.md`
 
 ## Provenance log (design verification runs)
 - BioModels sample source used:
@@ -134,6 +139,7 @@
 - 2026-02-11: Prompt 3 implemented with adapter/runner/storage separation and run registry CLI.
 - 2026-02-11: Prompt 4 implemented with BioModels SBML adapter baseline and slow integration test path.
 - 2026-02-11: Prompt 5 implemented as typed contract placeholders only; no inference logic added.
+- 2026-02-11: Added tutorial-first usage guide to reduce onboarding friction before full implementation.
 
 ## Open issues
 - Need final confirmation on first probabilistic backend target for post-v1 (`PyMC` candidate documented; benchmark gate pending).
