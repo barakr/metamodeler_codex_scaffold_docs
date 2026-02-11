@@ -48,6 +48,22 @@ The surrogate interface is backend-neutral, but some backends require optional d
 - Real SBI verification test:
   - `pytest -q tests/test_surrogate_backends.py -k sbi_npe_backend_fit_sample_and_logprob`
 
+## Surrogate Troubleshooting
+- `Surrogate fit failed: Invalid backend_config key...`
+  - Your backend config includes unsupported keys for the selected backend.
+  - See allowed keys in `SurrogateSpec` validation errors and `PROMPT_TO_CODEX.md`.
+- `Surrogate eval failed: No surrogate artifact found...`
+  - Run `mm surrogate fit <spec>` first, or ensure `spec.name` matches a fitted artifact.
+- `Surrogate eval failed: Surrogate backend mismatch...`
+  - The latest artifact for that `spec.name` was trained with another backend.
+  - Use a unique `spec.name` per backend, or refit with the intended backend.
+- `Surrogate eval failed: ... input signature mismatch ...`
+  - The requested spec inputs/outputs do not match the fitted artifact contract.
+  - Keep input/output ordering and names identical between fit and eval specs.
+- `Surrogate eval failed: --inputs must be a JSON object ...`
+  - `--inputs` must be a dict keyed by input variable names, each value a numeric array.
+  - Example: `--inputs '{"a":[0.1,0.2],"b":[1.0,1.5]}'`
+
 ## Reliability policy
 - No silent downsampling/subsampling.
 - Every run must store seed, spec digest, artifact digest, stdout, and stderr.

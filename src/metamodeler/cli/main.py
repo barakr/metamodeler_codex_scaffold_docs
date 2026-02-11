@@ -242,7 +242,12 @@ def _surrogate_fit_command(spec_path: Path) -> int:
     if code != 0:
         return code
 
-    artifact = fit_surrogate(spec)
+    try:
+        artifact = fit_surrogate(spec)
+    except (FileNotFoundError, ValueError, RuntimeError) as exc:
+        print(f"Surrogate fit failed: {exc}")
+        return 1
+
     print(
         "Surrogate artifact stored: "
         f"artifact_id={artifact['artifact_id']} path={artifact['artifact_path']}"
@@ -261,7 +266,12 @@ def _surrogate_eval_command(spec_path: Path, inputs_json: str, n: int) -> int:
         print(f"Invalid --inputs JSON: line {exc.lineno}, col {exc.colno}: {exc.msg}")
         return 1
 
-    result = eval_surrogate(spec=spec, inputs_payload=inputs_payload, n=n)
+    try:
+        result = eval_surrogate(spec=spec, inputs_payload=inputs_payload, n=n)
+    except (FileNotFoundError, ValueError, RuntimeError) as exc:
+        print(f"Surrogate eval failed: {exc}")
+        return 1
+
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0
 

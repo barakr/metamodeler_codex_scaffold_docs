@@ -14,6 +14,7 @@ from typing import Any
 import numpy as np
 from scipy.special import logsumexp
 
+from metamodeler.surrogate_config import validate_backend_config
 from metamodeler.surrogates import SurrogateModel
 
 
@@ -393,7 +394,7 @@ def fit_backend_model(
     backend_config: dict[str, Any] | None = None,
     seed: int = 0,
 ):
-    config = backend_config or {}
+    config = validate_backend_config(backend, backend_config or {})
     if backend == "pymc_gp":
         return _fit_pymc_bayesian_linear(
             x=x,
@@ -469,9 +470,28 @@ def save_backend_payload(model: SurrogateModel, payload_path: Path) -> None:
     payload_path.write_text(json.dumps(payload, indent=2, sort_keys=True))
 
 
-def load_backend_model(backend: str, payload_path: Path) -> SurrogateModel:
+def load_backend_model(
+    backend: str,
+    payload_path: Path,
+    *,
+    expected_inputs: list[str] | None = None,
+    expected_output: str | None = None,
+) -> SurrogateModel:
     payload = json.loads(payload_path.read_text())
     model_type = payload.get("model_type", "linear_gaussian")
+    payload_inputs = list(payload.get("input_names", []))
+    payload_output = str(payload.get("output_name", ""))
+
+    if expected_inputs is not None and payload_inputs != expected_inputs:
+        raise ValueError(
+            "Surrogate payload input order mismatch: "
+            f"artifact has {payload_inputs}, spec expects {expected_inputs}."
+        )
+    if expected_output is not None and payload_output != expected_output:
+        raise ValueError(
+            "Surrogate payload output mismatch: "
+            f"artifact has '{payload_output}', spec expects '{expected_output}'."
+        )
 
     if backend == "pymc_gp":
         if model_type == "pymc_bayesian_linear":

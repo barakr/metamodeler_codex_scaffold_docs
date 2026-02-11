@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from metamodeler.surrogate_config import validate_backend_config
 
 
 class SurrogateSpec(BaseModel):
@@ -20,3 +22,13 @@ class SurrogateSpec(BaseModel):
     dataset_ref: str | dict[str, Any]
     seed: int = Field(ge=0)
     summary_config: dict[str, Any] | None = None
+
+    @model_validator(mode="after")
+    def _validate_backend_contract(self) -> SurrogateSpec:
+        validate_backend_config(self.backend, self.backend_config)
+        if len(self.outputs) != 1:
+            raise ValueError(
+                "Surrogate learning currently supports exactly one output variable. "
+                f"Got outputs={self.outputs}."
+            )
+        return self

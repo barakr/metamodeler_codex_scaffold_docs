@@ -66,6 +66,7 @@ def persist_surrogate_artifact(
         "spec_digest": _digest_json(spec_payload),
         "dataset_digest": hashlib.sha256(dataset_digest.encode("utf-8")).hexdigest(),
         "variable_lists": {"inputs": spec.inputs, "outputs": spec.outputs},
+        "io_signature": {"inputs_ordered": spec.inputs, "outputs_ordered": spec.outputs},
         "seed": spec.seed,
         "dependency_versions": versions,
         "backend_payload": str(backend_payload_path),

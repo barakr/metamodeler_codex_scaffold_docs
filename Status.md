@@ -1,8 +1,8 @@
 # Status: Metamodeling Automation Framework
 
 ## High level state
-- Stage: Prompt 12 implementation complete (real SBI backend for `sbi_npe`)
-- Current focus: execute Prompt 13 next (backend hardening) after explicit approval
+- Stage: Prompt 13 implementation complete (surrogate backend hardening)
+- Current focus: post-prompt hardening and integration follow-ups
 
 ## Folder structure
 - src/metamodeler/: library code
@@ -220,6 +220,31 @@
   - Updated docs with SBI install and verification commands:
     - `README.md`
     - `TUTORIAL.md`
+- Prompt 13 implemented:
+  - Added explicit backend-config validation contract with actionable errors:
+    - `src/metamodeler/surrogate_config.py`
+    - wired into `SurrogateSpec` validation in `src/metamodeler/spec/surrogate.py`
+  - Added strict artifact compatibility checks during eval:
+    - backend mismatch detection
+    - artifact input/output signature mismatch detection
+    - payload input/output order mismatch detection
+    - backend payload presence check
+    - module: `src/metamodeler/surrogates/service.py`
+  - Added backend payload signature checks at load boundary:
+    - module: `src/metamodeler/surrogates/backends.py`
+  - Improved CLI robustness for surrogate fit/eval failures:
+    - clear `Surrogate fit failed: ...` / `Surrogate eval failed: ...` messages
+    - module: `src/metamodeler/cli/main.py`
+  - Hardened artifact metadata for IO compatibility:
+    - added `io_signature` fields in `src/metamodeler/storage/surrogate_store.py`
+  - Added dedicated hardening tests:
+    - `tests/test_surrogate_backend_hardening.py`
+      - backend_config key/value validation
+      - backend mismatch and signature mismatch guards
+      - malformed/missing eval payload and artifact CLI errors
+      - optional dual-backend integration path (slow, dependency-gated)
+  - Added troubleshooting section for surrogate fit/eval guardrails:
+    - `README.md`
 
 ## Provenance log (design verification runs)
 - BioModels sample source used:
@@ -261,10 +286,9 @@
     - `1 passed` (2026-02-11)
 
 ## Next steps, ordered
-1) Execute Prompt 13: backend compatibility hardening and CLI robustness
-2) Persist immutable run logs inside finalized run artifact directories
-3) Expand slow integration coverage for real BioModels + metamodel sampling
-4) Push branch to origin and open review
+1) Persist immutable run logs inside finalized run artifact directories
+2) Expand slow integration coverage for real BioModels + metamodel sampling
+3) Push branch to origin and open review
 
 ## Decisions log
 - 2026-02-11: Prioritize execution/reproducibility core before advanced Bayesian coupling.
@@ -293,6 +317,7 @@
 - 2026-02-11: Prompt 12 implemented real SBI NPE surrogate learning path with persisted posterior payload and dependency-gated tests.
 - 2026-02-11: Prompt 12 acceptance criteria retroactively tightened to require at least one executed real-SBI verification test run and log in `Status.md`.
 - 2026-02-11: Verified real SBI surrogate learning test passes in isolated conda env (`tmp/conda_pymc_verify`).
+- 2026-02-11: Prompt 13 implemented backend-config validation, artifact compatibility checks, and improved surrogate CLI error reporting.
 
 ## Open issues
 - PyMC backend tests skip automatically when `pymc` is not installed in the active environment.
