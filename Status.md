@@ -1,8 +1,8 @@
 # Status: Metamodeling Automation Framework
 
 ## High level state
-- Stage: Prompt 1 implementation complete (typed ModelSpec validation)
-- Current focus: move to Prompt 2 (DOE planner) after review
+- Stage: Prompt 2 implementation complete (DOE planner)
+- Current focus: move to Prompt 3 (execution pipeline)
 
 ## Folder structure
 - src/metamodeler/: library code
@@ -43,6 +43,15 @@
     - `tests/test_modelspec_validation.py`
   - Added shared test path setup in:
     - `tests/conftest.py`
+- Prompt 2 implemented:
+  - Added DOE planner module in:
+    - `src/metamodeler/designs/planner.py`
+  - Added strategy support:
+    - `grid` cartesian product planning
+    - `sobol` deterministic low-discrepancy planning with bounds scaling
+  - Added `mm plan <spec>` CLI command with deterministic preview output.
+  - Added fast tests in:
+    - `tests/test_doe_planner.py`
 
 ## Provenance log (design verification runs)
 - BioModels sample source used:
@@ -68,11 +77,11 @@
   - `tmp/run_logs/biomodel_sim_lever.stderr.log`
 
 ## Next steps, ordered
-1) Implement DOE planner (`grid`, `sobol`) with deterministic preview (`mm plan`)
-2) Add fast tests for DOE bounds, counts, and deterministic ordering
-3) Implement adapter registry + local runner + dataset store
-4) Implement run registry CLI commands
-5) Prepare BioModels adapter milestone as slow/integration path
+1) Implement adapter registry + local runner + dataset store
+2) Implement run registry CLI commands
+3) Add toy-program fast end-to-end run test
+4) Prepare BioModels adapter milestone as slow/integration path
+5) Add surrogate/meta interface placeholders with CLI wiring
 
 ## Decisions log
 - 2026-02-11: Prioritize execution/reproducibility core before advanced Bayesian coupling.
@@ -83,6 +92,7 @@
 - 2026-02-11: Added pre-implementation `CodeDesign.md` to lock target interfaces against a three-model coupling use case and a real BioModels sample use case.
 - 2026-02-11: BioModels sample verification executed against MODEL1907260003 with logged three-scenario parameter scan (no downsampling).
 - 2026-02-11: Prompt 1 implemented using Pydantic v2 contracts and explicit schema artifact generation.
+- 2026-02-11: Prompt 2 implemented with deterministic DOE planning for `grid` and `sobol`.
 
 ## Open issues
 - Need final confirmation on first probabilistic backend target for post-v1 (`PyMC` candidate documented; benchmark gate pending).
