@@ -1,8 +1,8 @@
 # Status: Metamodeling Automation Framework
 
 ## High level state
-- Stage: Prompt 6 implementation complete (backend-neutral IR)
-- Current focus: move to Prompt 7 surrogate backend implementations
+- Stage: Prompt 7 implementation complete (surrogate backend implementations)
+- Current focus: move to Prompt 8 metamodel coupling and sampling
 
 ## Folder structure
 - src/metamodeler/: library code
@@ -109,6 +109,27 @@
     - IR roundtrip serialization: `tests/test_meta_ir_roundtrip.py`
     - Compiler smoke with mocked surrogate factor: `tests/test_meta_compiler_smoke.py`
     - Generic fit-quality tests with increasing challenge: `tests/test_surrogate_fit_quality_generic.py`
+- Prompt 7 implemented:
+  - Added backend implementations behind wrapper contract:
+    - `pymc_gp` (pragmatic linear-Gaussian baseline API)
+    - `sbi_npe` (pragmatic linear-Gaussian baseline API)
+    - module: `src/metamodeler/surrogates/backends.py`
+  - Added dataset loader from canonical run store:
+    - `src/metamodeler/surrogates/dataset.py`
+    - no implicit downsampling/thinning
+  - Added backend-neutral surrogate artifact persistence:
+    - `src/metamodeler/storage/surrogate_store.py`
+    - includes spec digest, dataset digest, variable lists, seed, dependency versions
+  - Added surrogate fit/eval service layer:
+    - `src/metamodeler/surrogates/service.py`
+  - Updated CLI:
+    - `mm surrogate fit surrogate.json`
+    - `mm surrogate eval surrogate.json --inputs '<json>' --n 1000`
+  - Added examples:
+    - `examples/surrogates/surrogate.toy.pymc_gp.json`
+  - Added fast tests:
+    - `tests/test_surrogate_backends.py`
+    - updated `tests/test_surrogate_meta_placeholders.py` for real fit/eval flow
 - Documentation update:
   - Added user-facing usage tutorial:
     - `TUTORIAL.md`
@@ -139,11 +160,11 @@
   - `tmp/run_logs/biomodel_sim_lever.stderr.log`
 
 ## Next steps, ordered
-1) Implement real surrogate backends (`pymc_gp`, `sbi_npe`) behind wrapper interface
-2) Persist backend-neutral surrogate artifacts + backend payload
-3) Add surrogate fit/eval CLI training and evaluation behavior
-4) Keep strict no-downsampling behavior in dataset handling
-5) Continue to Prompt 8 metamodel sampling implementation
+1) Implement MetamodelSpec v1 for joint coupling + backend selection
+2) Implement `mm meta sample` with backend-specific execution path
+3) Store canonical sample artifacts and metamodel run provenance
+4) Add fast synthetic coupling integration tests
+5) Continue to Prompt 9 for NumPyro backend parity
 
 ## Decisions log
 - 2026-02-11: Prioritize execution/reproducibility core before advanced Bayesian coupling.
@@ -160,6 +181,7 @@
 - 2026-02-11: Prompt 5 implemented as typed contract placeholders only; no inference logic added.
 - 2026-02-11: Added tutorial-first usage guide to reduce onboarding friction before full implementation.
 - 2026-02-11: Prompt 6 added backend-neutral IR and compiler boundary before binding runtime inference backends.
+- 2026-02-11: Prompt 7 introduced concrete backend names and artifact contracts while keeping user-facing surrogate interface stable.
 
 ## Open issues
 - Need final confirmation on first probabilistic backend target for post-v1 (`PyMC` candidate documented; benchmark gate pending).

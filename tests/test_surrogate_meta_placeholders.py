@@ -2,29 +2,60 @@ import copy
 import json
 from pathlib import Path
 
+import metamodeler.storage.surrogate_store as surrogate_store
 from metamodeler.cli.main import main
 
 
-def test_mm_surrogate_fit_placeholder(monkeypatch, capsys):
-    spec_path = Path("examples/biomodels/surrogate.model1907260003.json")
+def _write_tiny_run_store(root: Path) -> None:
+    runs = root / "runs"
+    runs.mkdir(parents=True, exist_ok=True)
+    for idx, (a, b) in enumerate([(0.0, 0.0), (1.0, 2.0), (2.0, 1.0), (3.0, 1.0)]):
+        run_dir = runs / f"r{idx}"
+        run_dir.mkdir(parents=True, exist_ok=True)
+        (run_dir / "inputs.json").write_text(json.dumps({"a": a, "b": b}))
+        (run_dir / "outputs.json").write_text(json.dumps({"y": a + b}))
+
+
+def _surrogate_spec_payload(run_store_root: Path) -> dict:
+    return {
+        "schema_version": "1.0",
+        "name": "tiny_cli_surrogate",
+        "kind": "conditional",
+        "inputs": ["a", "b"],
+        "outputs": ["y"],
+        "backend": "pymc_gp",
+        "backend_config": {},
+        "dataset_ref": {"run_store_root": str(run_store_root)},
+        "seed": 11,
+    }
+
+
+def test_mm_surrogate_fit_and_eval_cli(monkeypatch, capsys, tmp_path):
+    registry = tmp_path / "surrogate_registry.json"
+    monkeypatch.setattr(surrogate_store, "SURROGATE_REGISTRY_PATH", registry)
+
+    run_store = tmp_path / "store"
+    _write_tiny_run_store(run_store)
+
+    spec_path = tmp_path / "surrogate.json"
+    spec_path.write_text(json.dumps(_surrogate_spec_payload(run_store)))
 
     monkeypatch.setattr("sys.argv", ["mm", "surrogate", "fit", str(spec_path)])
-    code = main()
-    out = capsys.readouterr().out
+    fit_code = main()
+    fit_out = capsys.readouterr().out
+    assert fit_code == 0
+    assert "Surrogate artifact stored:" in fit_out
+    assert registry.exists()
 
-    assert code == 0
-    assert "Placeholder: surrogate fit is not implemented yet" in out
-
-
-def test_mm_surrogate_eval_placeholder(monkeypatch, capsys):
-    spec_path = Path("examples/biomodels/surrogate.model1907260003.json")
-
-    monkeypatch.setattr("sys.argv", ["mm", "surrogate", "eval", str(spec_path)])
-    code = main()
-    out = capsys.readouterr().out
-
-    assert code == 0
-    assert "Placeholder: surrogate eval is not implemented yet" in out
+    eval_inputs = json.dumps({"a": [0.5, 1.5], "b": [0.5, 1.0]})
+    monkeypatch.setattr(
+        "sys.argv",
+        ["mm", "surrogate", "eval", str(spec_path), "--inputs", eval_inputs, "--n", "16"],
+    )
+    eval_code = main()
+    eval_out = capsys.readouterr().out
+    assert eval_code == 0
+    assert '"sample_shape": [' in eval_out
 
 
 def test_mm_meta_build_placeholder(monkeypatch, capsys):
@@ -39,7 +70,7 @@ def test_mm_meta_build_placeholder(monkeypatch, capsys):
 
 
 def test_mm_surrogate_fit_invalid_spec_fails(monkeypatch, capsys, tmp_path):
-    payload = json.loads(Path("examples/biomodels/surrogate.model1907260003.json").read_text())
+    payload = _surrogate_spec_payload(tmp_path / "store")
     bad_payload = copy.deepcopy(payload)
     del bad_payload["name"]
 

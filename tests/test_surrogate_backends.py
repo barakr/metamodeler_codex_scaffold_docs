@@ -1,0 +1,120 @@
+import json
+from pathlib import Path
+
+import numpy as np
+
+import metamodeler.storage.surrogate_store as surrogate_store
+from metamodeler.spec import SurrogateSpec
+from metamodeler.surrogates import eval_surrogate, fit_surrogate
+from metamodeler.surrogates.backends import load_backend_model
+
+
+def _write_linear_run_store(root: Path, noise: float = 0.0) -> None:
+    rng = np.random.default_rng(42)
+    runs = root / "runs"
+    runs.mkdir(parents=True, exist_ok=True)
+    for idx in range(60):
+        a = float(rng.uniform(-2, 2))
+        b = float(rng.uniform(-1, 1))
+        y = 1.7 * a - 0.8 * b + 0.2 + float(rng.normal(0, noise))
+        run_dir = runs / f"run_{idx:03d}"
+        run_dir.mkdir(parents=True, exist_ok=True)
+        (run_dir / "inputs.json").write_text(json.dumps({"a": a, "b": b}))
+        (run_dir / "outputs.json").write_text(json.dumps({"y": y}))
+
+
+def _spec(backend: str, store_root: Path, seed: int = 123) -> SurrogateSpec:
+    return SurrogateSpec.model_validate(
+        {
+            "schema_version": "1.0",
+            "name": f"spec_{backend}",
+            "kind": "conditional",
+            "inputs": ["a", "b"],
+            "outputs": ["y"],
+            "backend": backend,
+            "backend_config": {},
+            "dataset_ref": {"run_store_root": str(store_root)},
+            "seed": seed,
+        }
+    )
+
+
+def _artifact_payload_path(registry_path: Path) -> Path:
+    registry = json.loads(registry_path.read_text())
+    artifact_path = Path(next(iter(registry.values())))
+    artifact = json.loads(artifact_path.read_text())
+    return Path(artifact["backend_payload"])
+
+
+def test_pymc_gp_backend_fit_sample_and_logprob(monkeypatch, tmp_path):
+    registry = tmp_path / "reg_pymc.json"
+    monkeypatch.setattr(surrogate_store, "SURROGATE_REGISTRY_PATH", registry)
+
+    store = tmp_path / "store_pymc"
+    _write_linear_run_store(store, noise=0.05)
+
+    spec = _spec("pymc_gp", store)
+    artifact = fit_surrogate(spec)
+
+    payload_path = Path(artifact["backend_payload"])
+    model = load_backend_model("pymc_gp", payload_path)
+    inputs = {"a": np.array([0.1, 0.5]), "b": np.array([0.0, -0.2])}
+    outputs = {"y": np.array([0.4, 1.4])}
+
+    draws = model.sample(inputs, n=32, seed=7)
+    logp = model.log_prob(inputs, outputs)
+
+    assert draws.shape == (2, 32)
+    assert np.isfinite(logp).all()
+
+
+def test_sbi_npe_backend_fit_sample_and_logprob(monkeypatch, tmp_path):
+    registry = tmp_path / "reg_sbi.json"
+    monkeypatch.setattr(surrogate_store, "SURROGATE_REGISTRY_PATH", registry)
+
+    store = tmp_path / "store_sbi"
+    _write_linear_run_store(store, noise=0.08)
+
+    spec = _spec("sbi_npe", store)
+    artifact = fit_surrogate(spec)
+
+    payload_path = Path(artifact["backend_payload"])
+    model = load_backend_model("sbi_npe", payload_path)
+    inputs = {"a": np.array([0.2, -0.1]), "b": np.array([0.3, 0.4])}
+    outputs = {"y": np.array([0.1, -0.5])}
+
+    draws = model.sample(inputs, n=16, seed=9)
+    logp = model.log_prob(inputs, outputs)
+
+    assert draws.shape == (2, 16)
+    assert np.isfinite(logp).all()
+
+
+def test_backend_specific_fit_quality_increasing_difficulty(monkeypatch, tmp_path):
+    registry = tmp_path / "reg_quality.json"
+    monkeypatch.setattr(surrogate_store, "SURROGATE_REGISTRY_PATH", registry)
+
+    store_easy = tmp_path / "store_easy"
+    store_med = tmp_path / "store_med"
+    store_hard = tmp_path / "store_hard"
+
+    _write_linear_run_store(store_easy, noise=0.02)
+    _write_linear_run_store(store_med, noise=0.1)
+    _write_linear_run_store(store_hard, noise=0.2)
+
+    mse_values = []
+    for idx, store in enumerate([store_easy, store_med, store_hard]):
+        spec = _spec("pymc_gp" if idx % 2 == 0 else "sbi_npe", store, seed=idx + 1)
+        fit_surrogate(spec)
+
+        eval_result = eval_surrogate(
+            spec,
+            inputs_payload={"a": [0.1, 0.5, 1.0], "b": [0.2, -0.3, 0.7]},
+            n=64,
+        )
+        means = np.asarray(eval_result["summary"]["mean"], dtype=float)
+        target = 1.7 * np.asarray([0.1, 0.5, 1.0]) - 0.8 * np.asarray([0.2, -0.3, 0.7]) + 0.2
+        mse_values.append(float(np.mean((means - target) ** 2)))
+
+    assert mse_values[0] <= mse_values[1] + 0.1
+    assert mse_values[1] <= mse_values[2] + 0.15

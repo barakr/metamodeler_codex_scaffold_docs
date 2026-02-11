@@ -25,6 +25,7 @@ from metamodeler.storage import (
     persist_run,
     show_registered_run,
 )
+from metamodeler.surrogates import eval_surrogate, fit_surrogate
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
@@ -99,12 +100,14 @@ def build_parser() -> argparse.ArgumentParser:
     show_parser = runs_subparsers.add_parser("show", help="Show one run record")
     show_parser.add_argument("run_id", help="Run ID")
 
-    surrogate_parser = subparsers.add_parser("surrogate", help="Surrogate placeholder commands")
+    surrogate_parser = subparsers.add_parser("surrogate", help="Surrogate commands")
     surrogate_subparsers = surrogate_parser.add_subparsers(dest="surrogate_command")
-    surrogate_fit = surrogate_subparsers.add_parser("fit", help="Placeholder surrogate fit")
+    surrogate_fit = surrogate_subparsers.add_parser("fit", help="Train a surrogate")
     surrogate_fit.add_argument("spec", help="Path to SurrogateSpec JSON")
-    surrogate_eval = surrogate_subparsers.add_parser("eval", help="Placeholder surrogate eval")
+    surrogate_eval = surrogate_subparsers.add_parser("eval", help="Evaluate a fitted surrogate")
     surrogate_eval.add_argument("spec", help="Path to SurrogateSpec JSON")
+    surrogate_eval.add_argument("--inputs", required=True, help="JSON dict of input arrays")
+    surrogate_eval.add_argument("--n", type=int, default=1000, help="Number of samples")
 
     meta_parser = subparsers.add_parser("meta", help="Metamodel commands")
     meta_subparsers = meta_parser.add_subparsers(dest="meta_command")
@@ -225,20 +228,28 @@ def _surrogate_fit_command(spec_path: Path) -> int:
     spec, code = _load_and_validate_surrogate(spec_path)
     if code != 0:
         return code
+
+    artifact = fit_surrogate(spec)
     print(
-        f"Placeholder: surrogate fit is not implemented yet. Validated surrogate spec '{spec.name}'"
+        "Surrogate artifact stored: "
+        f"artifact_id={artifact['artifact_id']} path={artifact['artifact_path']}"
     )
     return 0
 
 
-def _surrogate_eval_command(spec_path: Path) -> int:
+def _surrogate_eval_command(spec_path: Path, inputs_json: str, n: int) -> int:
     spec, code = _load_and_validate_surrogate(spec_path)
     if code != 0:
         return code
-    print(
-        "Placeholder: surrogate eval is not implemented yet. "
-        f"Validated surrogate spec '{spec.name}'"
-    )
+
+    try:
+        inputs_payload = json.loads(inputs_json)
+    except json.JSONDecodeError as exc:
+        print(f"Invalid --inputs JSON: line {exc.lineno}, col {exc.colno}: {exc.msg}")
+        return 1
+
+    result = eval_surrogate(spec=spec, inputs_payload=inputs_payload, n=n)
+    print(json.dumps(result, indent=2, sort_keys=True))
     return 0
 
 
@@ -277,7 +288,7 @@ def main() -> int:
     if args.command == "surrogate" and args.surrogate_command == "fit":
         return _surrogate_fit_command(Path(args.spec))
     if args.command == "surrogate" and args.surrogate_command == "eval":
-        return _surrogate_eval_command(Path(args.spec))
+        return _surrogate_eval_command(Path(args.spec), args.inputs, args.n)
     if args.command == "meta" and args.meta_command == "build":
         return _meta_build_command(Path(args.spec))
 
