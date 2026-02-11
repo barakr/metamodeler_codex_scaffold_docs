@@ -1,8 +1,8 @@
 # Status: Metamodeling Automation Framework
 
 ## High level state
-- Stage: Prompt 11 implementation complete (real PyMC backend for `pymc_gp`)
-- Current focus: execute Prompt 12 next (real `sbi_npe`) after explicit approval
+- Stage: Prompt 12 implementation complete (real SBI backend for `sbi_npe`)
+- Current focus: execute Prompt 13 next (backend hardening) after explicit approval
 
 ## Folder structure
 - src/metamodeler/: library code
@@ -202,6 +202,23 @@
   - Updated user docs with backend install and behavior notes:
     - `README.md`
     - `TUTORIAL.md`
+- Prompt 12 implemented:
+  - Replaced placeholder `sbi_npe` backend with real SBI NPE fit/eval flow in:
+    - `src/metamodeler/surrogates/backends.py`
+  - Added dependency guards with actionable runtime errors for missing `sbi` / `torch`.
+  - Added persisted SBI backend payload format:
+    - model type `sbi_npe_posterior`
+    - serialized posterior payload via torch-save + base64
+    - normalization metadata (`x_mean`, `x_scale`, `y_mean`, `y_scale`)
+  - Added optional dependency extra for SBI:
+    - `pyproject.toml`
+  - Added/updated tests:
+    - real SBI backend fit/eval test (skip-safe when dependency missing)
+    - SBI missing-dependency actionable error test
+    - backend selection helpers for integration tests so fast suite remains stable without optional deps
+  - Updated docs with SBI install and verification commands:
+    - `README.md`
+    - `TUTORIAL.md`
 
 ## Provenance log (design verification runs)
 - BioModels sample source used:
@@ -236,11 +253,10 @@
     - `PYTENSOR_FLAGS='cxx='` was required in this sandbox to avoid missing local C++ stdlib/toolchain headers during PyTensor compilation.
 
 ## Next steps, ordered
-1) Execute Prompt 12: real `sbi_npe` backend implementation and tests
-2) Execute Prompt 13: backend compatibility hardening and CLI robustness
-3) Persist immutable run logs inside finalized run artifact directories
-4) Expand slow integration coverage for real BioModels + metamodel sampling
-5) Push branch to origin and open review
+1) Execute Prompt 13: backend compatibility hardening and CLI robustness
+2) Persist immutable run logs inside finalized run artifact directories
+3) Expand slow integration coverage for real BioModels + metamodel sampling
+4) Push branch to origin and open review
 
 ## Decisions log
 - 2026-02-11: Prioritize execution/reproducibility core before advanced Bayesian coupling.
@@ -266,10 +282,12 @@
 - 2026-02-11: Prompt 11 implemented real PyMC-backed surrogate learning for `pymc_gp` with persisted posterior payload and optional dependency handling.
 - 2026-02-11: Prompt 11 acceptance criteria retroactively tightened to require at least one executed real-PyMC verification test run and log in `Status.md`.
 - 2026-02-11: Verified real PyMC surrogate learning test passes in isolated conda env (`tmp/conda_pymc_verify`) using PyTensor non-C fallback.
+- 2026-02-11: Prompt 12 implemented real SBI NPE surrogate learning path with persisted posterior payload and dependency-gated tests.
 
 ## Open issues
-- `sbi_npe` remains a placeholder backend pending Prompt 12.
 - PyMC backend tests skip automatically when `pymc` is not installed in the active environment.
 - PyMC is currently not installed in `/Users/barak/miniconda3/envs/py314_metamodeling`; fast suite there remains skip-safe for PyMC-specific tests.
+- SBI backend tests skip automatically when `sbi`/`torch` are not installed in the active environment.
+- `sbi`/`torch` are currently not installed in `/Users/barak/miniconda3/envs/py314_metamodeling`; fast suite there remains skip-safe for SBI-specific tests.
 - `py312` environment currently has dependency conflicts due direct `pip` install of `libroadrunner`; this was used for design verification only and should be isolated before production workflows.
 - `libroadrunner` may not be available in the py314 environment; slow BioModels test is expected to skip when dependency is absent.

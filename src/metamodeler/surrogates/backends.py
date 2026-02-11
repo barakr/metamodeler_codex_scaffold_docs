@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import base64
 import importlib.metadata
+import io
 import json
 import warnings
 from dataclasses import dataclass
@@ -49,11 +51,11 @@ class LinearGaussianModel:
 
 
 class PymcGPSurrogateModel(LinearGaussianModel):
-    """Pragmatic baseline that exposes a pymc_gp backend contract."""
+    """Legacy linear payload compatibility wrapper for pymc_gp."""
 
 
 class SbiNPESurrogateModel(LinearGaussianModel):
-    """Pragmatic baseline that exposes an sbi_npe-like contract."""
+    """Legacy linear payload compatibility wrapper for sbi_npe."""
 
 
 @dataclass
@@ -101,6 +103,68 @@ class PymcPosteriorLinearModel:
             "std": predictive_std.tolist(),
             "posterior_draws": int(mu.shape[1]),
             "n": int(len(point_mean)),
+        }
+
+
+@dataclass
+class SbiNPEPosteriorModel:
+    posterior: Any
+    input_names: list[str]
+    output_name: str
+    x_mean: np.ndarray
+    x_scale: np.ndarray
+    y_mean: float
+    y_scale: float
+    summary_samples: int = 256
+
+    def _normalized_x(self, inputs: dict[str, np.ndarray]) -> np.ndarray:
+        x_raw = np.column_stack(
+            [np.asarray(inputs[name], dtype=float).reshape(-1) for name in self.input_names]
+        )
+        return (x_raw - self.x_mean[None, :]) / self.x_scale[None, :]
+
+    def sample(self, inputs: dict[str, np.ndarray], n: int, seed: int) -> np.ndarray:
+        torch = _require_torch()
+        x_norm = self._normalized_x(inputs)
+        rows: list[np.ndarray] = []
+
+        for idx, row in enumerate(x_norm):
+            torch.manual_seed(seed + idx)
+            obs = torch.as_tensor(row, dtype=torch.float32)
+            sampled = self.posterior.sample((n,), x=obs)
+            sample_np = np.asarray(sampled.detach().cpu().numpy(), dtype=float).reshape(n, -1)
+            denorm = sample_np[:, 0] * self.y_scale + self.y_mean
+            rows.append(denorm)
+
+        return np.vstack(rows)
+
+    def log_prob(self, inputs: dict[str, np.ndarray], outputs: dict[str, np.ndarray]) -> np.ndarray:
+        torch = _require_torch()
+        x_norm = self._normalized_x(inputs)
+        y = np.asarray(outputs[self.output_name], dtype=float).reshape(-1)
+        if len(y) != len(x_norm):
+            raise ValueError("Output length must match number of input rows for log_prob")
+
+        y_norm = ((y - self.y_mean) / self.y_scale).astype(np.float32)
+        logp: list[float] = []
+
+        for idx, row in enumerate(x_norm):
+            obs = torch.as_tensor(row, dtype=torch.float32)
+            theta = torch.as_tensor([y_norm[idx]], dtype=torch.float32)
+            value = self.posterior.log_prob(theta, x=obs)
+            scalar = float(np.asarray(value.detach().cpu().numpy(), dtype=float).reshape(-1)[0])
+            # Correct for affine re-scaling from normalized y-space back to original units.
+            logp.append(scalar - np.log(self.y_scale))
+
+        return np.asarray(logp, dtype=float)
+
+    def summary(self, inputs: dict[str, np.ndarray]) -> dict:
+        draws = self.sample(inputs=inputs, n=self.summary_samples, seed=0)
+        return {
+            "mean": np.mean(draws, axis=1).tolist(),
+            "std": np.std(draws, axis=1).tolist(),
+            "posterior_draws": int(self.summary_samples),
+            "n": int(draws.shape[0]),
         }
 
 
@@ -156,6 +220,68 @@ def _require_pymc():
     return pm
 
 
+def _require_torch():
+    try:
+        import torch  # type: ignore[import-not-found]
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(
+            "Backend 'sbi_npe' requires 'torch' and 'sbi'. "
+            "Install in your conda env: "
+            "`conda install -n py314_metamodeling -c conda-forge pytorch sbi` "
+            "or use `pip install 'metamodeler[sbi]'`."
+        ) from exc
+    return torch
+
+
+def _require_sbi():
+    try:
+        import sbi  # type: ignore[import-not-found]
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(
+            "Backend 'sbi_npe' requires 'sbi' and 'torch'. "
+            "Install in your conda env: "
+            "`conda install -n py314_metamodeling -c conda-forge pytorch sbi` "
+            "or use `pip install 'metamodeler[sbi]'`."
+        ) from exc
+    return sbi
+
+
+def _build_sbi_inference(density_estimator: str):
+    _require_sbi()
+    try:
+        from sbi.inference import NPE  # type: ignore[import-not-found]
+
+        return NPE(density_estimator=density_estimator)
+    except Exception:
+        from sbi.inference import SNPE  # type: ignore[import-not-found]
+
+        return SNPE(prior=None, density_estimator=density_estimator)
+
+
+def _train_sbi_density_estimator(
+    inference: Any, theta: Any, x: Any, backend_config: dict[str, Any]
+) -> Any:
+    trainer = inference.append_simulations(theta, x)
+    train_kwargs = {
+        "max_num_epochs": int(backend_config.get("max_num_epochs", 120)),
+        "training_batch_size": int(backend_config.get("training_batch_size", 32)),
+        "learning_rate": float(backend_config.get("learning_rate", 5e-4)),
+        "validation_fraction": float(backend_config.get("validation_fraction", 0.1)),
+        "stop_after_epochs": int(backend_config.get("stop_after_epochs", 20)),
+        "show_train_summary": bool(backend_config.get("show_train_summary", False)),
+    }
+
+    try:
+        return trainer.train(**train_kwargs)
+    except TypeError:
+        # Compatibility path for sbi versions that do not support the full train kwargs.
+        fallback = {
+            "max_num_epochs": train_kwargs["max_num_epochs"],
+            "training_batch_size": train_kwargs["training_batch_size"],
+        }
+        return trainer.train(**fallback)
+
+
 def _fit_pymc_bayesian_linear(
     *,
     x: np.ndarray,
@@ -202,6 +328,54 @@ def _fit_pymc_bayesian_linear(
     )
 
 
+def _fit_sbi_npe(
+    *,
+    x: np.ndarray,
+    y: np.ndarray,
+    input_names: list[str],
+    output_name: str,
+    backend_config: dict[str, Any],
+    seed: int,
+) -> SbiNPEPosteriorModel:
+    torch = _require_torch()
+    _require_sbi()
+
+    x_mean = np.mean(x, axis=0)
+    x_scale = np.std(x, axis=0)
+    x_scale = np.where(x_scale < 1e-8, 1.0, x_scale)
+
+    y_mean = float(np.mean(y))
+    y_scale = float(max(np.std(y), 1e-8))
+
+    x_norm = ((x - x_mean[None, :]) / x_scale[None, :]).astype(np.float32)
+    theta_norm = ((y - y_mean) / y_scale).astype(np.float32).reshape(-1, 1)
+
+    torch.manual_seed(seed)
+    theta = torch.as_tensor(theta_norm, dtype=torch.float32)
+    observations = torch.as_tensor(x_norm, dtype=torch.float32)
+
+    density_estimator_name = str(backend_config.get("density_estimator", "maf"))
+    inference = _build_sbi_inference(density_estimator=density_estimator_name)
+    density_estimator = _train_sbi_density_estimator(
+        inference=inference,
+        theta=theta,
+        x=observations,
+        backend_config=backend_config,
+    )
+    posterior = inference.build_posterior(density_estimator)
+
+    return SbiNPEPosteriorModel(
+        posterior=posterior,
+        input_names=input_names,
+        output_name=output_name,
+        x_mean=np.asarray(x_mean, dtype=float),
+        x_scale=np.asarray(x_scale, dtype=float),
+        y_mean=y_mean,
+        y_scale=y_scale,
+        summary_samples=int(backend_config.get("summary_samples", 256)),
+    )
+
+
 def fit_backend_model(
     *,
     backend: str,
@@ -223,9 +397,31 @@ def fit_backend_model(
             seed=seed,
         )
     if backend == "sbi_npe":
-        model = _fit_linear(x=x, y=y, input_names=input_names, output_name=output_name)
-        return SbiNPESurrogateModel(**model.__dict__)
+        return _fit_sbi_npe(
+            x=x,
+            y=y,
+            input_names=input_names,
+            output_name=output_name,
+            backend_config=config,
+            seed=seed,
+        )
     raise ValueError(f"Unsupported backend: {backend}")
+
+
+def _serialize_torch_object(payload: Any) -> str:
+    torch = _require_torch()
+    buffer = io.BytesIO()
+    torch.save(payload, buffer)
+    return base64.b64encode(buffer.getvalue()).decode("ascii")
+
+
+def _deserialize_torch_object(serialized: str) -> Any:
+    torch = _require_torch()
+    buffer = io.BytesIO(base64.b64decode(serialized.encode("ascii")))
+    try:
+        return torch.load(buffer, map_location="cpu", weights_only=False)
+    except TypeError:
+        return torch.load(buffer, map_location="cpu")
 
 
 def save_backend_payload(model: SurrogateModel, payload_path: Path) -> None:
@@ -237,6 +433,19 @@ def save_backend_payload(model: SurrogateModel, payload_path: Path) -> None:
             "posterior_sigma": model.posterior_sigma.tolist(),
             "input_names": model.input_names,
             "output_name": model.output_name,
+        }
+    elif isinstance(model, SbiNPEPosteriorModel):
+        payload = {
+            "model_type": "sbi_npe_posterior",
+            "serialization": "torch_save_base64",
+            "posterior_blob_b64": _serialize_torch_object(model.posterior),
+            "input_names": model.input_names,
+            "output_name": model.output_name,
+            "x_mean": model.x_mean.tolist(),
+            "x_scale": model.x_scale.tolist(),
+            "y_mean": model.y_mean,
+            "y_scale": model.y_scale,
+            "summary_samples": model.summary_samples,
         }
     elif isinstance(model, LinearGaussianModel):
         payload = {
@@ -277,15 +486,28 @@ def load_backend_model(backend: str, payload_path: Path) -> SurrogateModel:
         else:
             raise ValueError(f"Unsupported payload model_type for pymc_gp: {model_type}")
     elif backend == "sbi_npe":
-        if model_type != "linear_gaussian":
+        if model_type == "sbi_npe_posterior":
+            _require_sbi()
+            model = SbiNPEPosteriorModel(
+                posterior=_deserialize_torch_object(payload["posterior_blob_b64"]),
+                input_names=list(payload["input_names"]),
+                output_name=str(payload["output_name"]),
+                x_mean=np.asarray(payload["x_mean"], dtype=float),
+                x_scale=np.asarray(payload["x_scale"], dtype=float),
+                y_mean=float(payload["y_mean"]),
+                y_scale=float(payload["y_scale"]),
+                summary_samples=int(payload.get("summary_samples", 256)),
+            )
+        elif model_type == "linear_gaussian":
+            model = SbiNPESurrogateModel(
+                weights=np.asarray(payload["weights"], dtype=float),
+                bias=float(payload["bias"]),
+                sigma=float(payload["sigma"]),
+                input_names=list(payload["input_names"]),
+                output_name=str(payload["output_name"]),
+            )
+        else:
             raise ValueError(f"Unsupported payload model_type for sbi_npe: {model_type}")
-        model = SbiNPESurrogateModel(
-            weights=np.asarray(payload["weights"], dtype=float),
-            bias=float(payload["bias"]),
-            sigma=float(payload["sigma"]),
-            input_names=list(payload["input_names"]),
-            output_name=str(payload["output_name"]),
-        )
     else:
         raise ValueError(f"Unsupported backend: {backend}")
     return _ModelWrapper(model)
@@ -306,4 +528,7 @@ def get_backend_dependency_versions(backend: str) -> dict[str, str]:
     if backend == "pymc_gp":
         versions["pymc"] = _package_version("pymc")
         versions["arviz"] = _package_version("arviz")
+    if backend == "sbi_npe":
+        versions["sbi"] = _package_version("sbi")
+        versions["torch"] = _package_version("torch")
     return versions

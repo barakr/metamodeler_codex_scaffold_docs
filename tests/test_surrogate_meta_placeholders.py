@@ -4,6 +4,7 @@ from pathlib import Path
 
 import metamodeler.storage.surrogate_store as surrogate_store
 from metamodeler.cli.main import main
+from tests.backend_support import available_fit_backend
 
 
 def _write_tiny_run_store(root: Path) -> None:
@@ -16,15 +17,20 @@ def _write_tiny_run_store(root: Path) -> None:
         (run_dir / "outputs.json").write_text(json.dumps({"y": a + b}))
 
 
-def _surrogate_spec_payload(run_store_root: Path) -> dict:
+def _surrogate_spec_payload(
+    run_store_root: Path, *, backend: str | None = None, backend_config: dict | None = None
+) -> dict:
+    if backend is None:
+        backend, backend_config = available_fit_backend()
+    cfg = backend_config or {}
     return {
         "schema_version": "1.0",
         "name": "tiny_cli_surrogate",
         "kind": "conditional",
         "inputs": ["a", "b"],
         "outputs": ["y"],
-        "backend": "sbi_npe",
-        "backend_config": {},
+        "backend": backend,
+        "backend_config": cfg,
         "dataset_ref": {"run_store_root": str(run_store_root)},
         "seed": 11,
     }
@@ -70,7 +76,7 @@ def test_mm_meta_build_placeholder(monkeypatch, capsys):
 
 
 def test_mm_surrogate_fit_invalid_spec_fails(monkeypatch, capsys, tmp_path):
-    payload = _surrogate_spec_payload(tmp_path / "store")
+    payload = _surrogate_spec_payload(tmp_path / "store", backend="sbi_npe", backend_config={})
     bad_payload = copy.deepcopy(payload)
     del bad_payload["name"]
 

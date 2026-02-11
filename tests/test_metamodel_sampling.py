@@ -5,6 +5,7 @@ import metamodeler.storage.surrogate_store as surrogate_store
 from metamodeler.cli.main import main
 from metamodeler.spec import SurrogateSpec
 from metamodeler.surrogates import fit_surrogate
+from tests.backend_support import available_fit_backend
 
 
 def _write_store(root: Path, scale: float) -> None:
@@ -19,6 +20,7 @@ def _write_store(root: Path, scale: float) -> None:
 
 
 def _surrogate_spec(name: str, store: Path) -> SurrogateSpec:
+    backend, backend_config = available_fit_backend()
     return SurrogateSpec.model_validate(
         {
             "schema_version": "1.0",
@@ -26,8 +28,8 @@ def _surrogate_spec(name: str, store: Path) -> SurrogateSpec:
             "kind": "conditional",
             "inputs": ["x"],
             "outputs": ["y"],
-            "backend": "sbi_npe",
-            "backend_config": {},
+            "backend": backend,
+            "backend_config": backend_config,
             "dataset_ref": {"run_store_root": str(store)},
             "seed": 7,
         }

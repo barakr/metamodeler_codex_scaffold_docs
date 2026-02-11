@@ -109,25 +109,73 @@ def test_pymc_gp_backend_missing_dependency_has_actionable_error(monkeypatch, tm
 
 
 def test_sbi_npe_backend_fit_sample_and_logprob(monkeypatch, tmp_path):
+    pytest.importorskip("sbi")
+    pytest.importorskip("torch")
+
     registry = tmp_path / "reg_sbi.json"
     monkeypatch.setattr(surrogate_store, "SURROGATE_REGISTRY_PATH", registry)
 
     store = tmp_path / "store_sbi"
     _write_linear_run_store(store, noise=0.08)
 
-    spec = _spec("sbi_npe", store)
+    spec = _spec(
+        "sbi_npe",
+        store,
+        backend_config={
+            "density_estimator": "maf",
+            "max_num_epochs": 80,
+            "training_batch_size": 32,
+            "learning_rate": 5e-4,
+            "summary_samples": 128,
+        },
+    )
     artifact = fit_surrogate(spec)
 
     payload_path = Path(artifact["backend_payload"])
+    payload = json.loads(payload_path.read_text())
+    assert payload["model_type"] == "sbi_npe_posterior"
+    assert "posterior_blob_b64" in payload
+
     model = load_backend_model("sbi_npe", payload_path)
     inputs = {"a": np.array([0.2, -0.1]), "b": np.array([0.3, 0.4])}
     outputs = {"y": np.array([0.1, -0.5])}
 
     draws = model.sample(inputs, n=16, seed=9)
     logp = model.log_prob(inputs, outputs)
+    summary = model.summary(inputs)
+    target = 1.7 * np.asarray([0.2, -0.1]) - 0.8 * np.asarray([0.3, 0.4]) + 0.2
+    mse = float(np.mean((np.asarray(summary["mean"], dtype=float) - target) ** 2))
 
     assert draws.shape == (2, 16)
     assert np.isfinite(logp).all()
+    assert mse < 0.35
+    assert summary["posterior_draws"] >= 64
+
+
+def test_sbi_npe_backend_missing_dependency_has_actionable_error(monkeypatch, tmp_path):
+    registry = tmp_path / "reg_missing_sbi.json"
+    monkeypatch.setattr(surrogate_store, "SURROGATE_REGISTRY_PATH", registry)
+
+    store = tmp_path / "store_missing_sbi"
+    _write_linear_run_store(store, noise=0.08)
+
+    spec = _spec(
+        "sbi_npe",
+        store,
+        backend_config={"max_num_epochs": 10, "training_batch_size": 16},
+    )
+
+    def _raise_missing():
+        raise RuntimeError(
+            "Backend 'sbi_npe' requires 'sbi' and 'torch'. Install in your conda env."
+        )
+
+    monkeypatch.setattr(backends, "_require_sbi", _raise_missing)
+
+    with pytest.raises(
+        RuntimeError, match=r"requires 'torch' and 'sbi'|requires 'sbi' and 'torch'"
+    ):
+        fit_surrogate(spec)
 
 
 def test_backend_specific_fit_quality_increasing_difficulty(monkeypatch, tmp_path):
@@ -143,12 +191,33 @@ def test_backend_specific_fit_quality_increasing_difficulty(monkeypatch, tmp_pat
     _write_linear_run_store(store_hard, noise=0.2)
 
     has_pymc = backends.get_backend_dependency_versions("pymc_gp").get("pymc") != "not_installed"
-    backend_order = ["pymc_gp", "sbi_npe", "pymc_gp"] if has_pymc else ["sbi_npe"] * 3
+    sbi_versions = backends.get_backend_dependency_versions("sbi_npe")
+    has_sbi = (
+        sbi_versions.get("sbi") != "not_installed" and sbi_versions.get("torch") != "not_installed"
+    )
+    if not has_pymc and not has_sbi:
+        pytest.skip("No optional surrogate backend available for fit-quality checks")
+
+    if has_pymc and has_sbi:
+        backend_order = ["pymc_gp", "sbi_npe", "pymc_gp"]
+    elif has_pymc:
+        backend_order = ["pymc_gp"] * 3
+    else:
+        backend_order = ["sbi_npe"] * 3
 
     mse_values = []
     for idx, store in enumerate([store_easy, store_med, store_hard]):
         backend = backend_order[idx]
-        config = {"draws": 60, "tune": 60, "chains": 1} if backend == "pymc_gp" else {}
+        if backend == "pymc_gp":
+            config = {"draws": 60, "tune": 60, "chains": 1, "target_accept": 0.9}
+        else:
+            config = {
+                "density_estimator": "maf",
+                "max_num_epochs": 60,
+                "training_batch_size": 32,
+                "learning_rate": 5e-4,
+                "summary_samples": 96,
+            }
         spec = _spec(backend, store, seed=idx + 1, backend_config=config)
         fit_surrogate(spec)
 

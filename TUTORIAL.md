@@ -25,6 +25,14 @@ pip install -e '.[pymc]'
 
 PyMC note: the supported package is `pymc` (PyMC v5, successor to legacy `pymc3`).
 
+Optional SBI backend support:
+
+```bash
+conda install -n py314_metamodeling -c conda-forge pytorch sbi
+# or
+pip install -e '.[sbi]'
+```
+
 Without install, use module mode:
 
 ```bash
@@ -158,7 +166,7 @@ pytest -q -m "not slow"
 ## 10) Current baseline limitations
 
 - `pymc_gp` now uses a real PyMC probabilistic backend (Bayesian linear model) and persists posterior payload for reuse.
-- `sbi_npe` is still a pragmatic placeholder baseline and will be replaced in the next prompt.
+- `sbi_npe` now uses a real SBI NPE probabilistic backend and persists serialized posterior payload for reuse.
 - Run logs are currently written under `_active` paths; immutable finalized log placement is still a hardening target.
 - BioModels runtime depends on environment availability of `libroadrunner`.
 
@@ -172,4 +180,10 @@ If your environment lacks C++ build tooling for PyTensor:
 
 ```bash
 PYTENSOR_FLAGS='cxx=' pytest -q tests/test_surrogate_backends.py -k pymc_gp_backend_fit_sample_and_logprob
+```
+
+## 12) Verify real SBI learning path
+
+```bash
+pytest -q tests/test_surrogate_backends.py -k sbi_npe_backend_fit_sample_and_logprob
 ```
