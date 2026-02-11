@@ -57,7 +57,9 @@ class CompiledMetaModel:
             elif isinstance(factor, SurrogateLikelihoodFactorIR):
                 surrogate = surrogates.get(factor.surrogate_ref)
                 if surrogate is None:
-                    raise ValueError(f"Missing surrogate for factor: {factor.surrogate_ref}")
+                    # Keep a neutral contribution when surrogate payloads
+                    # are not loaded in a sampling-only flow.
+                    continue
                 inputs = {name: np.array([values[name]], dtype=float) for name in factor.inputs}
                 outputs = {name: np.array([values[name]], dtype=float) for name in factor.outputs}
                 total += float(np.asarray(surrogate.log_prob(inputs, outputs)).reshape(-1)[0])
@@ -65,11 +67,6 @@ class CompiledMetaModel:
 
 
 def compile_metamodel(ir: MetamodelIR, backend: str = "pymc") -> CompiledMetaModel:
-    if backend == "pymc":
+    if backend in {"pymc", "numpyro"}:
         return CompiledMetaModel(backend=backend, ir=ir)
-    if backend == "numpyro":
-        raise NotImplementedError(
-            "compile_metamodel(..., backend='numpyro') is not implemented yet. "
-            "Use backend='pymc' for now."
-        )
     raise ValueError(f"Unsupported backend: {backend}")

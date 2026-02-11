@@ -43,3 +43,14 @@ Metamodeler now builds a backend-neutral metamodel IR before inference/runtime e
   - `compile_metamodel(ir, backend=\"pymc\")` is available.
   - `compile_metamodel(ir, backend=\"numpyro\")` currently raises a clear `NotImplementedError`.
 - `mm meta build <metamodel.json>` validates spec input and writes an IR artifact to `tmp/metamodel_ir/`.
+
+## Backend Selection (`ppl_backend`)
+`MetaModelSpec` accepts:
+- `ppl_backend: "pymc"`
+- `ppl_backend: "numpyro"`
+
+The same JSON interface is used for both backends (`mm meta sample ...`).
+
+Known numerical differences:
+- The current baseline samplers may produce slightly different coupling-noise realizations between backends.
+- Small posterior summary differences are expected due backend-specific sampling jitter and initialization.

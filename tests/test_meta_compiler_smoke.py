@@ -1,5 +1,4 @@
 import numpy as np
-import pytest
 
 from metamodeler.meta import compile_metamodel
 from metamodeler.meta.ir import (
@@ -55,5 +54,5 @@ def test_compile_ir_pymc_smoke_with_surrogate_factor():
 
 def test_compile_ir_numpyro_stub_is_clear():
     ir = MetamodelIR(name="stub", variables=[VariableIR(name="x")], factors=[])
-    with pytest.raises(NotImplementedError, match="backend='numpyro'"):
-        compile_metamodel(ir, backend="numpyro")
+    compiled = compile_metamodel(ir, backend="numpyro")
+    assert compiled.backend == "numpyro"

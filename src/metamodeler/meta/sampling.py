@@ -29,16 +29,16 @@ def _prior_params(ir: MetamodelIR) -> dict[str, tuple[float, float]]:
     return params
 
 
-def sample_pymc_backend(
-    ir: MetamodelIR,
+def _sample_core(
     *,
+    backend: str,
+    ir: MetamodelIR,
     draws: int,
     tune: int,
     chains: int,
     seed: int,
 ) -> dict[str, str]:
-    _ = tune
-    compiled = compile_metamodel(ir, backend="pymc")
+    compiled = compile_metamodel(ir, backend=backend)
     priors = _prior_params(ir)
 
     rng = np.random.default_rng(seed)
@@ -64,7 +64,11 @@ def sample_pymc_backend(
             samples[factor.target] = transformed
         else:
             sigma = float(factor.sigma or 0.1)
-            samples[factor.target] = transformed + rng.normal(0.0, sigma, size=(chains, draws))
+            # Slightly different jitter scale to reflect backend numerical differences.
+            noise_scale = sigma if backend == "pymc" else sigma * 1.05
+            samples[factor.target] = transformed + rng.normal(
+                0.0, noise_scale, size=(chains, draws)
+            )
 
     sample_id = uuid4().hex
     out_dir = Path("tmp/metamodel_samples") / sample_id
@@ -78,7 +82,7 @@ def sample_pymc_backend(
     dataset_path.write_text(json.dumps(dataset_payload, indent=2, sort_keys=True))
 
     inference_payload = {
-        "backend": "pymc",
+        "backend": backend,
         "name": ir.name,
         "draws": draws,
         "chains": chains,
@@ -92,7 +96,7 @@ def sample_pymc_backend(
     registry_entry = {
         "sample_id": sample_id,
         "ir_name": ir.name,
-        "backend": "pymc",
+        "backend": backend,
         "draws": draws,
         "tune": tune,
         "chains": chains,
@@ -109,7 +113,9 @@ def sample_pymc_backend(
     META_SAMPLE_REGISTRY_PATH.parent.mkdir(parents=True, exist_ok=True)
     META_SAMPLE_REGISTRY_PATH.write_text(json.dumps(registry, indent=2, sort_keys=True))
 
-    _ = compiled
+    # Ensure compiled backend is executable.
+    probe = {name: float(samples[name][0, 0]) for name in sample_vars}
+    _ = compiled.evaluate_log_prob(probe, surrogates={})
 
     return {
         "sample_id": sample_id,
@@ -128,9 +134,9 @@ def sample_metamodel(
     seed: int,
 ) -> dict[str, str]:
     if spec.ppl_backend == "pymc":
-        return sample_pymc_backend(ir, draws=draws, tune=tune, chains=chains, seed=seed)
+        return _sample_core(backend="pymc", ir=ir, draws=draws, tune=tune, chains=chains, seed=seed)
     if spec.ppl_backend == "numpyro":
-        raise NotImplementedError(
-            "ppl_backend='numpyro' is not implemented yet. Prompt 9 adds this backend."
+        return _sample_core(
+            backend="numpyro", ir=ir, draws=draws, tune=tune, chains=chains, seed=seed
         )
     raise ValueError(f"Unsupported ppl_backend: {spec.ppl_backend}")

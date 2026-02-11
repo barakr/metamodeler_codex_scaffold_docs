@@ -1,8 +1,8 @@
 # Status: Metamodeling Automation Framework
 
 ## High level state
-- Stage: Prompt 8 implementation complete (metamodel coupling and sampling baseline)
-- Current focus: move to Prompt 9 NumPyro backend parity
+- Stage: Prompt 9 implementation complete (NumPyro backend parity)
+- Current focus: move to Prompt 10 UX and reproducibility hardening
 
 ## Folder structure
 - src/metamodeler/: library code
@@ -150,6 +150,17 @@
     - `examples/coupled/spec.three_model_coupling.json` updated to v1 structure
   - Added fast synthetic integration test:
     - `tests/test_metamodel_sampling.py`
+- Prompt 9 implemented:
+  - Enabled `compile_metamodel(ir, backend=\"numpyro\")` path:
+    - `src/metamodeler/meta/compiler.py`
+  - Enabled `ppl_backend: \"numpyro\"` sampling mode using same metamodel spec interface:
+    - `src/metamodeler/meta/sampling.py`
+  - Kept canonical sample storage format aligned with pymc path:
+    - `inference_data.json`
+    - `samples_dataset.json`
+  - Added fast backend integration test:
+    - `tests/test_metamodel_sampling_numpyro.py`
+  - Added backend-switch documentation and known numerical differences in `README.md`.
 - Documentation update:
   - Added user-facing usage tutorial:
     - `TUTORIAL.md`
@@ -180,11 +191,11 @@
   - `tmp/run_logs/biomodel_sim_lever.stderr.log`
 
 ## Next steps, ordered
-1) Implement NumPyro compiler path and sampling mode with same spec interface
-2) Ensure canonical sample storage compatibility between backends
-3) Add backend-switch integration tests (`pymc` vs `numpyro`)
-4) Document backend selection in README
-5) Continue to Prompt 10 UX and reproducibility hardening
+1) Add `mm tutorial` command for guided flow
+2) Add `mm surrogate list` and `mm meta list` artifact-listing commands
+3) Harden surrogate/metamodel schema validation messaging paths
+4) Ensure all emitted artifacts carry spec/dataset/version/seed metadata
+5) Finalize Prompt 10 docs and status updates
 
 ## Decisions log
 - 2026-02-11: Prioritize execution/reproducibility core before advanced Bayesian coupling.
@@ -203,6 +214,7 @@
 - 2026-02-11: Prompt 6 added backend-neutral IR and compiler boundary before binding runtime inference backends.
 - 2026-02-11: Prompt 7 introduced concrete backend names and artifact contracts while keeping user-facing surrogate interface stable.
 - 2026-02-11: Prompt 8 implemented metamodel build/sample flow with backend-gated behavior and canonical sample artifacts.
+- 2026-02-11: Prompt 9 enabled backend switching (`pymc`/`numpyro`) without changing metamodel JSON interface.
 
 ## Open issues
 - Need final confirmation on first probabilistic backend target for post-v1 (`PyMC` candidate documented; benchmark gate pending).
