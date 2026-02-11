@@ -36,7 +36,11 @@ The surrogate interface is backend-neutral, but some backends require optional d
 - Install PyMC backend support in the project conda environment:
   - `conda install -n py314_metamodeling -c conda-forge pymc arviz`
   - or `pip install -e '.[pymc]'`
+- `pymc` is the modern package (PyMC v5), and is the supported successor to legacy `pymc3`.
 - If `pymc_gp` is selected without PyMC installed, `mm surrogate fit` raises an actionable install error.
+- Real PyMC verification test:
+  - `pytest -q tests/test_surrogate_backends.py -k pymc_gp_backend_fit_sample_and_logprob`
+  - In toolchain-limited environments, use: `PYTENSOR_FLAGS='cxx=' pytest -q tests/test_surrogate_backends.py -k pymc_gp_backend_fit_sample_and_logprob`
 
 ## Reliability policy
 - No silent downsampling/subsampling.

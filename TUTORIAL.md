@@ -23,6 +23,8 @@ conda install -n py314_metamodeling -c conda-forge pymc arviz
 pip install -e '.[pymc]'
 ```
 
+PyMC note: the supported package is `pymc` (PyMC v5, successor to legacy `pymc3`).
+
 Without install, use module mode:
 
 ```bash
@@ -159,3 +161,15 @@ pytest -q -m "not slow"
 - `sbi_npe` is still a pragmatic placeholder baseline and will be replaced in the next prompt.
 - Run logs are currently written under `_active` paths; immutable finalized log placement is still a hardening target.
 - BioModels runtime depends on environment availability of `libroadrunner`.
+
+## 11) Verify real PyMC learning path
+
+```bash
+pytest -q tests/test_surrogate_backends.py -k pymc_gp_backend_fit_sample_and_logprob
+```
+
+If your environment lacks C++ build tooling for PyTensor:
+
+```bash
+PYTENSOR_FLAGS='cxx=' pytest -q tests/test_surrogate_backends.py -k pymc_gp_backend_fit_sample_and_logprob
+```

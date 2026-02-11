@@ -311,6 +311,7 @@ Before commit: run `ruff format .`, `ruff check .`, `pytest -q -m "not slow"`.
 If fast tests fail, do not commit.
 
 Task: replace the current placeholder implementation for backend `pymc_gp` with a real model implemented using the `pymc` package.
+Note: use modern `pymc` (PyMC v5, successor to PyMC3). Do not reintroduce legacy `pymc3` APIs.
 
 Requirements:
 1) Dependencies and configuration:
@@ -328,6 +329,11 @@ Requirements:
    - Add focused tests for real PyMC fit/eval behavior.
    - Tests must skip gracefully when `pymc` is not installed, not fail.
    - Keep tests deterministic with explicit seeds.
+   - Add a real-learning quality assertion (not only shape/finite checks): predictive mean must match a known synthetic mapping within a bounded error.
+   - Add an explicit verification command path and run it at least once in an environment where `pymc` is installed:
+     - `pytest -q tests/test_surrogate_backends.py -k pymc_gp_backend_fit_sample_and_logprob`
+     - if the environment lacks a local C++ toolchain, run with `PYTENSOR_FLAGS='cxx='` so PyMC/PyTensor uses non-C fallback for verification.
+     - Record the executed command, environment details, and pass/fail result in `Status.md`.
 5) Docs:
    - Update `README.md` and `TUTORIAL.md` with PyMC backend usage and install notes.
    - Update `Status.md`.
@@ -336,6 +342,7 @@ Constraints:
 - One commit only for this prompt.
 Acceptance:
 - `make fast` passes.
+- Real PyMC verification test executed at least once in a PyMC-capable env and logged in `Status.md`.
 - Commit message: "feat: real pymc surrogate backend"
 
 ### Prompt 12: implement real SBI-backed surrogate learning (`sbi_npe`)

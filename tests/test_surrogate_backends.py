@@ -80,9 +80,14 @@ def test_pymc_gp_backend_fit_sample_and_logprob(monkeypatch, tmp_path):
 
     draws = model.sample(inputs, n=32, seed=7)
     logp = model.log_prob(inputs, outputs)
+    summary = model.summary(inputs)
+    target = 1.7 * np.asarray([0.1, 0.5]) - 0.8 * np.asarray([0.0, -0.2]) + 0.2
+    mse = float(np.mean((np.asarray(summary["mean"], dtype=float) - target) ** 2))
 
     assert draws.shape == (2, 32)
     assert np.isfinite(logp).all()
+    assert mse < 0.2
+    assert summary["posterior_draws"] >= 20
 
 
 def test_pymc_gp_backend_missing_dependency_has_actionable_error(monkeypatch, tmp_path):

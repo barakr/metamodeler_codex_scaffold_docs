@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.metadata
 import json
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -137,7 +138,14 @@ def _fit_linear(
 
 def _require_pymc():
     try:
-        import pymc as pm  # type: ignore[import-not-found]
+        with warnings.catch_warnings():
+            # ArviZ currently emits a startup FutureWarning during import; keep tests stable.
+            warnings.filterwarnings(
+                "ignore",
+                message="ArviZ is undergoing a major refactor*",
+                category=FutureWarning,
+            )
+            import pymc as pm  # type: ignore[import-not-found]
     except ModuleNotFoundError as exc:
         raise RuntimeError(
             "Backend 'pymc_gp' requires 'pymc'. "

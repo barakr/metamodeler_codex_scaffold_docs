@@ -190,6 +190,7 @@
     - `src/metamodeler/surrogates/backends.py`
   - Added posterior-based surrogate methods (`sample`, `log_prob`, `summary`) backed by PyMC posterior draws.
   - Added actionable missing-dependency error for `pymc_gp` with conda/pip install guidance.
+  - Added warning-safe PyMC import path to avoid ArviZ startup warning failures under `filterwarnings = error`.
   - Added backend dependency version capture and persistence into surrogate artifacts:
     - `src/metamodeler/surrogates/service.py`
     - `src/metamodeler/storage/surrogate_store.py`
@@ -197,6 +198,7 @@
     - `pyproject.toml`
   - Updated tests for real PyMC backend behavior and graceful skip/error handling:
     - `tests/test_surrogate_backends.py`
+  - Strengthened PyMC fit test with a real-learning quality assertion (bounded predictive MSE on synthetic mapping).
   - Updated user docs with backend install and behavior notes:
     - `README.md`
     - `TUTORIAL.md`
@@ -223,6 +225,15 @@
   - `tmp/run_logs/biomodel_download_lever.stderr.log`
   - `tmp/run_logs/biomodel_sim_lever.stdout.log`
   - `tmp/run_logs/biomodel_sim_lever.stderr.log`
+- PyMC verification run (Prompt 11 acceptance backfill):
+  - Verification environment:
+    - `tmp/conda_pymc_verify` (Python `3.11.14`, PyMC `5.27.1`, ArviZ `0.23.4`)
+  - Command:
+    - `HOME=$(pwd)/tmp/home_for_tests MPLCONFIGDIR=$(pwd)/tmp/home_for_tests/.mpl PYTENSOR_FLAGS='cxx=' PYTHONPATH=src /Users/barak/Downloads/metamodeler_codex_scaffold_docs/tmp/conda_pymc_verify/bin/pytest -q tests/test_surrogate_backends.py -k pymc_gp_backend_fit_sample_and_logprob`
+  - Result:
+    - `1 passed` (2026-02-11)
+  - Note:
+    - `PYTENSOR_FLAGS='cxx='` was required in this sandbox to avoid missing local C++ stdlib/toolchain headers during PyTensor compilation.
 
 ## Next steps, ordered
 1) Execute Prompt 12: real `sbi_npe` backend implementation and tests
@@ -253,9 +264,12 @@
 - 2026-02-11: Tutorial and README backend notes updated to remove stale placeholder/stub language.
 - 2026-02-11: Added prompts 11-13 in `PROMPT_TO_CODEX.md` to implement real `pymc_gp` and `sbi_npe` backends plus compatibility hardening.
 - 2026-02-11: Prompt 11 implemented real PyMC-backed surrogate learning for `pymc_gp` with persisted posterior payload and optional dependency handling.
+- 2026-02-11: Prompt 11 acceptance criteria retroactively tightened to require at least one executed real-PyMC verification test run and log in `Status.md`.
+- 2026-02-11: Verified real PyMC surrogate learning test passes in isolated conda env (`tmp/conda_pymc_verify`) using PyTensor non-C fallback.
 
 ## Open issues
 - `sbi_npe` remains a placeholder backend pending Prompt 12.
 - PyMC backend tests skip automatically when `pymc` is not installed in the active environment.
+- PyMC is currently not installed in `/Users/barak/miniconda3/envs/py314_metamodeling`; fast suite there remains skip-safe for PyMC-specific tests.
 - `py312` environment currently has dependency conflicts due direct `pip` install of `libroadrunner`; this was used for design verification only and should be isolated before production workflows.
 - `libroadrunner` may not be available in the py314 environment; slow BioModels test is expected to skip when dependency is absent.
