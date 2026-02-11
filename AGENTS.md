@@ -1,7 +1,7 @@
 # Codex instructions for this repository
 
 Repo:
-- Git: <PUT_GIT_REPO_URL_HERE>
+- Git: https://github.com/barakr/metamodeler_codex_scaffold_docs
 
 Project docs (keep these accurate):
 - PRD: ./PRD.md
