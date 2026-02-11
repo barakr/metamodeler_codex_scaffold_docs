@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+branch="$(git rev-parse --abbrev-ref HEAD)"
+if [[ "$branch" == "main" || "$branch" == "master" ]]; then
+  if [[ "${ALLOW_MAIN_COMMIT:-}" != "1" ]]; then
+    echo "pre-commit: commits to $branch are blocked (set ALLOW_MAIN_COMMIT=1 to override intentionally)."
+    exit 1
+  fi
+fi
+
+mkdir -p tmp/hook_logs
+log_file="tmp/hook_logs/pre-commit.log"
+
+run_ruff() {
+  if command -v ruff >/dev/null 2>&1; then
+    ruff "$@"
+    return
+  fi
+  if [[ -x "/Users/barak/miniconda3/envs/py314_metamodeling/bin/ruff" ]]; then
+    /Users/barak/miniconda3/envs/py314_metamodeling/bin/ruff "$@"
+    return
+  fi
+  echo "pre-commit: ruff not found in PATH and fallback env is unavailable."
+  return 127
+}
+
+run_pytest() {
+  if command -v pytest >/dev/null 2>&1; then
+    pytest "$@"
+    return
+  fi
+  if [[ -x "/Users/barak/miniconda3/envs/py314_metamodeling/bin/pytest" ]]; then
+    /Users/barak/miniconda3/envs/py314_metamodeling/bin/pytest "$@"
+    return
+  fi
+  echo "pre-commit: pytest not found in PATH and fallback env is unavailable."
+  return 127
+}
+
+{
+  echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] pre-commit start"
+  run_ruff format .
+  run_ruff check .
+  run_pytest -q -m "not slow"
+
+  changed_staged="$(git diff --cached --name-only || true)"
+  if echo "$changed_staged" | rg -q '^(src/|examples/)'; then
+    if ! echo "$changed_staged" | rg -q '^Status.md$'; then
+      echo "pre-commit: Status.md must be staged when src/ or examples/ changes."
+      exit 1
+    fi
+  fi
+
+  echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] pre-commit success"
+} >"$log_file" 2>&1
