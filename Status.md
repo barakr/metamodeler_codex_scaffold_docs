@@ -1,8 +1,8 @@
 # Status: Metamodeling Automation Framework
 
 ## High level state
-- Stage: Prompt 4 implementation complete (BioModels adapter milestone)
-- Current focus: move to Prompt 5 (surrogate/meta interface placeholders)
+- Stage: Prompt 5 implementation complete (surrogate/meta placeholders)
+- Current focus: all prompt-pack milestones 0-5 are implemented at baseline level
 
 ## Folder structure
 - src/metamodeler/: library code
@@ -79,6 +79,17 @@
     - `examples/biomodels/spec.prompt4.model1907260003.json`
   - Added slow integration test:
     - `tests/test_biomodels_slow.py`
+- Prompt 5 implemented:
+  - Added typed placeholder surrogate spec:
+    - `src/metamodeler/spec/surrogate.py`
+  - Added typed placeholder metamodel spec:
+    - `src/metamodeler/spec/metamodel.py`
+  - Added CLI placeholder commands:
+    - `mm surrogate fit <spec>`
+    - `mm surrogate eval <spec>`
+    - `mm meta build <spec>`
+  - Added fast tests for placeholder CLI wiring:
+    - `tests/test_surrogate_meta_placeholders.py`
 
 ## Provenance log (design verification runs)
 - BioModels sample source used:
@@ -104,9 +115,9 @@
   - `tmp/run_logs/biomodel_sim_lever.stderr.log`
 
 ## Next steps, ordered
-1) Add surrogate/meta interface placeholders with CLI wiring
-2) Add tests for surrogate/meta CLI wiring and placeholder behavior
-3) Keep run provenance fields complete as features expand
+1) Harden run-store structure (move active logs/artifacts into immutable run dirs)
+2) Add schema artifacts for surrogate and metamodel placeholder specs
+3) Implement Prompt 2/3/4 command-level docs in README with concrete examples
 4) Revisit BioModels dependency isolation for py314 environment
 5) Push accumulated commits to origin after user confirmation
 
@@ -122,6 +133,7 @@
 - 2026-02-11: Prompt 2 implemented with deterministic DOE planning for `grid` and `sobol`.
 - 2026-02-11: Prompt 3 implemented with adapter/runner/storage separation and run registry CLI.
 - 2026-02-11: Prompt 4 implemented with BioModels SBML adapter baseline and slow integration test path.
+- 2026-02-11: Prompt 5 implemented as typed contract placeholders only; no inference logic added.
 
 ## Open issues
 - Need final confirmation on first probabilistic backend target for post-v1 (`PyMC` candidate documented; benchmark gate pending).

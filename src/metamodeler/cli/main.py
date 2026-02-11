@@ -12,7 +12,12 @@ from pydantic import ValidationError
 from metamodeler.adapters import resolve_adapter
 from metamodeler.designs import DOEPlanError, plan_points, render_plan_preview
 from metamodeler.runners import LocalProcessRunner
-from metamodeler.spec import format_validation_error, load_and_validate_modelspec
+from metamodeler.spec import (
+    MetaModelSpec,
+    SurrogateSpec,
+    format_validation_error,
+    load_and_validate_modelspec,
+)
 from metamodeler.storage import list_registered_runs, persist_run, show_registered_run
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -43,6 +48,30 @@ def _load_and_validate(path: Path):
     return payload, spec, 0
 
 
+def _load_and_validate_surrogate(path: Path):
+    payload = _load_json(path)
+    if payload is None:
+        return None, 1
+    try:
+        spec = SurrogateSpec.model_validate(payload)
+    except ValidationError as exc:
+        print(format_validation_error(exc))
+        return None, 1
+    return spec, 0
+
+
+def _load_and_validate_metamodel(path: Path):
+    payload = _load_json(path)
+    if payload is None:
+        return None, 1
+    try:
+        spec = MetaModelSpec.model_validate(payload)
+    except ValidationError as exc:
+        print(format_validation_error(exc))
+        return None, 1
+    return spec, 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="mm", description="Metamodeler CLI")
     parser.add_argument("--version", action="store_true", help="Show scaffold version")
@@ -63,6 +92,18 @@ def build_parser() -> argparse.ArgumentParser:
     runs_subparsers.add_parser("list", help="List known run ids")
     show_parser = runs_subparsers.add_parser("show", help="Show one run record")
     show_parser.add_argument("run_id", help="Run ID")
+
+    surrogate_parser = subparsers.add_parser("surrogate", help="Surrogate placeholder commands")
+    surrogate_subparsers = surrogate_parser.add_subparsers(dest="surrogate_command")
+    surrogate_fit = surrogate_subparsers.add_parser("fit", help="Placeholder surrogate fit")
+    surrogate_fit.add_argument("spec", help="Path to SurrogateSpec JSON")
+    surrogate_eval = surrogate_subparsers.add_parser("eval", help="Placeholder surrogate eval")
+    surrogate_eval.add_argument("spec", help="Path to SurrogateSpec JSON")
+
+    meta_parser = subparsers.add_parser("meta", help="Metamodel placeholder commands")
+    meta_subparsers = meta_parser.add_subparsers(dest="meta_command")
+    meta_build = meta_subparsers.add_parser("build", help="Placeholder metamodel build")
+    meta_build.add_argument("spec", help="Path to MetaModelSpec JSON")
 
     return parser
 
@@ -174,6 +215,38 @@ def _runs_show_command(run_id: str) -> int:
     return 0
 
 
+def _surrogate_fit_command(spec_path: Path) -> int:
+    spec, code = _load_and_validate_surrogate(spec_path)
+    if code != 0:
+        return code
+    print(
+        f"Placeholder: surrogate fit is not implemented yet. Validated surrogate spec '{spec.name}'"
+    )
+    return 0
+
+
+def _surrogate_eval_command(spec_path: Path) -> int:
+    spec, code = _load_and_validate_surrogate(spec_path)
+    if code != 0:
+        return code
+    print(
+        "Placeholder: surrogate eval is not implemented yet. "
+        f"Validated surrogate spec '{spec.name}'"
+    )
+    return 0
+
+
+def _meta_build_command(spec_path: Path) -> int:
+    spec, code = _load_and_validate_metamodel(spec_path)
+    if code != 0:
+        return code
+    print(
+        "Placeholder: metamodel build is not implemented yet. "
+        f"Validated metamodel spec '{spec.name}'"
+    )
+    return 0
+
+
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
@@ -192,6 +265,12 @@ def main() -> int:
         return _runs_list_command()
     if args.command == "runs" and args.runs_command == "show":
         return _runs_show_command(args.run_id)
+    if args.command == "surrogate" and args.surrogate_command == "fit":
+        return _surrogate_fit_command(Path(args.spec))
+    if args.command == "surrogate" and args.surrogate_command == "eval":
+        return _surrogate_eval_command(Path(args.spec))
+    if args.command == "meta" and args.meta_command == "build":
+        return _meta_build_command(Path(args.spec))
 
     parser.print_help()
     return 0
