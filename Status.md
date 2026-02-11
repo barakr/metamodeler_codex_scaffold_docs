@@ -1,8 +1,8 @@
 # Status: Metamodeling Automation Framework
 
 ## High level state
-- Stage: scaffold baseline complete + design validation complete (still pre-Prompt-1 implementation)
-- Current focus: begin Prompt 1 typed spec validation using refined design artifacts
+- Stage: Prompt 1 implementation complete (typed ModelSpec validation)
+- Current focus: move to Prompt 2 (DOE planner) after review
 
 ## Folder structure
 - src/metamodeler/: library code
@@ -31,6 +31,18 @@
     - `examples/biomodels/spec.model1907260003.json`
     - `examples/biomodels/surrogate.model1907260003.json`
   - `TechSpec.md` and `README.md` updated to reference design-validation scenarios and `CodeDesign.md`.
+- Prompt 1 implemented:
+  - Added typed Pydantic v2 spec model hierarchy in `src/metamodeler/spec/modelspec.py`:
+    - `ModelSpec`, `VariableSpec`, `AdapterSpec`, `RunnerSpec` and nested contract models.
+  - Added schema export helper in `src/metamodeler/spec/schema.py`.
+  - Added JSON schema artifact:
+    - `src/metamodeler/spec/modelspec.schema.json`
+  - Added `mm validate <spec>` command with actionable validation output in:
+    - `src/metamodeler/cli/main.py`
+  - Added fast tests in:
+    - `tests/test_modelspec_validation.py`
+  - Added shared test path setup in:
+    - `tests/conftest.py`
 
 ## Provenance log (design verification runs)
 - BioModels sample source used:
@@ -56,11 +68,11 @@
   - `tmp/run_logs/biomodel_sim_lever.stderr.log`
 
 ## Next steps, ordered
-1) Implement typed `ModelSpec` + nested specs and validation CLI (`mm validate`)
-2) Define typed placeholders for `SurrogateSpec`, `CouplingSpec`, `MetaModelSpec` (validation-only in Prompt 1/next)
-3) Add JSON schema artifact generation for ModelSpec
-4) Add fast tests for valid/invalid spec behavior and example-spec validation
-5) Implement DOE planner (`grid`, `sobol`) with deterministic preview
+1) Implement DOE planner (`grid`, `sobol`) with deterministic preview (`mm plan`)
+2) Add fast tests for DOE bounds, counts, and deterministic ordering
+3) Implement adapter registry + local runner + dataset store
+4) Implement run registry CLI commands
+5) Prepare BioModels adapter milestone as slow/integration path
 
 ## Decisions log
 - 2026-02-11: Prioritize execution/reproducibility core before advanced Bayesian coupling.
@@ -70,6 +82,7 @@
 - 2026-02-11: Main-branch commit blocking hook includes explicit override (`ALLOW_MAIN_COMMIT=1`) to support controlled bootstrap commits.
 - 2026-02-11: Added pre-implementation `CodeDesign.md` to lock target interfaces against a three-model coupling use case and a real BioModels sample use case.
 - 2026-02-11: BioModels sample verification executed against MODEL1907260003 with logged three-scenario parameter scan (no downsampling).
+- 2026-02-11: Prompt 1 implemented using Pydantic v2 contracts and explicit schema artifact generation.
 
 ## Open issues
 - Need final confirmation on first probabilistic backend target for post-v1 (`PyMC` candidate documented; benchmark gate pending).
