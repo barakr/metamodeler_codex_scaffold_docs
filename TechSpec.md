@@ -92,6 +92,18 @@
 - `githooks/`
 - `tmp/`
 
+## Design validation scenarios (pre-Prompt-1)
+- Scenario A: three independent models, each with its own surrogate, coupled via explicit coupling variables and constraints.
+  - Design artifact: `examples/coupled/spec.three_model_coupling.json`
+- Scenario B: BioModels SBML source model execution from JSON spec, with outputs shaped for surrogate training.
+  - Design artifacts:
+    - `examples/biomodels/spec.model1907260003.json`
+    - `examples/biomodels/surrogate.model1907260003.json`
+  - Verified download target:
+    - `MODEL1907260003` (`lever2014 v5.0.xml`)
+
+These scenarios define interface requirements for Prompt 1 (typed validation) without adding runtime feature implementation yet.
+
 ## Package strategy for later probabilistic modules
 Decision for implementation phases after v1:
 - Bayesian PPL backbone candidate: `PyMC` (modern replacement path from legacy `pymc3`).

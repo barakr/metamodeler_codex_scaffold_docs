@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0",
+  "name": "three_model_coupling_demo",
+  "models": [
+    {"id": "model_A", "surrogate_artifact": "artifacts/surrogates/model_A"},
+    {"id": "model_B", "surrogate_artifact": "artifacts/surrogates/model_B"},
+    {"id": "model_C", "surrogate_artifact": "artifacts/surrogates/model_C"}
+  ],
+  "coupling_variables": [
+    {"name": "z_shared", "distribution": {"kind": "normal", "loc": 0.0, "scale": 1.0}}
+  ],
+  "links": [
+    {
+      "from": {"model": "model_A", "var": "out_x"},
+      "to": {"model": "model_B", "var": "in_k"},
+      "relation": {"kind": "identity"}
+    },
+    {
+      "from": {"model": "model_B", "var": "out_y"},
+      "to": {"model": "model_C", "var": "in_m"},
+      "relation": {"kind": "affine", "alpha": 1.0, "beta": 0.0}
+    }
+  ],
+  "constraints": [
+    {"kind": "units_compatible", "left": "model_A.out_x", "right": "model_B.in_k"},
+    {"kind": "bound", "target": "model_C.in_m", "min": 0.0, "max": 100.0}
+  ]
+}

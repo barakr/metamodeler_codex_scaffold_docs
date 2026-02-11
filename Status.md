@@ -1,8 +1,8 @@
 # Status: Metamodeling Automation Framework
 
 ## High level state
-- Stage: scaffold baseline implemented (Prompt 0 scope)
-- Current focus: verify scaffold guardrails and start typed ModelSpec validation (Prompt 1)
+- Stage: scaffold baseline complete + design validation complete (still pre-Prompt-1 implementation)
+- Current focus: begin Prompt 1 typed spec validation using refined design artifacts
 
 ## Folder structure
 - src/metamodeler/: library code
@@ -23,13 +23,44 @@
     - `commit-msg` enforces conventional commit style.
   - Hook logs path standardized to `tmp/hook_logs/`.
   - `tmp/` confirmed gitignored.
+- Design validation artifacts created:
+  - `CodeDesign.md` added with explicit spec family (`ModelSpec` / `SurrogateSpec` / `CouplingSpec` / `MetaModelSpec`) and concrete workflow mapping.
+  - Three-model coupling example spec added:
+    - `examples/coupled/spec.three_model_coupling.json`
+  - BioModels execution + surrogate-spec examples added:
+    - `examples/biomodels/spec.model1907260003.json`
+    - `examples/biomodels/surrogate.model1907260003.json`
+  - `TechSpec.md` and `README.md` updated to reference design-validation scenarios and `CodeDesign.md`.
+
+## Provenance log (design verification runs)
+- BioModels sample source used:
+  - `https://www.ebi.ac.uk/biomodels/services/download/get-files/MODEL1907260003/2/lever2014%20v5.0.xml`
+- Local artifact:
+  - `tmp/biomodels/MODEL1907260003_lever2014_v5_0.xml`
+- Artifact digest (SHA256):
+  - `bb58b84e80f11b7cea87393bb8b79247e0c13fa9c5347a13c65b341d70a3b94e`
+- Simulation driver:
+  - `tmp/scripts/simulate_lever_model.py`
+- Driver digest (SHA256):
+  - `d35ac97d4df556fb960f3b25dd2ea56d13990da7d8723fd838633f93d4921dd0`
+- Executed scenarios (seeds): baseline=101, param_low=102, param_high=103
+- Scanned parameter:
+  - `k_on` with values `[0.00008, 0.0001, 0.00012]`
+- Output summary:
+  - `tmp/biomodels/simulations_MODEL1907260003/summary.json`
+- Summary digest (SHA256):
+  - `1bce50952d5df74eb399dff9f247efbf250541315b22c407884d033347178536`
+- Run logs:
+  - `tmp/run_logs/biomodel_download_lever.stderr.log`
+  - `tmp/run_logs/biomodel_sim_lever.stdout.log`
+  - `tmp/run_logs/biomodel_sim_lever.stderr.log`
 
 ## Next steps, ordered
 1) Implement typed `ModelSpec` + nested specs and validation CLI (`mm validate`)
-2) Add JSON schema artifact generation for ModelSpec
-3) Add fast tests for valid/invalid spec behavior
-4) Implement DOE planner (`grid`, `sobol`) with deterministic preview
-5) Implement adapter/runner/store execution path
+2) Define typed placeholders for `SurrogateSpec`, `CouplingSpec`, `MetaModelSpec` (validation-only in Prompt 1/next)
+3) Add JSON schema artifact generation for ModelSpec
+4) Add fast tests for valid/invalid spec behavior and example-spec validation
+5) Implement DOE planner (`grid`, `sobol`) with deterministic preview
 
 ## Decisions log
 - 2026-02-11: Prioritize execution/reproducibility core before advanced Bayesian coupling.
@@ -37,7 +68,10 @@
 - 2026-02-11: Enforce explicit no-downsampling policy in docs and prompt pack.
 - 2026-02-11: Scaffold step implemented with strict hooks and no modeling logic added.
 - 2026-02-11: Main-branch commit blocking hook includes explicit override (`ALLOW_MAIN_COMMIT=1`) to support controlled bootstrap commits.
+- 2026-02-11: Added pre-implementation `CodeDesign.md` to lock target interfaces against a three-model coupling use case and a real BioModels sample use case.
+- 2026-02-11: BioModels sample verification executed against MODEL1907260003 with logged three-scenario parameter scan (no downsampling).
 
 ## Open issues
 - Need final confirmation on first probabilistic backend target for post-v1 (`PyMC` candidate documented; benchmark gate pending).
 - `mm` currently exposes scaffold help/version only; domain commands are pending by design.
+- `py312` environment currently has dependency conflicts due direct `pip` install of `libroadrunner`; this was used for design verification only and should be isolated before production workflows.

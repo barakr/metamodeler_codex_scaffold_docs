@@ -5,6 +5,7 @@ Primary governing files:
 - `/Users/barak/Downloads/metamodeler_codex_scaffold_docs/AGENTS.md`
 - `/Users/barak/Downloads/metamodeler_codex_scaffold_docs/PRD.md`
 - `/Users/barak/Downloads/metamodeler_codex_scaffold_docs/TechSpec.md`
+- `/Users/barak/Downloads/metamodeler_codex_scaffold_docs/CodeDesign.md`
 - `/Users/barak/Downloads/metamodeler_codex_scaffold_docs/Status.md`
 
 ## One-time local setup (human step)
