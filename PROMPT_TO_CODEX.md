@@ -373,6 +373,9 @@ Requirements:
    - Add focused tests for `sbi_npe` fit/eval behavior.
    - Tests must skip gracefully when `sbi`/`torch` are not installed.
    - Add at least one synthetic quality check (finite log_prob + reasonable predictive mean error).
+   - Add an explicit verification command path and run it at least once in an environment where `sbi` and `torch` are installed:
+     - `pytest -q tests/test_surrogate_backends.py -k sbi_npe_backend_fit_sample_and_logprob`
+     - Record the executed command, environment details, and pass/fail result in `Status.md`.
 5) Docs:
    - Update `README.md` and `TUTORIAL.md` with SBI backend usage and install notes.
    - Update `Status.md`.
@@ -381,6 +384,7 @@ Constraints:
 - One commit only for this prompt.
 Acceptance:
 - `make fast` passes.
+- Real SBI verification test executed at least once in an SBI-capable env and logged in `Status.md`.
 - Commit message: "feat: real sbi surrogate backend"
 
 ### Prompt 13: backend integration hardening and CLI validation

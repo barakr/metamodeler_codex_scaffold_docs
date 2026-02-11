@@ -206,6 +206,7 @@
   - Replaced placeholder `sbi_npe` backend with real SBI NPE fit/eval flow in:
     - `src/metamodeler/surrogates/backends.py`
   - Added dependency guards with actionable runtime errors for missing `sbi` / `torch`.
+  - Added warning-safe SBI training path to ignore known non-fatal 1D-flow warning under `filterwarnings = error`.
   - Added persisted SBI backend payload format:
     - model type `sbi_npe_posterior`
     - serialized posterior payload via torch-save + base64
@@ -251,6 +252,13 @@
     - `1 passed` (2026-02-11)
   - Note:
     - `PYTENSOR_FLAGS='cxx='` was required in this sandbox to avoid missing local C++ stdlib/toolchain headers during PyTensor compilation.
+- SBI verification run (Prompt 12 acceptance backfill):
+  - Verification environment:
+    - `tmp/conda_pymc_verify` (Python `3.11.14`, SBI `0.25.0`, Torch `2.5.1`)
+  - Command:
+    - `HOME=$(pwd)/tmp/home_for_tests MPLCONFIGDIR=$(pwd)/tmp/home_for_tests/.mpl PYTHONPATH=src /Users/barak/Downloads/metamodeler_codex_scaffold_docs/tmp/conda_pymc_verify/bin/pytest -q tests/test_surrogate_backends.py -k sbi_npe_backend_fit_sample_and_logprob`
+  - Result:
+    - `1 passed` (2026-02-11)
 
 ## Next steps, ordered
 1) Execute Prompt 13: backend compatibility hardening and CLI robustness
@@ -283,6 +291,8 @@
 - 2026-02-11: Prompt 11 acceptance criteria retroactively tightened to require at least one executed real-PyMC verification test run and log in `Status.md`.
 - 2026-02-11: Verified real PyMC surrogate learning test passes in isolated conda env (`tmp/conda_pymc_verify`) using PyTensor non-C fallback.
 - 2026-02-11: Prompt 12 implemented real SBI NPE surrogate learning path with persisted posterior payload and dependency-gated tests.
+- 2026-02-11: Prompt 12 acceptance criteria retroactively tightened to require at least one executed real-SBI verification test run and log in `Status.md`.
+- 2026-02-11: Verified real SBI surrogate learning test passes in isolated conda env (`tmp/conda_pymc_verify`).
 
 ## Open issues
 - PyMC backend tests skip automatically when `pymc` is not installed in the active environment.

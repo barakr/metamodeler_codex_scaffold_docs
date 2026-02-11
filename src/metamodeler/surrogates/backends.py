@@ -271,15 +271,22 @@ def _train_sbi_density_estimator(
         "show_train_summary": bool(backend_config.get("show_train_summary", False)),
     }
 
-    try:
-        return trainer.train(**train_kwargs)
-    except TypeError:
-        # Compatibility path for sbi versions that do not support the full train kwargs.
-        fallback = {
-            "max_num_epochs": train_kwargs["max_num_epochs"],
-            "training_batch_size": train_kwargs["training_batch_size"],
-        }
-        return trainer.train(**fallback)
+    with warnings.catch_warnings():
+        # sbi emits this for 1D outputs with flow families; this is expected and non-fatal.
+        warnings.filterwarnings(
+            "ignore",
+            message="In one-dimensional output space, this flow is limited to Gaussians",
+            category=UserWarning,
+        )
+        try:
+            return trainer.train(**train_kwargs)
+        except TypeError:
+            # Compatibility path for sbi versions that do not support the full train kwargs.
+            fallback = {
+                "max_num_epochs": train_kwargs["max_num_epochs"],
+                "training_batch_size": train_kwargs["training_batch_size"],
+            }
+            return trainer.train(**fallback)
 
 
 def _fit_pymc_bayesian_linear(
