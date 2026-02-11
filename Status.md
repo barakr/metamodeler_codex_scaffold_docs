@@ -1,8 +1,8 @@
 # Status: Metamodeling Automation Framework
 
 ## High level state
-- Stage: Prompt 2 implementation complete (DOE planner)
-- Current focus: move to Prompt 3 (execution pipeline)
+- Stage: Prompt 3 implementation complete (local execution pipeline)
+- Current focus: move to Prompt 4 (BioModels adapter milestone)
 
 ## Folder structure
 - src/metamodeler/: library code
@@ -52,6 +52,23 @@
   - Added `mm plan <spec>` CLI command with deterministic preview output.
   - Added fast tests in:
     - `tests/test_doe_planner.py`
+- Prompt 3 implemented:
+  - Added adapter interfaces and registry:
+    - `src/metamodeler/adapters/base.py`
+    - `src/metamodeler/adapters/python_cli.py`
+    - `src/metamodeler/adapters/registry.py`
+  - Added local process runner:
+    - `src/metamodeler/runners/local_process.py`
+  - Added run store + registry with provenance and stdout/stderr references:
+    - `src/metamodeler/storage/run_store.py`
+  - Added CLI commands:
+    - `mm run <spec>`
+    - `mm runs list`
+    - `mm runs show <run_id>`
+  - Added toy executable program:
+    - `examples/toy_program/run.py`
+  - Added fast end-to-end integration test:
+    - `tests/test_run_pipeline.py`
 
 ## Provenance log (design verification runs)
 - BioModels sample source used:
@@ -77,11 +94,11 @@
   - `tmp/run_logs/biomodel_sim_lever.stderr.log`
 
 ## Next steps, ordered
-1) Implement adapter registry + local runner + dataset store
-2) Implement run registry CLI commands
-3) Add toy-program fast end-to-end run test
-4) Prepare BioModels adapter milestone as slow/integration path
-5) Add surrogate/meta interface placeholders with CLI wiring
+1) Prepare BioModels adapter milestone as slow/integration path
+2) Add slow BioModels integration test marker coverage
+3) Add surrogate/meta interface placeholders with CLI wiring
+4) Keep run provenance fields complete as features expand
+5) Push accumulated commits to origin after user confirmation
 
 ## Decisions log
 - 2026-02-11: Prioritize execution/reproducibility core before advanced Bayesian coupling.
@@ -93,6 +110,7 @@
 - 2026-02-11: BioModels sample verification executed against MODEL1907260003 with logged three-scenario parameter scan (no downsampling).
 - 2026-02-11: Prompt 1 implemented using Pydantic v2 contracts and explicit schema artifact generation.
 - 2026-02-11: Prompt 2 implemented with deterministic DOE planning for `grid` and `sobol`.
+- 2026-02-11: Prompt 3 implemented with adapter/runner/storage separation and run registry CLI.
 
 ## Open issues
 - Need final confirmation on first probabilistic backend target for post-v1 (`PyMC` candidate documented; benchmark gate pending).
