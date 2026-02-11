@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import platform
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
@@ -24,7 +25,18 @@ def _save_registry(registry: dict[str, str]) -> None:
     META_REGISTRY_PATH.write_text(json.dumps(registry, indent=2, sort_keys=True))
 
 
-def persist_ir_artifact(ir: MetamodelIR) -> dict[str, str]:
+def list_meta_ir_artifacts() -> list[dict[str, str]]:
+    registry = _load_registry()
+    return [{"artifact_id": aid, "artifact_path": path} for aid, path in sorted(registry.items())]
+
+
+def persist_ir_artifact(
+    ir: MetamodelIR,
+    *,
+    spec_payload: dict,
+    dataset_digest: str,
+    seed: int,
+) -> dict[str, str]:
     artifact_id = uuid4().hex
     artifact_dir = Path("tmp/metamodel_ir") / artifact_id
     artifact_dir.mkdir(parents=True, exist_ok=True)
@@ -34,6 +46,9 @@ def persist_ir_artifact(ir: MetamodelIR) -> dict[str, str]:
     ir_path.write_text(json.dumps(ir_payload, indent=2, sort_keys=True))
 
     digest = hashlib.sha256(json.dumps(ir_payload, sort_keys=True).encode("utf-8")).hexdigest()
+    spec_digest = hashlib.sha256(
+        json.dumps(spec_payload, sort_keys=True).encode("utf-8")
+    ).hexdigest()
     meta_path = artifact_dir / "artifact.json"
     meta_path.write_text(
         json.dumps(
@@ -41,6 +56,13 @@ def persist_ir_artifact(ir: MetamodelIR) -> dict[str, str]:
                 "artifact_id": artifact_id,
                 "ir_path": str(ir_path),
                 "ir_digest": digest,
+                "spec_digest": spec_digest,
+                "dataset_digest": hashlib.sha256(dataset_digest.encode("utf-8")).hexdigest(),
+                "dependency_versions": {
+                    "python": platform.python_version(),
+                    "platform": platform.platform(),
+                },
+                "seed": seed,
                 "created_at": datetime.now(UTC).isoformat(),
             },
             indent=2,

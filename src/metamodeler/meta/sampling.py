@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
+import platform
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
@@ -14,6 +16,16 @@ from metamodeler.meta.ir import CouplingFactorIR, MetamodelIR, PriorFactorIR
 from metamodeler.spec import MetaModelSpec
 
 META_SAMPLE_REGISTRY_PATH = Path("tmp/metamodel_samples_registry.json")
+
+
+def list_meta_samples() -> list[dict[str, str]]:
+    if not META_SAMPLE_REGISTRY_PATH.exists():
+        return []
+    registry = json.loads(META_SAMPLE_REGISTRY_PATH.read_text())
+    return [
+        {"sample_id": sid, "backend": payload.get("backend", "")}
+        for sid, payload in sorted(registry.items())
+    ]
 
 
 def _prior_params(ir: MetamodelIR) -> dict[str, tuple[float, float]]:
@@ -33,6 +45,8 @@ def _sample_core(
     *,
     backend: str,
     ir: MetamodelIR,
+    spec_payload: dict,
+    dataset_digest: str,
     draws: int,
     tune: int,
     chains: int,
@@ -64,7 +78,6 @@ def _sample_core(
             samples[factor.target] = transformed
         else:
             sigma = float(factor.sigma or 0.1)
-            # Slightly different jitter scale to reflect backend numerical differences.
             noise_scale = sigma if backend == "pymc" else sigma * 1.05
             samples[factor.target] = transformed + rng.normal(
                 0.0, noise_scale, size=(chains, draws)
@@ -93,6 +106,10 @@ def _sample_core(
     inference_path = out_dir / "inference_data.json"
     inference_path.write_text(json.dumps(inference_payload, indent=2, sort_keys=True))
 
+    spec_digest = hashlib.sha256(
+        json.dumps(spec_payload, sort_keys=True).encode("utf-8")
+    ).hexdigest()
+    dataset_digest_hash = hashlib.sha256(dataset_digest.encode("utf-8")).hexdigest()
     registry_entry = {
         "sample_id": sample_id,
         "ir_name": ir.name,
@@ -101,6 +118,12 @@ def _sample_core(
         "tune": tune,
         "chains": chains,
         "seed": seed,
+        "spec_digest": spec_digest,
+        "dataset_digest": dataset_digest_hash,
+        "dependency_versions": {
+            "python": platform.python_version(),
+            "platform": platform.platform(),
+        },
         "inference_data_path": str(inference_path),
         "samples_dataset_path": str(dataset_path),
         "created_at": datetime.now(UTC).isoformat(),
@@ -133,10 +156,29 @@ def sample_metamodel(
     chains: int,
     seed: int,
 ) -> dict[str, str]:
+    spec_payload = spec.model_dump(mode="json")
+    dataset_digest = json.dumps(spec.surrogate_refs, sort_keys=True)
+
     if spec.ppl_backend == "pymc":
-        return _sample_core(backend="pymc", ir=ir, draws=draws, tune=tune, chains=chains, seed=seed)
+        return _sample_core(
+            backend="pymc",
+            ir=ir,
+            spec_payload=spec_payload,
+            dataset_digest=dataset_digest,
+            draws=draws,
+            tune=tune,
+            chains=chains,
+            seed=seed,
+        )
     if spec.ppl_backend == "numpyro":
         return _sample_core(
-            backend="numpyro", ir=ir, draws=draws, tune=tune, chains=chains, seed=seed
+            backend="numpyro",
+            ir=ir,
+            spec_payload=spec_payload,
+            dataset_digest=dataset_digest,
+            draws=draws,
+            tune=tune,
+            chains=chains,
+            seed=seed,
         )
     raise ValueError(f"Unsupported ppl_backend: {spec.ppl_backend}")

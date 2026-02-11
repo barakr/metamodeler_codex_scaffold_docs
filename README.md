@@ -54,3 +54,17 @@ The same JSON interface is used for both backends (`mm meta sample ...`).
 Known numerical differences:
 - The current baseline samplers may produce slightly different coupling-noise realizations between backends.
 - Small posterior summary differences are expected due backend-specific sampling jitter and initialization.
+
+## End-to-End Quickstart
+```bash
+PYTHONPATH=src python -m metamodeler.cli.main validate examples/toy_program/spec.toy_program.json
+PYTHONPATH=src python -m metamodeler.cli.main run examples/toy_program/spec.toy_program.json
+PYTHONPATH=src python -m metamodeler.cli.main surrogate fit examples/surrogates/surrogate.toy.pymc_gp.json
+PYTHONPATH=src python -m metamodeler.cli.main meta build examples/metamodels/metamodel.simple.json
+PYTHONPATH=src python -m metamodeler.cli.main meta sample examples/metamodels/metamodel.simple.json --draws 100 --tune 50 --chains 2 --seed 1
+```
+
+Utility commands:
+- `mm tutorial`
+- `mm surrogate list`
+- `mm meta list`

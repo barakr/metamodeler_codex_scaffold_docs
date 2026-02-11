@@ -29,6 +29,14 @@ def _digest_json(payload: dict) -> str:
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
 
 
+def list_surrogate_artifacts() -> list[dict[str, str]]:
+    registry = _load_registry()
+    return [
+        {"artifact_id": artifact_id, "artifact_path": path}
+        for artifact_id, path in sorted(registry.items())
+    ]
+
+
 def persist_surrogate_artifact(
     *, spec: SurrogateSpec, dataset_digest: str, payload_path: Path
 ) -> dict[str, str]:

@@ -20,7 +20,10 @@ from metamodeler.spec import (
     load_and_validate_modelspec,
 )
 from metamodeler.storage import (
+    list_meta_ir_artifacts,
+    list_meta_samples,
     list_registered_runs,
+    list_surrogate_artifacts,
     persist_ir_artifact,
     persist_run,
     show_registered_run,
@@ -58,25 +61,25 @@ def _load_and_validate(path: Path):
 def _load_and_validate_surrogate(path: Path):
     payload = _load_json(path)
     if payload is None:
-        return None, 1
+        return None, None, 1
     try:
         spec = SurrogateSpec.model_validate(payload)
     except ValidationError as exc:
         print(format_validation_error(exc))
-        return None, 1
-    return spec, 0
+        return None, None, 1
+    return payload, spec, 0
 
 
 def _load_and_validate_metamodel(path: Path):
     payload = _load_json(path)
     if payload is None:
-        return None, 1
+        return None, None, 1
     try:
         spec = MetaModelSpec.model_validate(payload)
     except ValidationError as exc:
         print(format_validation_error(exc))
-        return None, 1
-    return spec, 0
+        return None, None, 1
+    return payload, spec, 0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -108,6 +111,7 @@ def build_parser() -> argparse.ArgumentParser:
     surrogate_eval.add_argument("spec", help="Path to SurrogateSpec JSON")
     surrogate_eval.add_argument("--inputs", required=True, help="JSON dict of input arrays")
     surrogate_eval.add_argument("--n", type=int, default=1000, help="Number of samples")
+    surrogate_subparsers.add_parser("list", help="List stored surrogate artifacts")
 
     meta_parser = subparsers.add_parser("meta", help="Metamodel commands")
     meta_subparsers = meta_parser.add_subparsers(dest="meta_command")
@@ -119,6 +123,9 @@ def build_parser() -> argparse.ArgumentParser:
     meta_sample.add_argument("--tune", type=int, default=0)
     meta_sample.add_argument("--chains", type=int, default=1)
     meta_sample.add_argument("--seed", type=int, default=0)
+    meta_subparsers.add_parser("list", help="List stored metamodel artifacts and samples")
+
+    subparsers.add_parser("tutorial", help="Print guided end-to-end workflow")
 
     return parser
 
@@ -231,7 +238,7 @@ def _runs_show_command(run_id: str) -> int:
 
 
 def _surrogate_fit_command(spec_path: Path) -> int:
-    spec, code = _load_and_validate_surrogate(spec_path)
+    _, spec, code = _load_and_validate_surrogate(spec_path)
     if code != 0:
         return code
 
@@ -244,7 +251,7 @@ def _surrogate_fit_command(spec_path: Path) -> int:
 
 
 def _surrogate_eval_command(spec_path: Path, inputs_json: str, n: int) -> int:
-    spec, code = _load_and_validate_surrogate(spec_path)
+    _, spec, code = _load_and_validate_surrogate(spec_path)
     if code != 0:
         return code
 
@@ -259,13 +266,25 @@ def _surrogate_eval_command(spec_path: Path, inputs_json: str, n: int) -> int:
     return 0
 
 
+def _surrogate_list_command() -> int:
+    items = list_surrogate_artifacts()
+    if not items:
+        print("No surrogate artifacts stored")
+        return 0
+    print(f"Surrogate artifacts: {len(items)}")
+    for item in items:
+        print(f"- {item['artifact_id']}: {item['artifact_path']}")
+    return 0
+
+
 def _meta_build_command(spec_path: Path) -> int:
-    spec, code = _load_and_validate_metamodel(spec_path)
+    payload, spec, code = _load_and_validate_metamodel(spec_path)
     if code != 0:
         return code
 
     ir = build_ir_from_metamodel_spec(spec)
-    artifact = persist_ir_artifact(ir)
+    dataset_digest = json.dumps(spec.surrogate_refs, sort_keys=True)
+    artifact = persist_ir_artifact(ir, spec_payload=payload, dataset_digest=dataset_digest, seed=0)
     print(
         "Metamodel IR artifact stored: "
         f"artifact_id={artifact['artifact_id']} ir_path={artifact['ir_path']}"
@@ -274,28 +293,51 @@ def _meta_build_command(spec_path: Path) -> int:
 
 
 def _meta_sample_command(spec_path: Path, *, draws: int, tune: int, chains: int, seed: int) -> int:
-    spec, code = _load_and_validate_metamodel(spec_path)
+    _, spec, code = _load_and_validate_metamodel(spec_path)
     if code != 0:
         return code
 
     ir = build_ir_from_metamodel_spec(spec)
-    try:
-        artifact = sample_metamodel(
-            spec=spec,
-            ir=ir,
-            draws=draws,
-            tune=tune,
-            chains=chains,
-            seed=seed,
-        )
-    except NotImplementedError as exc:
-        print(str(exc))
-        return 1
+    artifact = sample_metamodel(
+        spec=spec,
+        ir=ir,
+        draws=draws,
+        tune=tune,
+        chains=chains,
+        seed=seed,
+    )
 
     print(
         "Metamodel sample stored: "
         f"sample_id={artifact['sample_id']} dataset={artifact['samples_dataset_path']}"
     )
+    return 0
+
+
+def _meta_list_command() -> int:
+    ir_items = list_meta_ir_artifacts()
+    sample_items = list_meta_samples()
+
+    print(f"Metamodel IR artifacts: {len(ir_items)}")
+    for item in ir_items:
+        print(f"- IR {item['artifact_id']}: {item['artifact_path']}")
+
+    print(f"Metamodel samples: {len(sample_items)}")
+    for item in sample_items:
+        print(f"- Sample {item['sample_id']}: backend={item['backend']}")
+    return 0
+
+
+def _tutorial_command() -> int:
+    print("Metamodeler tutorial flow:")
+    print("1) Validate: mm validate examples/toy_program/spec.toy_program.json")
+    print("2) Plan: mm plan examples/toy_program/spec.toy_program.json")
+    print("3) Run: mm run examples/toy_program/spec.toy_program.json")
+    print("4) Fit surrogate: mm surrogate fit examples/surrogates/surrogate.toy.pymc_gp.json")
+    print('5) Eval surrogate: mm surrogate eval <spec> --inputs \'{"a":[0.5],"b":[1.0]}\' --n 100')
+    print("6) Build metamodel: mm meta build examples/metamodels/metamodel.simple.json")
+    print("7) Sample metamodel: mm meta sample <spec> --draws 100 --tune 50 --chains 2 --seed 1")
+    print("See also: TUTORIAL.md")
     return 0
 
 
@@ -321,6 +363,8 @@ def main() -> int:
         return _surrogate_fit_command(Path(args.spec))
     if args.command == "surrogate" and args.surrogate_command == "eval":
         return _surrogate_eval_command(Path(args.spec), args.inputs, args.n)
+    if args.command == "surrogate" and args.surrogate_command == "list":
+        return _surrogate_list_command()
     if args.command == "meta" and args.meta_command == "build":
         return _meta_build_command(Path(args.spec))
     if args.command == "meta" and args.meta_command == "sample":
@@ -331,6 +375,10 @@ def main() -> int:
             chains=args.chains,
             seed=args.seed,
         )
+    if args.command == "meta" and args.meta_command == "list":
+        return _meta_list_command()
+    if args.command == "tutorial":
+        return _tutorial_command()
 
     parser.print_help()
     return 0

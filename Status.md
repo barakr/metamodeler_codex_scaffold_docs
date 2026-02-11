@@ -1,8 +1,8 @@
 # Status: Metamodeling Automation Framework
 
 ## High level state
-- Stage: Prompt 9 implementation complete (NumPyro backend parity)
-- Current focus: move to Prompt 10 UX and reproducibility hardening
+- Stage: Prompt 10 implementation complete (UX and reproducibility hardening)
+- Current focus: prompts 0-10 complete at current baseline
 
 ## Folder structure
 - src/metamodeler/: library code
@@ -161,6 +161,20 @@
   - Added fast backend integration test:
     - `tests/test_metamodel_sampling_numpyro.py`
   - Added backend-switch documentation and known numerical differences in `README.md`.
+- Prompt 10 implemented:
+  - Added guided CLI command:
+    - `mm tutorial`
+  - Added artifact listing commands:
+    - `mm surrogate list`
+    - `mm meta list`
+  - Hardened artifact metadata fields across surrogate/meta artifacts:
+    - `spec_digest`
+    - `dataset_digest`
+    - `dependency_versions`
+    - `seed`
+  - Added end-to-end quickstart block in `README.md`.
+  - Added fast UX/repro tests:
+    - `tests/test_cli_ux_commands.py`
 - Documentation update:
   - Added user-facing usage tutorial:
     - `TUTORIAL.md`
@@ -191,11 +205,11 @@
   - `tmp/run_logs/biomodel_sim_lever.stderr.log`
 
 ## Next steps, ordered
-1) Add `mm tutorial` command for guided flow
-2) Add `mm surrogate list` and `mm meta list` artifact-listing commands
-3) Harden surrogate/metamodel schema validation messaging paths
-4) Ensure all emitted artifacts carry spec/dataset/version/seed metadata
-5) Finalize Prompt 10 docs and status updates
+1) Replace pragmatic backend baselines with full PyMC / SBI / NumPyro implementations
+2) Persist immutable run logs inside finalized run artifact directories
+3) Add schema artifacts for SurrogateSpec and MetaModelSpec
+4) Expand slow integration coverage for real BioModels + metamodel sampling
+5) Push branch to origin and open review
 
 ## Decisions log
 - 2026-02-11: Prioritize execution/reproducibility core before advanced Bayesian coupling.
@@ -215,6 +229,7 @@
 - 2026-02-11: Prompt 7 introduced concrete backend names and artifact contracts while keeping user-facing surrogate interface stable.
 - 2026-02-11: Prompt 8 implemented metamodel build/sample flow with backend-gated behavior and canonical sample artifacts.
 - 2026-02-11: Prompt 9 enabled backend switching (`pymc`/`numpyro`) without changing metamodel JSON interface.
+- 2026-02-11: Prompt 10 added UX commands and reproducibility metadata guarantees for emitted artifacts.
 
 ## Open issues
 - Need final confirmation on first probabilistic backend target for post-v1 (`PyMC` candidate documented; benchmark gate pending).
