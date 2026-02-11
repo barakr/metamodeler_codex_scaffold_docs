@@ -32,3 +32,12 @@ This repository is currently in planning/scaffold phase. The code implementation
 - No silent downsampling/subsampling.
 - Every run must store seed, spec digest, artifact digest, stdout, and stderr.
 - Any major decision or scope shift is recorded in `Status.md`.
+
+## Backend-Neutral IR
+Metamodeler now builds a backend-neutral metamodel IR before inference/runtime execution.
+- Variables and factors are serialized in a backend-independent schema.
+- Coupling factors and surrogate-likelihood factors are represented uniformly.
+- Compiler boundary:
+  - `compile_metamodel(ir, backend=\"pymc\")` is available.
+  - `compile_metamodel(ir, backend=\"numpyro\")` currently raises a clear `NotImplementedError`.
+- `mm meta build <metamodel.json>` validates spec input and writes an IR artifact to `tmp/metamodel_ir/`.

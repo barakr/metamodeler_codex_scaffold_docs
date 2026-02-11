@@ -11,6 +11,7 @@ from pydantic import ValidationError
 
 from metamodeler.adapters import resolve_adapter
 from metamodeler.designs import DOEPlanError, plan_points, render_plan_preview
+from metamodeler.meta import build_ir_from_metamodel_spec
 from metamodeler.runners import LocalProcessRunner
 from metamodeler.spec import (
     MetaModelSpec,
@@ -18,7 +19,12 @@ from metamodeler.spec import (
     format_validation_error,
     load_and_validate_modelspec,
 )
-from metamodeler.storage import list_registered_runs, persist_run, show_registered_run
+from metamodeler.storage import (
+    list_registered_runs,
+    persist_ir_artifact,
+    persist_run,
+    show_registered_run,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
@@ -100,9 +106,9 @@ def build_parser() -> argparse.ArgumentParser:
     surrogate_eval = surrogate_subparsers.add_parser("eval", help="Placeholder surrogate eval")
     surrogate_eval.add_argument("spec", help="Path to SurrogateSpec JSON")
 
-    meta_parser = subparsers.add_parser("meta", help="Metamodel placeholder commands")
+    meta_parser = subparsers.add_parser("meta", help="Metamodel commands")
     meta_subparsers = meta_parser.add_subparsers(dest="meta_command")
-    meta_build = meta_subparsers.add_parser("build", help="Placeholder metamodel build")
+    meta_build = meta_subparsers.add_parser("build", help="Build metamodel IR artifact")
     meta_build.add_argument("spec", help="Path to MetaModelSpec JSON")
 
     return parser
@@ -240,9 +246,12 @@ def _meta_build_command(spec_path: Path) -> int:
     spec, code = _load_and_validate_metamodel(spec_path)
     if code != 0:
         return code
+
+    ir = build_ir_from_metamodel_spec(spec)
+    artifact = persist_ir_artifact(ir)
     print(
-        "Placeholder: metamodel build is not implemented yet. "
-        f"Validated metamodel spec '{spec.name}'"
+        "Metamodel IR artifact stored: "
+        f"artifact_id={artifact['artifact_id']} ir_path={artifact['ir_path']}"
     )
     return 0
 

@@ -1,8 +1,8 @@
 # Status: Metamodeling Automation Framework
 
 ## High level state
-- Stage: Prompt 5 implementation complete (surrogate/meta placeholders)
-- Current focus: all prompt-pack milestones 0-5 are implemented at baseline level
+- Stage: Prompt 6 implementation complete (backend-neutral IR)
+- Current focus: move to Prompt 7 surrogate backend implementations
 
 ## Folder structure
 - src/metamodeler/: library code
@@ -90,6 +90,25 @@
     - `mm meta build <spec>`
   - Added fast tests for placeholder CLI wiring:
     - `tests/test_surrogate_meta_placeholders.py`
+- Prompt 6 implemented:
+  - Refined `SurrogateSpec` to backend-neutral contract fields (`kind`, `inputs`, `outputs`, `backend`, `backend_config`, `dataset_ref`, `seed`).
+  - Added backend-neutral `SurrogateModel` wrapper interface:
+    - `src/metamodeler/surrogates/base.py`
+  - Added metamodel IR schema and helpers:
+    - `src/metamodeler/meta/ir.py`
+  - Added compiler boundary:
+    - `src/metamodeler/meta/compiler.py`
+    - `compile_metamodel(..., backend=\"pymc\")` implemented
+    - `compile_metamodel(..., backend=\"numpyro\")` stubbed with clear `NotImplementedError`
+  - Added metamodel IR builder + artifact store:
+    - `src/metamodeler/meta/builder.py`
+    - `src/metamodeler/storage/meta_store.py`
+  - Updated CLI:
+    - `mm meta build <spec>` now writes IR artifact to `tmp/metamodel_ir/` and registers it in `tmp/meta_registry.json`
+  - Added tests:
+    - IR roundtrip serialization: `tests/test_meta_ir_roundtrip.py`
+    - Compiler smoke with mocked surrogate factor: `tests/test_meta_compiler_smoke.py`
+    - Generic fit-quality tests with increasing challenge: `tests/test_surrogate_fit_quality_generic.py`
 - Documentation update:
   - Added user-facing usage tutorial:
     - `TUTORIAL.md`
@@ -120,11 +139,11 @@
   - `tmp/run_logs/biomodel_sim_lever.stderr.log`
 
 ## Next steps, ordered
-1) Harden run-store structure (move active logs/artifacts into immutable run dirs)
-2) Add schema artifacts for surrogate and metamodel placeholder specs
-3) Implement Prompt 2/3/4 command-level docs in README with concrete examples
-4) Revisit BioModels dependency isolation for py314 environment
-5) Push accumulated commits to origin after user confirmation
+1) Implement real surrogate backends (`pymc_gp`, `sbi_npe`) behind wrapper interface
+2) Persist backend-neutral surrogate artifacts + backend payload
+3) Add surrogate fit/eval CLI training and evaluation behavior
+4) Keep strict no-downsampling behavior in dataset handling
+5) Continue to Prompt 8 metamodel sampling implementation
 
 ## Decisions log
 - 2026-02-11: Prioritize execution/reproducibility core before advanced Bayesian coupling.
@@ -140,6 +159,7 @@
 - 2026-02-11: Prompt 4 implemented with BioModels SBML adapter baseline and slow integration test path.
 - 2026-02-11: Prompt 5 implemented as typed contract placeholders only; no inference logic added.
 - 2026-02-11: Added tutorial-first usage guide to reduce onboarding friction before full implementation.
+- 2026-02-11: Prompt 6 added backend-neutral IR and compiler boundary before binding runtime inference backends.
 
 ## Open issues
 - Need final confirmation on first probabilistic backend target for post-v1 (`PyMC` candidate documented; benchmark gate pending).

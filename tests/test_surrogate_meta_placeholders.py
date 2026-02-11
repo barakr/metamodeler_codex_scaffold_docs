@@ -35,7 +35,7 @@ def test_mm_meta_build_placeholder(monkeypatch, capsys):
     out = capsys.readouterr().out
 
     assert code == 0
-    assert "Placeholder: metamodel build is not implemented yet" in out
+    assert "Metamodel IR artifact stored:" in out
 
 
 def test_mm_surrogate_fit_invalid_spec_fails(monkeypatch, capsys, tmp_path):
