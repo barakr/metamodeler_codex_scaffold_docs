@@ -180,6 +180,11 @@
     - `TUTORIAL.md`
   - Linked tutorial from:
     - `README.md`
+  - Refreshed tutorial after Prompts 6-10 to reflect real commands and backend behavior:
+    - `mm tutorial`
+    - `mm surrogate list`
+    - `mm meta list`
+    - real surrogate fit/eval and metamodel build/sample flow
 
 ## Provenance log (design verification runs)
 - BioModels sample source used:
@@ -230,6 +235,7 @@
 - 2026-02-11: Prompt 8 implemented metamodel build/sample flow with backend-gated behavior and canonical sample artifacts.
 - 2026-02-11: Prompt 9 enabled backend switching (`pymc`/`numpyro`) without changing metamodel JSON interface.
 - 2026-02-11: Prompt 10 added UX commands and reproducibility metadata guarantees for emitted artifacts.
+- 2026-02-11: Tutorial and README backend notes updated to remove stale placeholder/stub language.
 
 ## Open issues
 - Need final confirmation on first probabilistic backend target for post-v1 (`PyMC` candidate documented; benchmark gate pending).

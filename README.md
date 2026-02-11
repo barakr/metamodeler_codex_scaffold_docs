@@ -41,7 +41,7 @@ Metamodeler now builds a backend-neutral metamodel IR before inference/runtime e
 - Coupling factors and surrogate-likelihood factors are represented uniformly.
 - Compiler boundary:
   - `compile_metamodel(ir, backend=\"pymc\")` is available.
-  - `compile_metamodel(ir, backend=\"numpyro\")` currently raises a clear `NotImplementedError`.
+  - `compile_metamodel(ir, backend=\"numpyro\")` is available.
 - `mm meta build <metamodel.json>` validates spec input and writes an IR artifact to `tmp/metamodel_ir/`.
 
 ## Backend Selection (`ppl_backend`)
