@@ -88,9 +88,42 @@
 - `src/metamodeler/surrogates/` (placeholder in v1)
 - `src/metamodeler/meta/` (placeholder in v1)
 - `examples/`
+- `tutorials/` (notebook-first onboarding track)
+  - `Tutorial_0.ipynb` (hub)
+  - `Tutorial_1.ipynb` ... `Tutorial_9.ipynb` (progressive modules)
+  - `specs/` (tutorial-specific runnable specs)
+  - `artifacts/` (tutorial artifact stubs for standalone paths)
 - `tests/`
 - `githooks/`
 - `tmp/`
+
+## Tutorial delivery design
+- Format: Jupyter notebooks only for tutorials (`.ipynb`).
+- Onboarding structure per notebook:
+  - audience + prerequisites + estimated time,
+  - primary package aim + secondary scientific aim,
+  - runnable steps with checkpoint outcomes,
+  - troubleshooting and fallback path,
+  - at least one visual checkpoint (plot/graphic).
+- Decoupling policy:
+  - every tutorial should run standalone when possible,
+  - if prior artifacts are required, provide a bootstrap or stub artifact path.
+- Placeholder policy:
+  - avoid manual placeholders (e.g., `RUN_ID`) when an artifact can be discovered programmatically in notebook cells.
+- Lint policy for docs notebooks:
+  - repository lint gate excludes `.ipynb` files via Ruff config to keep code-quality checks focused on source and tests.
+
+## Design validation scenarios (pre-Prompt-1)
+- Scenario A: three independent models, each with its own surrogate, coupled via explicit coupling variables and constraints.
+  - Design artifact: `examples/coupled/spec.three_model_coupling.json`
+- Scenario B: BioModels SBML source model execution from JSON spec, with outputs shaped for surrogate training.
+  - Design artifacts:
+    - `examples/biomodels/spec.model1907260003.json`
+    - `examples/biomodels/surrogate.model1907260003.json`
+  - Verified download target:
+    - `MODEL1907260003` (`lever2014 v5.0.xml`)
+
+These scenarios define interface requirements for Prompt 1 (typed validation) without adding runtime feature implementation yet.
 
 ## Package strategy for later probabilistic modules
 Decision for implementation phases after v1:

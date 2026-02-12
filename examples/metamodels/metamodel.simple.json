@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0",
+  "name": "metamodel_simple",
+  "ppl_backend": "pymc",
+  "surrogate_refs": [
+    "examples/coupled/artifacts/surrogate_A.artifact.json",
+    "examples/coupled/artifacts/surrogate_B.artifact.json"
+  ],
+  "variables": [
+    {"name": "x", "type": "scalar"},
+    {"name": "y", "type": "scalar"},
+    {"name": "z", "type": "scalar"},
+    {"name": "C", "type": "scalar"}
+  ],
+  "couplings": [
+    {
+      "kind": "equality_soft",
+      "source": "y",
+      "target": "C",
+      "transform": {"kind": "identity"},
+      "sigma": 0.15
+    },
+    {
+      "kind": "deterministic",
+      "source": "C",
+      "target": "z",
+      "transform": {"kind": "affine", "alpha": 1.0, "beta": 0.0}
+    }
+  ],
+  "priors": [
+    {"variable": "x", "distribution": {"kind": "normal", "loc": 0.0, "scale": 1.0}},
+    {"variable": "y", "distribution": {"kind": "normal", "loc": 0.0, "scale": 1.0}}
+  ]
+}

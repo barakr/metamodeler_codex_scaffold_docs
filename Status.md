@@ -1,37 +1,384 @@
 # Status: Metamodeling Automation Framework
 
 ## High level state
-- Stage: planning documents refined; implementation not started
-- Current focus: approve docs baseline, then begin incremental implementation from Prompt 0
+- Stage: Prompt 15 implementation complete (notebook-only tutorial onboarding)
+- Current focus: tutorial hardening and onboarding reliability validation
 
 ## Folder structure
 - src/metamodeler/: library code
 - examples/: example specs and toy models
+- tutorials/: modular tutorial curriculum, tutorial specs, and notebook entrypoint
 - tests/: unit and integration tests
 - tmp/: scratch and temporary files, not committed
 - githooks/: git hooks that enforce formatting, lint, and fast tests
 
 ## Implemented
-- Documentation baseline refinement only:
-  - PRD rewritten with explicit v1 scope, functional/non-functional requirements, and acceptance metrics.
-  - TechSpec expanded with architecture contracts, provenance requirements, and phased probabilistic package strategy.
-  - README updated as project map and reliability contract.
-  - PROMPT_TO_CODEX prompt sequence hardened for reproducibility and staged delivery.
+- Scaffold created:
+  - Python package skeleton under `src/metamodeler/` including target subpackages from TechSpec.
+  - `pyproject.toml` added with setuptools build, Python package metadata, and CLI entry point `mm`.
+  - Minimal CLI scaffold at `src/metamodeler/cli/main.py`.
+  - Baseline pytest smoke test at `tests/test_scaffold_smoke.py`.
+  - Git hooks implemented in `githooks/`:
+    - `pre-commit` runs format/lint/fast tests, blocks main/master commits by default, and enforces `Status.md` staging when `src/` or `examples/` are staged.
+    - `pre-push` runs fast tests.
+    - `commit-msg` enforces conventional commit style.
+  - Hook logs path standardized to `tmp/hook_logs/`.
+  - `tmp/` confirmed gitignored.
+- Design validation artifacts created:
+  - `CodeDesign.md` added with explicit spec family (`ModelSpec` / `SurrogateSpec` / `CouplingSpec` / `MetaModelSpec`) and concrete workflow mapping.
+  - Three-model coupling example spec added:
+    - `examples/coupled/spec.three_model_coupling.json`
+  - BioModels execution + surrogate-spec examples added:
+    - `examples/biomodels/spec.model1907260003.json`
+    - `examples/biomodels/surrogate.model1907260003.json`
+  - `TechSpec.md` and `README.md` updated to reference design-validation scenarios and `CodeDesign.md`.
+- Prompt 1 implemented:
+  - Added typed Pydantic v2 spec model hierarchy in `src/metamodeler/spec/modelspec.py`:
+    - `ModelSpec`, `VariableSpec`, `AdapterSpec`, `RunnerSpec` and nested contract models.
+  - Added schema export helper in `src/metamodeler/spec/schema.py`.
+  - Added JSON schema artifact:
+    - `src/metamodeler/spec/modelspec.schema.json`
+  - Added `mm validate <spec>` command with actionable validation output in:
+    - `src/metamodeler/cli/main.py`
+  - Added fast tests in:
+    - `tests/test_modelspec_validation.py`
+  - Added shared test path setup in:
+    - `tests/conftest.py`
+- Prompt 2 implemented:
+  - Added DOE planner module in:
+    - `src/metamodeler/designs/planner.py`
+  - Added strategy support:
+    - `grid` cartesian product planning
+    - `sobol` deterministic low-discrepancy planning with bounds scaling
+  - Added `mm plan <spec>` CLI command with deterministic preview output.
+  - Added fast tests in:
+    - `tests/test_doe_planner.py`
+- Prompt 3 implemented:
+  - Added adapter interfaces and registry:
+    - `src/metamodeler/adapters/base.py`
+    - `src/metamodeler/adapters/python_cli.py`
+    - `src/metamodeler/adapters/registry.py`
+  - Added local process runner:
+    - `src/metamodeler/runners/local_process.py`
+  - Added run store + registry with provenance and stdout/stderr references:
+    - `src/metamodeler/storage/run_store.py`
+  - Added CLI commands:
+    - `mm run <spec>`
+    - `mm runs list`
+    - `mm runs show <run_id>`
+  - Added toy executable program:
+    - `examples/toy_program/run.py`
+  - Added fast end-to-end integration test:
+    - `tests/test_run_pipeline.py`
+- Prompt 4 implemented:
+  - Added BioModels SBML adapter baseline:
+    - `src/metamodeler/adapters/biomodels_sbml.py`
+  - Added SBML worker script for simulation:
+    - `src/metamodeler/adapters/biomodels_worker.py`
+  - Adapter registry now resolves `biomodels_sbml_adapter_v1`.
+  - Added BioModels example spec:
+    - `examples/biomodels/spec.prompt4.model1907260003.json`
+  - Added slow integration test:
+    - `tests/test_biomodels_slow.py`
+- Prompt 5 implemented:
+  - Added typed placeholder surrogate spec:
+    - `src/metamodeler/spec/surrogate.py`
+  - Added typed placeholder metamodel spec:
+    - `src/metamodeler/spec/metamodel.py`
+  - Added CLI placeholder commands:
+    - `mm surrogate fit <spec>`
+    - `mm surrogate eval <spec>`
+    - `mm meta build <spec>`
+  - Added fast tests for placeholder CLI wiring:
+    - `tests/test_surrogate_meta_placeholders.py`
+- Prompt 6 implemented:
+  - Refined `SurrogateSpec` to backend-neutral contract fields (`kind`, `inputs`, `outputs`, `backend`, `backend_config`, `dataset_ref`, `seed`).
+  - Added backend-neutral `SurrogateModel` wrapper interface:
+    - `src/metamodeler/surrogates/base.py`
+  - Added metamodel IR schema and helpers:
+    - `src/metamodeler/meta/ir.py`
+  - Added compiler boundary:
+    - `src/metamodeler/meta/compiler.py`
+    - `compile_metamodel(..., backend=\"pymc\")` implemented
+    - `compile_metamodel(..., backend=\"numpyro\")` stubbed with clear `NotImplementedError`
+  - Added metamodel IR builder + artifact store:
+    - `src/metamodeler/meta/builder.py`
+    - `src/metamodeler/storage/meta_store.py`
+  - Updated CLI:
+    - `mm meta build <spec>` now writes IR artifact to `tmp/metamodel_ir/` and registers it in `tmp/meta_registry.json`
+  - Added tests:
+    - IR roundtrip serialization: `tests/test_meta_ir_roundtrip.py`
+    - Compiler smoke with mocked surrogate factor: `tests/test_meta_compiler_smoke.py`
+    - Generic fit-quality tests with increasing challenge: `tests/test_surrogate_fit_quality_generic.py`
+- Prompt 7 implemented:
+  - Added backend implementations behind wrapper contract:
+    - `pymc_gp` (pragmatic linear-Gaussian baseline API)
+    - `sbi_npe` (pragmatic linear-Gaussian baseline API)
+    - module: `src/metamodeler/surrogates/backends.py`
+  - Added dataset loader from canonical run store:
+    - `src/metamodeler/surrogates/dataset.py`
+    - no implicit downsampling/thinning
+  - Added backend-neutral surrogate artifact persistence:
+    - `src/metamodeler/storage/surrogate_store.py`
+    - includes spec digest, dataset digest, variable lists, seed, dependency versions
+  - Added surrogate fit/eval service layer:
+    - `src/metamodeler/surrogates/service.py`
+  - Updated CLI:
+    - `mm surrogate fit surrogate.json`
+    - `mm surrogate eval surrogate.json --inputs '<json>' --n 1000`
+  - Added examples:
+    - `examples/surrogates/surrogate.toy.pymc_gp.json`
+  - Added fast tests:
+    - `tests/test_surrogate_backends.py`
+    - updated `tests/test_surrogate_meta_placeholders.py` for real fit/eval flow
+- Prompt 8 implemented:
+  - Added MetamodelSpec v1 fields in `src/metamodeler/spec/metamodel.py`:
+    - `ppl_backend`, `surrogate_refs`, `variables`, `couplings`, `priors`
+  - Updated IR builder to load surrogate artifacts and include surrogate likelihood factors:
+    - `src/metamodeler/meta/builder.py`
+  - Added metamodel sampling module and artifacts:
+    - `src/metamodeler/meta/sampling.py`
+    - stores `inference_data.json` and canonical `samples_dataset.json`
+    - registry: `tmp/metamodel_samples_registry.json`
+  - Updated CLI:
+    - `mm meta build metamodel.json`
+    - `mm meta sample metamodel.json --draws D --tune T --chains C --seed S`
+    - backend behavior:
+      - `pymc`: sampling path implemented
+      - `numpyro`: explicit `NotImplementedError` pending Prompt 9
+  - Added example metamodel specs/artifacts:
+    - `examples/metamodels/metamodel.simple.json`
+    - `examples/coupled/spec.three_model_coupling.json` updated to v1 structure
+  - Added fast synthetic integration test:
+    - `tests/test_metamodel_sampling.py`
+- Prompt 9 implemented:
+  - Enabled `compile_metamodel(ir, backend=\"numpyro\")` path:
+    - `src/metamodeler/meta/compiler.py`
+  - Enabled `ppl_backend: \"numpyro\"` sampling mode using same metamodel spec interface:
+    - `src/metamodeler/meta/sampling.py`
+  - Kept canonical sample storage format aligned with pymc path:
+    - `inference_data.json`
+    - `samples_dataset.json`
+  - Added fast backend integration test:
+    - `tests/test_metamodel_sampling_numpyro.py`
+  - Added backend-switch documentation and known numerical differences in `README.md`.
+- Prompt 10 implemented:
+  - Added guided CLI command:
+    - `mm tutorial`
+  - Added artifact listing commands:
+    - `mm surrogate list`
+    - `mm meta list`
+  - Hardened artifact metadata fields across surrogate/meta artifacts:
+    - `spec_digest`
+    - `dataset_digest`
+    - `dependency_versions`
+    - `seed`
+  - Added end-to-end quickstart block in `README.md`.
+  - Added fast UX/repro tests:
+    - `tests/test_cli_ux_commands.py`
+- Documentation update:
+  - Added top-level tutorial entry pointers:
+    - `TUTORIAL.md`
+    - `TUTORIAL.ipynb`
+  - Linked tutorial from:
+    - `README.md`
+  - Refreshed tutorial after Prompts 6-10 to reflect real commands and backend behavior:
+    - `mm tutorial`
+    - `mm surrogate list`
+    - `mm meta list`
+    - real surrogate fit/eval and metamodel build/sample flow
+- Tutorial architecture update (modular track):
+  - Added `tutorials/` subfolder with 9-part progression and notebook hub:
+    - `tutorials/Tutorial_0.ipynb`
+    - `tutorials/Tutorial_1.ipynb` ... `tutorials/Tutorial_9.ipynb`
+  - Added tutorial-specific runnable specs and artifact stubs:
+    - `tutorials/specs/`
+    - `tutorials/artifacts/`
+  - Added standalone vs serial execution guidance, prerequisites, estimated times, checkpoints, and troubleshooting in each notebook.
+  - Converted tutorials to notebook-only delivery by retiring `tutorials/Tutorial_*.md` files.
+  - Re-pointed top-level docs:
+    - `README.md` now links to notebook-only tutorial track.
+    - `TUTORIAL.md` now points to notebook-only sequence.
+    - `TUTORIAL.ipynb` now points to `tutorials/Tutorial_0.ipynb`.
+- Prompt 11 implemented:
+  - Replaced placeholder `pymc_gp` backend with a real PyMC probabilistic fit path in:
+    - `src/metamodeler/surrogates/backends.py`
+  - Added posterior-based surrogate methods (`sample`, `log_prob`, `summary`) backed by PyMC posterior draws.
+  - Added actionable missing-dependency error for `pymc_gp` with conda/pip install guidance.
+  - Added warning-safe PyMC import path to avoid ArviZ startup warning failures under `filterwarnings = error`.
+  - Added backend dependency version capture and persistence into surrogate artifacts:
+    - `src/metamodeler/surrogates/service.py`
+    - `src/metamodeler/storage/surrogate_store.py`
+  - Added optional dependency extra for PyMC:
+    - `pyproject.toml`
+  - Updated tests for real PyMC backend behavior and graceful skip/error handling:
+    - `tests/test_surrogate_backends.py`
+  - Strengthened PyMC fit test with a real-learning quality assertion (bounded predictive MSE on synthetic mapping).
+  - Updated user docs with backend install and behavior notes:
+    - `README.md`
+    - `TUTORIAL.md`
+- Prompt 12 implemented:
+  - Replaced placeholder `sbi_npe` backend with real SBI NPE fit/eval flow in:
+    - `src/metamodeler/surrogates/backends.py`
+  - Added dependency guards with actionable runtime errors for missing `sbi` / `torch`.
+  - Added warning-safe SBI training path to ignore known non-fatal 1D-flow warning under `filterwarnings = error`.
+  - Added persisted SBI backend payload format:
+    - model type `sbi_npe_posterior`
+    - serialized posterior payload via torch-save + base64
+    - normalization metadata (`x_mean`, `x_scale`, `y_mean`, `y_scale`)
+  - Added optional dependency extra for SBI:
+    - `pyproject.toml`
+  - Added/updated tests:
+    - real SBI backend fit/eval test (skip-safe when dependency missing)
+    - SBI missing-dependency actionable error test
+    - backend selection helpers for integration tests so fast suite remains stable without optional deps
+  - Updated docs with SBI install and verification commands:
+    - `README.md`
+    - `TUTORIAL.md`
+- Prompt 13 implemented:
+  - Added explicit backend-config validation contract with actionable errors:
+    - `src/metamodeler/surrogate_config.py`
+    - wired into `SurrogateSpec` validation in `src/metamodeler/spec/surrogate.py`
+  - Added strict artifact compatibility checks during eval:
+    - backend mismatch detection
+    - artifact input/output signature mismatch detection
+    - payload input/output order mismatch detection
+    - backend payload presence check
+    - module: `src/metamodeler/surrogates/service.py`
+  - Added backend payload signature checks at load boundary:
+    - module: `src/metamodeler/surrogates/backends.py`
+  - Improved CLI robustness for surrogate fit/eval failures:
+    - clear `Surrogate fit failed: ...` / `Surrogate eval failed: ...` messages
+    - module: `src/metamodeler/cli/main.py`
+  - Hardened artifact metadata for IO compatibility:
+    - added `io_signature` fields in `src/metamodeler/storage/surrogate_store.py`
+  - Added dedicated hardening tests:
+    - `tests/test_surrogate_backend_hardening.py`
+      - backend_config key/value validation
+      - backend mismatch and signature mismatch guards
+      - malformed/missing eval payload and artifact CLI errors
+      - optional dual-backend integration path (slow, dependency-gated)
+  - Added troubleshooting section for surrogate fit/eval guardrails:
+    - `README.md`
+- Prompt 15 implemented:
+  - Converted tutorial delivery to notebook-only (`.ipynb`) in:
+    - `tutorials/Tutorial_0.ipynb` ... `tutorials/Tutorial_9.ipynb`
+  - Removed markdown tutorial duplicates:
+    - retired `tutorials/Tutorial_*.md`
+  - Upgraded onboarding structure across all tutorials:
+    - estimated time
+    - prerequisites/dependencies
+    - success criteria
+    - runnable checkpoints
+    - troubleshooting/fallback guidance
+  - Synchronized tutorial architecture across docs:
+    - `README.md`
+    - `TUTORIAL.md`
+    - `tutorials/README.md`
+    - `PRD.md`
+    - `TechSpec.md`
+    - `CodeDesign.md`
+    - `PROMPT_TO_CODEX.md`
+- Tutorial hardening pass (post-Prompt 15):
+  - Fixed surrogate tutorial blocker in dataset parsing:
+    - `src/metamodeler/surrogates/dataset.py`
+    - now supports adapter output envelope shape `{out_name: {\"inputs\": ..., out_name: [...]}}`.
+  - Added regression coverage:
+    - `tests/test_surrogate_dataset_loading.py`
+  - Notebook quality-gate compatibility:
+    - `pyproject.toml` updated with Ruff `extend-exclude = [\"*.ipynb\"]` so docs notebooks do not break repo lint gate.
+  - Regenerated tutorial notebooks with richer guided pedagogy:
+    - explicit prerequisites, time estimates, success criteria, and troubleshooting.
+    - added graphics/plots in each tutorial notebook.
+    - removed manual `RUN_ID` placeholder in Tutorial 1 (auto-selects latest tutorial run).
+  - Validation results:
+    - `ruff format .` / `ruff check .` / `pytest -q -m \"not slow\"` pass in `py314_metamodeling`.
+    - PyMC and SBI tutorial fit/eval commands verified in dependency-capable env:
+      - `tmp/conda_pymc_verify`.
+    - New dataset parser regression test passes:
+      - `pytest -q tests/test_surrogate_dataset_loading.py`
+
+## Provenance log (design verification runs)
+- BioModels sample source used:
+  - `https://www.ebi.ac.uk/biomodels/services/download/get-files/MODEL1907260003/2/lever2014%20v5.0.xml`
+- Local artifact:
+  - `tmp/biomodels/MODEL1907260003_lever2014_v5_0.xml`
+- Artifact digest (SHA256):
+  - `bb58b84e80f11b7cea87393bb8b79247e0c13fa9c5347a13c65b341d70a3b94e`
+- Simulation driver:
+  - `tmp/scripts/simulate_lever_model.py`
+- Driver digest (SHA256):
+  - `d35ac97d4df556fb960f3b25dd2ea56d13990da7d8723fd838633f93d4921dd0`
+- Executed scenarios (seeds): baseline=101, param_low=102, param_high=103
+- Scanned parameter:
+  - `k_on` with values `[0.00008, 0.0001, 0.00012]`
+- Output summary:
+  - `tmp/biomodels/simulations_MODEL1907260003/summary.json`
+- Summary digest (SHA256):
+  - `1bce50952d5df74eb399dff9f247efbf250541315b22c407884d033347178536`
+- Run logs:
+  - `tmp/run_logs/biomodel_download_lever.stderr.log`
+  - `tmp/run_logs/biomodel_sim_lever.stdout.log`
+  - `tmp/run_logs/biomodel_sim_lever.stderr.log`
+- PyMC verification run (Prompt 11 acceptance backfill):
+  - Verification environment:
+    - `tmp/conda_pymc_verify` (Python `3.11.14`, PyMC `5.27.1`, ArviZ `0.23.4`)
+  - Command:
+    - `HOME=$(pwd)/tmp/home_for_tests MPLCONFIGDIR=$(pwd)/tmp/home_for_tests/.mpl PYTENSOR_FLAGS='cxx=' PYTHONPATH=src /Users/barak/Downloads/metamodeler_codex_scaffold_docs/tmp/conda_pymc_verify/bin/pytest -q tests/test_surrogate_backends.py -k pymc_gp_backend_fit_sample_and_logprob`
+  - Result:
+    - `1 passed` (2026-02-11)
+  - Note:
+    - `PYTENSOR_FLAGS='cxx='` was required in this sandbox to avoid missing local C++ stdlib/toolchain headers during PyTensor compilation.
+- SBI verification run (Prompt 12 acceptance backfill):
+  - Verification environment:
+    - `tmp/conda_pymc_verify` (Python `3.11.14`, SBI `0.25.0`, Torch `2.5.1`)
+  - Command:
+    - `HOME=$(pwd)/tmp/home_for_tests MPLCONFIGDIR=$(pwd)/tmp/home_for_tests/.mpl PYTHONPATH=src /Users/barak/Downloads/metamodeler_codex_scaffold_docs/tmp/conda_pymc_verify/bin/pytest -q tests/test_surrogate_backends.py -k sbi_npe_backend_fit_sample_and_logprob`
+  - Result:
+    - `1 passed` (2026-02-11)
 
 ## Next steps, ordered
-1) Human review and approve updated PRD/TechSpec/Prompt pack
-2) Prompt 0 implementation: scaffold, hooks, packaging, CI basics
-3) Prompt 1 implementation: typed ModelSpec validation
-4) Prompt 2 implementation: DOE planning
-5) Prompt 3 implementation: adapter + local runner + run store
-6) Prompt 4 implementation: BioModels adapter milestone
-7) Prompt 5 implementation: surrogate/meta interface placeholders
+1) Validate notebook onboarding flow with a first-time lab member and collect friction notes
+2) Improve Tutorial 2 offline-mode guidance (BioModels download/network dependency in restricted environments)
+3) Persist immutable run logs inside finalized run artifact directories
 
 ## Decisions log
 - 2026-02-11: Prioritize execution/reproducibility core before advanced Bayesian coupling.
 - 2026-02-11: Freeze v1 to local runner + typed contracts + run provenance; defer full surrogate/meta inference.
 - 2026-02-11: Enforce explicit no-downsampling policy in docs and prompt pack.
+- 2026-02-11: Scaffold step implemented with strict hooks and no modeling logic added.
+- 2026-02-11: Main-branch commit blocking hook includes explicit override (`ALLOW_MAIN_COMMIT=1`) to support controlled bootstrap commits.
+- 2026-02-11: Added pre-implementation `CodeDesign.md` to lock target interfaces against a three-model coupling use case and a real BioModels sample use case.
+- 2026-02-11: BioModels sample verification executed against MODEL1907260003 with logged three-scenario parameter scan (no downsampling).
+- 2026-02-11: Prompt 1 implemented using Pydantic v2 contracts and explicit schema artifact generation.
+- 2026-02-11: Prompt 2 implemented with deterministic DOE planning for `grid` and `sobol`.
+- 2026-02-11: Prompt 3 implemented with adapter/runner/storage separation and run registry CLI.
+- 2026-02-11: Prompt 4 implemented with BioModels SBML adapter baseline and slow integration test path.
+- 2026-02-11: Prompt 5 implemented as typed contract placeholders only; no inference logic added.
+- 2026-02-11: Added tutorial-first usage guide to reduce onboarding friction before full implementation.
+- 2026-02-11: Prompt 6 added backend-neutral IR and compiler boundary before binding runtime inference backends.
+- 2026-02-11: Prompt 7 introduced concrete backend names and artifact contracts while keeping user-facing surrogate interface stable.
+- 2026-02-11: Prompt 8 implemented metamodel build/sample flow with backend-gated behavior and canonical sample artifacts.
+- 2026-02-11: Prompt 9 enabled backend switching (`pymc`/`numpyro`) without changing metamodel JSON interface.
+- 2026-02-11: Prompt 10 added UX commands and reproducibility metadata guarantees for emitted artifacts.
+- 2026-02-11: Tutorial and README backend notes updated to remove stale placeholder/stub language.
+- 2026-02-11: Added prompts 11-13 in `PROMPT_TO_CODEX.md` to implement real `pymc_gp` and `sbi_npe` backends plus compatibility hardening.
+- 2026-02-11: Prompt 11 implemented real PyMC-backed surrogate learning for `pymc_gp` with persisted posterior payload and optional dependency handling.
+- 2026-02-11: Prompt 11 acceptance criteria retroactively tightened to require at least one executed real-PyMC verification test run and log in `Status.md`.
+- 2026-02-11: Verified real PyMC surrogate learning test passes in isolated conda env (`tmp/conda_pymc_verify`) using PyTensor non-C fallback.
+- 2026-02-11: Prompt 12 implemented real SBI NPE surrogate learning path with persisted posterior payload and dependency-gated tests.
+- 2026-02-11: Prompt 12 acceptance criteria retroactively tightened to require at least one executed real-SBI verification test run and log in `Status.md`.
+- 2026-02-11: Verified real SBI surrogate learning test passes in isolated conda env (`tmp/conda_pymc_verify`).
+- 2026-02-11: Prompt 13 implemented backend-config validation, artifact compatibility checks, and improved surrogate CLI error reporting.
+- 2026-02-12: Consolidated tutorial requests into Prompt 14 and implemented a modular 9-part tutorial curriculum with BioModels moved early and per-tutorial scientific side-aims.
+- 2026-02-12: Prompt 15 converted tutorials to notebook-only delivery and upgraded onboarding structure (time estimates, prerequisites, success criteria, checkpoints, troubleshooting).
+- 2026-02-12: Hardened tutorial execution by fixing surrogate dataset envelope parsing and regenerating all notebooks with guided explanations and graphics.
 
 ## Open issues
-- Missing repository URL in AGENTS.md (`<PUT_GIT_REPO_URL_HERE>`).
-- Need final confirmation on first probabilistic backend target for post-v1 (`PyMC` candidate documented; benchmark gate pending).
+- Tutorial 2 full run depends on external BioModels download; in restricted/offline sandboxes this step will fail while validate/plan still pass.
+- PyMC backend tests skip automatically when `pymc` is not installed in the active environment.
+- PyMC is currently not installed in `/Users/barak/miniconda3/envs/py314_metamodeling`; fast suite there remains skip-safe for PyMC-specific tests.
+- SBI backend tests skip automatically when `sbi`/`torch` are not installed in the active environment.
+- `sbi`/`torch` are currently not installed in `/Users/barak/miniconda3/envs/py314_metamodeling`; fast suite there remains skip-safe for SBI-specific tests.
+- `py312` environment currently has dependency conflicts due direct `pip` install of `libroadrunner`; this was used for design verification only and should be isolated before production workflows.
+- `libroadrunner` may not be available in the py314 environment; slow BioModels test is expected to skip when dependency is absent.

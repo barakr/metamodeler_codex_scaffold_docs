@@ -11,6 +11,11 @@ This repository is currently in planning/scaffold phase. The code implementation
 ## Documentation map
 - Product requirements: `/Users/barak/Downloads/metamodeler_codex_scaffold_docs/PRD.md`
 - Technical design: `/Users/barak/Downloads/metamodeler_codex_scaffold_docs/TechSpec.md`
+- Code design validation: `/Users/barak/Downloads/metamodeler_codex_scaffold_docs/CodeDesign.md`
+- Tutorial hub (notebook): `/Users/barak/Downloads/metamodeler_codex_scaffold_docs/tutorials/Tutorial_0.ipynb`
+- Tutorial sequence (notebooks): `/Users/barak/Downloads/metamodeler_codex_scaffold_docs/tutorials/Tutorial_1.ipynb` ... `/Users/barak/Downloads/metamodeler_codex_scaffold_docs/tutorials/Tutorial_9.ipynb`
+- Tutorial entry pointer: `/Users/barak/Downloads/metamodeler_codex_scaffold_docs/TUTORIAL.md`
+  - includes guided onboarding text, auto-discovery of key artifacts, and visual checkpoints
 - Project execution status and decisions: `/Users/barak/Downloads/metamodeler_codex_scaffold_docs/Status.md`
 - Prompt workflow for Codex: `/Users/barak/Downloads/metamodeler_codex_scaffold_docs/PROMPT_TO_CODEX.md`
 - Agent operating constraints: `/Users/barak/Downloads/metamodeler_codex_scaffold_docs/AGENTS.md`
@@ -25,8 +30,78 @@ This repository is currently in planning/scaffold phase. The code implementation
 ## Examples (spec stubs)
 - `examples/toy_program/spec.toy_program.json`: local CLI toy model.
 - `examples/biomodels/spec.biomodels.json`: BioModels SBML model by BioModels id.
+- `examples/surrogates/surrogate.toy.pymc_gp.json`: toy surrogate training spec.
+- `examples/metamodels/metamodel.simple.json`: coupled metamodel spec for sampling flow.
+
+## Optional Surrogate Backends
+The surrogate interface is backend-neutral, but some backends require optional dependencies.
+
+- Install PyMC backend support in the project conda environment:
+  - `conda install -n py314_metamodeling -c conda-forge pymc arviz`
+  - or `pip install -e '.[pymc]'`
+- Install SBI backend support in the project conda environment:
+  - `conda install -n py314_metamodeling -c conda-forge pytorch sbi`
+  - or `pip install -e '.[sbi]'`
+- `pymc` is the modern package (PyMC v5), and is the supported successor to legacy `pymc3`.
+- If `pymc_gp` is selected without PyMC installed, `mm surrogate fit` raises an actionable install error.
+- If `sbi_npe` is selected without `sbi`/`torch` installed, `mm surrogate fit` raises an actionable install error.
+- Real PyMC verification test:
+  - `pytest -q tests/test_surrogate_backends.py -k pymc_gp_backend_fit_sample_and_logprob`
+  - In toolchain-limited environments, use: `PYTENSOR_FLAGS='cxx=' pytest -q tests/test_surrogate_backends.py -k pymc_gp_backend_fit_sample_and_logprob`
+- Real SBI verification test:
+  - `pytest -q tests/test_surrogate_backends.py -k sbi_npe_backend_fit_sample_and_logprob`
+
+## Surrogate Troubleshooting
+- `Surrogate fit failed: Invalid backend_config key...`
+  - Your backend config includes unsupported keys for the selected backend.
+  - See allowed keys in `SurrogateSpec` validation errors and `PROMPT_TO_CODEX.md`.
+- `Surrogate eval failed: No surrogate artifact found...`
+  - Run `mm surrogate fit <spec>` first, or ensure `spec.name` matches a fitted artifact.
+- `Surrogate eval failed: Surrogate backend mismatch...`
+  - The latest artifact for that `spec.name` was trained with another backend.
+  - Use a unique `spec.name` per backend, or refit with the intended backend.
+- `Surrogate eval failed: ... input signature mismatch ...`
+  - The requested spec inputs/outputs do not match the fitted artifact contract.
+  - Keep input/output ordering and names identical between fit and eval specs.
+- `Surrogate eval failed: --inputs must be a JSON object ...`
+  - `--inputs` must be a dict keyed by input variable names, each value a numeric array.
+  - Example: `--inputs '{"a":[0.1,0.2],"b":[1.0,1.5]}'`
 
 ## Reliability policy
 - No silent downsampling/subsampling.
 - Every run must store seed, spec digest, artifact digest, stdout, and stderr.
 - Any major decision or scope shift is recorded in `Status.md`.
+
+## Backend-Neutral IR
+Metamodeler now builds a backend-neutral metamodel IR before inference/runtime execution.
+- Variables and factors are serialized in a backend-independent schema.
+- Coupling factors and surrogate-likelihood factors are represented uniformly.
+- Compiler boundary:
+  - `compile_metamodel(ir, backend=\"pymc\")` is available.
+  - `compile_metamodel(ir, backend=\"numpyro\")` is available.
+- `mm meta build <metamodel.json>` validates spec input and writes an IR artifact to `tmp/metamodel_ir/`.
+
+## Backend Selection (`ppl_backend`)
+`MetaModelSpec` accepts:
+- `ppl_backend: "pymc"`
+- `ppl_backend: "numpyro"`
+
+The same JSON interface is used for both backends (`mm meta sample ...`).
+
+Known numerical differences:
+- The current baseline samplers may produce slightly different coupling-noise realizations between backends.
+- Small posterior summary differences are expected due backend-specific sampling jitter and initialization.
+
+## End-to-End Quickstart
+```bash
+PYTHONPATH=src python -m metamodeler.cli.main validate examples/toy_program/spec.toy_program.json
+PYTHONPATH=src python -m metamodeler.cli.main run examples/toy_program/spec.toy_program.json
+PYTHONPATH=src python -m metamodeler.cli.main surrogate fit examples/surrogates/surrogate.toy.pymc_gp.json
+PYTHONPATH=src python -m metamodeler.cli.main meta build examples/metamodels/metamodel.simple.json
+PYTHONPATH=src python -m metamodeler.cli.main meta sample examples/metamodels/metamodel.simple.json --draws 100 --tune 50 --chains 2 --seed 1
+```
+
+Utility commands:
+- `mm tutorial`
+- `mm surrogate list`
+- `mm meta list`

@@ -1,0 +1,22 @@
+{
+  "schema_version": "1.0",
+  "name": "tutorial_toy_surrogate_pymc",
+  "kind": "conditional",
+  "inputs": ["a", "b"],
+  "outputs": ["y"],
+  "backend": "pymc_gp",
+  "backend_config": {
+    "draws": 300,
+    "tune": 300,
+    "chains": 1,
+    "target_accept": 0.9
+  },
+  "dataset_ref": {
+    "run_store_root": "tmp/tutorials/toy_store"
+  },
+  "seed": 123,
+  "summary_config": {
+    "kind": "index",
+    "index": 0
+  }
+}

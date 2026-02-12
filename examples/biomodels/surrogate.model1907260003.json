@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "name": "surrogate_model1907260003_time_series",
+  "kind": "conditional",
+  "inputs": ["k_on"],
+  "outputs": ["time_series"],
+  "backend": "pymc_gp",
+  "backend_config": {
+    "kernel": "rbf",
+    "noise_prior": "half_normal"
+  },
+  "dataset_ref": {
+    "run_store_root": "examples/biomodels/store_model1907260003",
+    "model_spec_ref": "examples/biomodels/spec.model1907260003.json"
+  },
+  "seed": 101
+}

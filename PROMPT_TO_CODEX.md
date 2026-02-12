@@ -5,6 +5,7 @@ Primary governing files:
 - `/Users/barak/Downloads/metamodeler_codex_scaffold_docs/AGENTS.md`
 - `/Users/barak/Downloads/metamodeler_codex_scaffold_docs/PRD.md`
 - `/Users/barak/Downloads/metamodeler_codex_scaffold_docs/TechSpec.md`
+- `/Users/barak/Downloads/metamodeler_codex_scaffold_docs/CodeDesign.md`
 - `/Users/barak/Downloads/metamodeler_codex_scaffold_docs/Status.md`
 
 ## One-time local setup (human step)
@@ -95,6 +96,452 @@ Acceptance:
 - Fast tests pass.
 - Status.md updated.
 - Commit: `feat: surrogate and meta interfaces`.
+
+### Prompt 6: backend neutral IR for surrogates and metamodels
+You are Codex working in this repository.
+Read AGENTS.md and follow it strictly.
+Do implementation in small, reviewable commits.
+Never change sampling resolution, dataset size, DOE cardinality, or runtime shortcuts unless explicitly requested.
+Always persist run provenance including seed, spec digest, artifact digest, stdout, and stderr.
+After each meaningful change: update Status.md with what changed, why, and decision notes.
+Before commit: run `ruff format .`, `ruff check .`, `pytest -q -m "not slow"`.
+If fast tests fail, do not commit.
+
+Task: introduce backend neutral interfaces so we can later switch PyMC to NumPyro without changing user facing JSON.
+
+Requirements:
+1) Add SurrogateSpec fields:
+   - kind: "conditional" | "joint"
+   - inputs: list[str]
+   - outputs: list[str]
+   - backend: "pymc_gp" | "sbi_npe" | "numpyro_gp" (future, not implemented)
+   - backend_config: dict
+   - dataset_ref: run store query or path
+   - seed
+2) Implement a backend neutral SurrogateModel wrapper interface:
+   - sample(inputs: dict, n: int, seed: int) -> numpy array or xarray
+   - log_prob(inputs: dict, outputs: dict) -> numpy array
+   - summary(inputs: dict) -> dict
+3) Implement Metamodel IR:
+   - variables: name, type, shape, support, units optional
+   - factors: list of factor objects in backend neutral form
+     - prior factors
+     - coupling factors: equality soft constraint, Gaussian link, deterministic transform
+     - surrogate likelihood factor: calls SurrogateModel.log_prob
+4) Add compiler boundary:
+   - compile_metamodel(ir, backend="pymc") implemented
+   - compile_metamodel(ir, backend="numpyro") stub that raises NotImplementedError with clear message
+5) Add CLI wiring stubs that operate on IR only:
+   - `mm meta build metamodel.json` must output an IR artifact to the run store
+6) Tests, fast:
+   - IR roundtrip serialization test
+   - compile(IR, pymc) smoke test using a tiny synthetic IR with one Gaussian factor and one surrogate factor where surrogate is a mocked SurrogateModel returning a simple log_prob
+   - Develop generic testing (doesn't depend on exact model) that show good fit between a learned surrogate model and the original model predictions, and several mock testsets with increasing challenge
+7) Docs:
+   - document the IR idea in README.md in a short section
+   - update Status.md
+
+Constraints:
+- One commit only for this prompt.
+Acceptance:
+- `make fast` passes.
+- Commit message: "refactor: backend neutral IR"
+
+
+### Prompt 7: implement real surrogate learning backends behind the wrapper
+You are Codex working in this repository.
+Read AGENTS.md and follow it strictly.
+Do implementation in small, reviewable commits.
+Never change sampling resolution, dataset size, DOE cardinality, or runtime shortcuts unless explicitly requested.
+Always persist run provenance including seed, spec digest, artifact digest, stdout, and stderr.
+After each meaningful change: update Status.md with what changed, why, and decision notes.
+Before commit: run `ruff format .`, `ruff check .`, `pytest -q -m "not slow"`.
+If fast tests fail, do not commit.
+
+Task: implement actual surrogate learning for conditional surrogates p(B | X,Y,A) using backend selection, but keep the user interface generic.
+
+Requirements:
+1) Implement backend "pymc_gp" as SurrogateModel:
+   - fit on tabular data where outputs are scalar or small vector
+   - predict as a Normal predictive distribution
+   - implement sample and log_prob via predictive mean and variance
+2) Implement backend "sbi_npe" as SurrogateModel:
+   - train a conditional density estimator for B given inputs
+   - implement sample and log_prob using sbi posterior style API
+   - persist model weights and config in the run store
+3) Persist a backend neutral surrogate artifact:
+   - artifact.json: backend, versions, spec digest, dataset digest, variable lists, seed
+   - backend payload: saved model files for the chosen backend
+4) CLI:
+   - `mm surrogate fit surrogate.json` trains and stores the artifact
+   - `mm surrogate eval surrogate.json --inputs <json> --n 1000` loads artifact and outputs samples plus summary stats
+5) Dataset handling:
+   - training data must be pulled from the run store canonical outputs
+   - no implicit downsampling or thinning
+   - if output B is high dimensional, add explicit summary configuration in SurrogateSpec and document it, default is no summaries
+6) Tests, fast:
+   - synthetic dataset test for pymc_gp: fit then sample shape checks, log_prob finite
+   - synthetic dataset test for sbi_npe: minimal training steps, sample shape checks, log_prob finite
+   - create refined tests for goodness of fits based on generic ones from Prompt 6 that are particulary tailored for testing things using pymc/sbi, with increasing difficulty
+7) Docs and examples:
+   - add examples/surrogates/ with one surrogate spec JSON for a toy model
+   - update Status.md
+
+Constraints:
+- One commit only for this prompt.
+Acceptance:
+- `make fast` passes.
+- Commit message: "feat: surrogate learning backends"
+
+### Prompt 8: metamodel coupling and joint distribution sampling using PyMC compiler
+You are Codex working in this repository.
+Read AGENTS.md and follow it strictly.
+Do implementation in small, reviewable commits.
+Never change sampling resolution, dataset size, DOE cardinality, or runtime shortcuts unless explicitly requested.
+Always persist run provenance including seed, spec digest, artifact digest, stdout, and stderr.
+After each meaningful change: update Status.md with what changed, why, and decision notes.
+Before commit: run `ruff format .`, `ruff check .`, `pytest -q -m "not slow"`.
+If fast tests fail, do not commit.
+
+Task: implement coupling variables and joint distribution inference via metamodel IR compiled to PyMC.
+
+Requirements:
+1) Define MetamodelSpec v1:
+   - ppl_backend: "pymc" | "numpyro"
+   - surrogate_refs: list of fitted surrogate artifact refs
+   - variables: optional explicit declarations for X,Y,A,B,C
+   - couplings: list of coupling factor specs
+   - priors: list of prior specs
+2) Implement `mm meta build metamodel.json`:
+   - loads surrogate artifacts
+   - builds metamodel IR containing coupling and surrogate factors
+   - stores IR artifact in the run store
+3) Implement `mm meta sample metamodel.json --draws D --tune T --chains C --seed S`:
+   - compiles IR with backend selected in MetamodelSpec
+   - for backend "pymc": run sampling and store ArviZ InferenceData plus a canonical xarray Dataset of samples
+   - for backend "numpyro": raise NotImplementedError, clear message that Prompt 9 will add it
+4) Coupling factor types to support in v1:
+   - gaussian_link: target ~ Normal(f(source vars), sigma)
+   - equality_soft: Normal(target - source, sigma)
+   - deterministic: target = f(source vars), no randomness
+5) Tests, fast:
+   - train two tiny surrogates on synthetic data
+   - build metamodel with one coupling variable C linking two surrogates
+   - sample with small draws to validate shapes and that results are stored
+6) Examples:
+   - examples/metamodels/metamodel.simple.json that couples two surrogates
+7) Status.md updates
+
+Constraints:
+- One commit only for this prompt.
+Acceptance:
+- `make fast` passes.
+- Commit message: "feat: metamodel coupling and sampling"
+
+### Prompt 9: add NumPyro mode without changing the user interface
+You are Codex working in this repository.
+Read AGENTS.md and follow it strictly.
+Do implementation in small, reviewable commits.
+Never change sampling resolution, dataset size, DOE cardinality, or runtime shortcuts unless explicitly requested.
+Always persist run provenance including seed, spec digest, artifact digest, stdout, and stderr.
+After each meaningful change: update Status.md with what changed, why, and decision notes.
+Before commit: run `ruff format .`, `ruff check .`, `pytest -q -m "not slow"`.
+If fast tests fail, do not commit.
+
+Task: implement compile_metamodel(ir, backend="numpyro") and enable `ppl_backend: "numpyro"` in MetamodelSpec with the same JSON interface.
+
+Requirements:
+1) Implement NumPyro compiler:
+   - translate Gaussian factors to numpyro.sample with dist.Normal
+   - translate soft constraints and surrogate factors to numpyro.factor using log_prob values
+2) Implement sampling:
+   - run NUTS, store posterior samples in the same canonical storage format as PyMC
+3) Add fast tests:
+   - same synthetic metamodel integration test as Prompt 8 but using ppl_backend="numpyro"
+4) Docs:
+   - README section: how to switch ppl_backend
+   - record known numerical differences between backends
+5) Status.md updates
+
+Constraints:
+- One commit only for this prompt.
+Acceptance:
+- `make fast` passes.
+- Commit message: "feat: numpyro backend"
+
+### Prompt 10: harden user facing UX and reproducibility
+You are Codex working in this repository.
+Read AGENTS.md and follow it strictly.
+Do implementation in small, reviewable commits.
+Never change sampling resolution, dataset size, DOE cardinality, or runtime shortcuts unless explicitly requested.
+Always persist run provenance including seed, spec digest, artifact digest, stdout, and stderr.
+After each meaningful change: update Status.md with what changed, why, and decision notes.
+Before commit: run `ruff format .`, `ruff check .`, `pytest -q -m "not slow"`.
+If fast tests fail, do not commit.
+
+Task: improve the user experience so a user can go from model spec to surrogates to a joint metamodel with minimal friction.
+
+Requirements:
+1) Add `mm tutorial` that prints a short guided flow and points to examples
+2) Add `mm surrogate list` and `mm meta list` commands that show stored artifacts
+3) Add schema validation for SurrogateSpec and MetamodelSpec with actionable errors
+4) Ensure every artifact has:
+   - spec digest
+   - dataset digest
+   - dependency versions
+   - random seed
+5) Add docs:
+   - examples end to end in README: run model, fit surrogate, build metamodel, sample joint
+6) Status.md updates
+
+Constraints:
+- One commit only for this prompt.
+Acceptance:
+- `make fast` passes.
+- Commit message: "chore: ux and reproducibility hardening"
+
+### Prompt 11: implement real PyMC-backed surrogate learning (`pymc_gp`)
+You are Codex working in this repository.
+Read AGENTS.md and follow it strictly.
+Do implementation in small, reviewable commits.
+Never change sampling resolution, dataset size, DOE cardinality, or runtime shortcuts unless explicitly requested.
+Always persist run provenance including seed, spec digest, artifact digest, stdout, and stderr.
+After each meaningful change: update Status.md with what changed, why, and decision notes.
+Before commit: run `ruff format .`, `ruff check .`, `pytest -q -m "not slow"`.
+If fast tests fail, do not commit.
+
+Task: replace the current placeholder implementation for backend `pymc_gp` with a real model implemented using the `pymc` package.
+Note: use modern `pymc` (PyMC v5, successor to PyMC3). Do not reintroduce legacy `pymc3` APIs.
+
+Requirements:
+1) Dependencies and configuration:
+   - Add optional project extras for `pymc` backend dependencies in `pyproject.toml`.
+   - Add clear runtime error messages when `pymc` is unavailable (how to install in conda env).
+   - Keep `mm` interface unchanged.
+2) Backend implementation:
+   - Implement a real `pymc_gp` fit path in `src/metamodeler/surrogates/backends.py`.
+   - Use a probabilistic model in PyMC (minimum: Bayesian linear Gaussian; preferred: GP if feasible with current interface).
+   - Preserve backend-neutral `sample`, `log_prob`, and `summary` behavior.
+3) Artifact persistence:
+   - Persist backend payload in a stable format (JSON/NPZ/etc.) and include dependency/version metadata.
+   - Ensure loading works across CLI sessions (`mm surrogate eval` after `mm surrogate fit`).
+4) Tests:
+   - Add focused tests for real PyMC fit/eval behavior.
+   - Tests must skip gracefully when `pymc` is not installed, not fail.
+   - Keep tests deterministic with explicit seeds.
+   - Add a real-learning quality assertion (not only shape/finite checks): predictive mean must match a known synthetic mapping within a bounded error.
+   - Add an explicit verification command path and run it at least once in an environment where `pymc` is installed:
+     - `pytest -q tests/test_surrogate_backends.py -k pymc_gp_backend_fit_sample_and_logprob`
+     - if the environment lacks a local C++ toolchain, run with `PYTENSOR_FLAGS='cxx='` so PyMC/PyTensor uses non-C fallback for verification.
+     - Record the executed command, environment details, and pass/fail result in `Status.md`.
+5) Docs:
+   - Update `README.md` and `TUTORIAL.md` with PyMC backend usage and install notes.
+   - Update `Status.md`.
+
+Constraints:
+- One commit only for this prompt.
+Acceptance:
+- `make fast` passes.
+- Real PyMC verification test executed at least once in a PyMC-capable env and logged in `Status.md`.
+- Commit message: "feat: real pymc surrogate backend"
+
+### Prompt 12: implement real SBI-backed surrogate learning (`sbi_npe`)
+You are Codex working in this repository.
+Read AGENTS.md and follow it strictly.
+Do implementation in small, reviewable commits.
+Never change sampling resolution, dataset size, DOE cardinality, or runtime shortcuts unless explicitly requested.
+Always persist run provenance including seed, spec digest, artifact digest, stdout, and stderr.
+After each meaningful change: update Status.md with what changed, why, and decision notes.
+Before commit: run `ruff format .`, `ruff check .`, `pytest -q -m "not slow"`.
+If fast tests fail, do not commit.
+
+Task: replace the current placeholder implementation for backend `sbi_npe` with a real implementation using the `sbi` package.
+
+Requirements:
+1) Dependencies and configuration:
+   - Add optional project extras for `sbi`/`torch` backend dependencies in `pyproject.toml`.
+   - Add explicit runtime error messages when dependencies are missing.
+   - Keep user-facing JSON schema unchanged.
+2) Backend implementation:
+   - Implement real `sbi_npe` fit path using `sbi` NPE training API.
+   - Implement backend-neutral `sample`, `log_prob`, and `summary` using trained posterior/density estimator.
+   - Keep deterministic seeding where supported and document any unavoidable stochasticity.
+3) Artifact persistence:
+   - Persist model payload (state dict/config/scalers) so `mm surrogate eval` can load without retraining.
+   - Record dependency versions in surrogate artifact metadata.
+4) Tests:
+   - Add focused tests for `sbi_npe` fit/eval behavior.
+   - Tests must skip gracefully when `sbi`/`torch` are not installed.
+   - Add at least one synthetic quality check (finite log_prob + reasonable predictive mean error).
+   - Add an explicit verification command path and run it at least once in an environment where `sbi` and `torch` are installed:
+     - `pytest -q tests/test_surrogate_backends.py -k sbi_npe_backend_fit_sample_and_logprob`
+     - Record the executed command, environment details, and pass/fail result in `Status.md`.
+5) Docs:
+   - Update `README.md` and `TUTORIAL.md` with SBI backend usage and install notes.
+   - Update `Status.md`.
+
+Constraints:
+- One commit only for this prompt.
+Acceptance:
+- `make fast` passes.
+- Real SBI verification test executed at least once in an SBI-capable env and logged in `Status.md`.
+- Commit message: "feat: real sbi surrogate backend"
+
+### Prompt 13: backend integration hardening and CLI validation
+You are Codex working in this repository.
+Read AGENTS.md and follow it strictly.
+Do implementation in small, reviewable commits.
+Never change sampling resolution, dataset size, DOE cardinality, or runtime shortcuts unless explicitly requested.
+Always persist run provenance including seed, spec digest, artifact digest, stdout, and stderr.
+After each meaningful change: update Status.md with what changed, why, and decision notes.
+Before commit: run `ruff format .`, `ruff check .`, `pytest -q -m "not slow"`.
+If fast tests fail, do not commit.
+
+Task: harden backend selection and artifact compatibility across `pymc_gp` and `sbi_npe`.
+
+Requirements:
+1) Validation:
+   - Validate backend-specific `backend_config` keys with actionable errors.
+   - Fail fast when artifact backend and requested backend mismatch.
+2) CLI robustness:
+   - Improve `mm surrogate fit` / `mm surrogate eval` error messages for missing artifacts, missing dependencies, and malformed input payloads.
+   - Keep command signatures unchanged.
+3) Compatibility checks:
+   - Ensure artifacts include enough metadata to prevent wrong-input ordering or output-name mismatch.
+   - Add strict checks for `inputs`/`outputs` list compatibility at load/eval time.
+4) Tests:
+   - Add fast tests for mismatch/error paths and artifact compatibility guards.
+   - Add one optional integration test path that runs both backends when dependencies are present.
+5) Docs:
+   - Update troubleshooting section in `README.md`.
+   - Update `Status.md`.
+
+Constraints:
+- One commit only for this prompt.
+Acceptance:
+- `make fast` passes.
+- Commit message: "chore: surrogate backend hardening"
+
+### Prompt 14: build modular tutorial curriculum (9 parts, package-first + science-second)
+You are Codex working in this repository.
+Read AGENTS.md and follow it strictly.
+Do implementation in small, reviewable commits.
+Never change sampling resolution, dataset size, DOE cardinality, or runtime shortcuts unless explicitly requested.
+Always persist run provenance including seed, spec digest, artifact digest, stdout, and stderr.
+After each meaningful change: update Status.md with what changed, why, and decision notes.
+Before commit: run `ruff format .`, `ruff check .`, `pytest -q -m "not slow"`.
+If fast tests fail, do not commit.
+
+Task: replace the single tutorial flow with a modular learning path that is practical for package users and scientifically informative without becoming theory-heavy.
+
+Requirements:
+1) Create a `tutorials/` subfolder with:
+   - `Tutorial_0` as the main hub and serial table-of-contents.
+   - `Tutorial_1` through `Tutorial_9` with progressively harder tasks.
+2) Every tutorial must include:
+   - Primary learning aim focused on package usage (`mm` commands, specs, artifacts).
+   - Secondary learning aim focused on scientific/computational intuition.
+3) Ordering constraints:
+   - Tutorial 1 must be quick, fun, and produce a real model result.
+   - BioModels example must appear early (by Tutorial 2) and later tutorials may build on it.
+   - Tutorials 5 and 6 must explicitly explain the underlying fitting ideas:
+     - PyMC path: priors, posterior, posterior predictive.
+     - SBI path: simulator-based inference, neural posterior estimation.
+4) Decoupling constraints:
+   - Tutorials should be mostly standalone.
+   - Each tutorial must state whether it can run independently and, if needed, provide fallback bootstrap commands to recreate missing artifacts from prior tutorials.
+5) Notebook support:
+   - Provide at least a notebook entrypoint for the modular track (`Tutorial_0.ipynb`).
+6) Documentation wiring:
+   - Update top-level tutorial entry docs (`TUTORIAL.md`, `README.md`) to point to `tutorials/Tutorial_0`.
+7) Add/update tutorial-specific example specs or artifact stubs if needed to keep tutorials runnable.
+8) Update `Status.md` with tutorial architecture decisions and what remains open.
+
+Constraints:
+- One commit only for this prompt.
+Acceptance:
+- Modular 9-part tutorial track exists and is discoverable from README.
+- Tutorial 0 provides clear serial roadmap and execution-mode guidance (standalone vs serial).
+- Status.md updated.
+- Commit message: "docs: modular tutorial track"
+
+### Prompt 15: convert tutorial system to pure Jupyter onboarding track
+You are Codex working in this repository.
+Read AGENTS.md and follow it strictly.
+Do implementation in small, reviewable commits.
+Never change sampling resolution, dataset size, DOE cardinality, or runtime shortcuts unless explicitly requested.
+Always persist run provenance including seed, spec digest, artifact digest, stdout, and stderr.
+After each meaningful change: update Status.md with what changed, why, and decision notes.
+Before commit: run `ruff format .`, `ruff check .`, `pytest -q -m "not slow"`.
+If fast tests fail, do not commit.
+
+Task: convert the modular tutorial content to notebook-only delivery and improve onboarding quality for lab members with general programming + biological background.
+
+Requirements:
+1) Tutorial format:
+   - Deliver tutorials as pure Jupyter notebooks:
+     - `tutorials/Tutorial_0.ipynb`
+     - `tutorials/Tutorial_1.ipynb` ... `tutorials/Tutorial_9.ipynb`
+   - Remove/retire Markdown tutorial duplicates (`tutorials/Tutorial_*.md`).
+2) Onboarding quality:
+   - For each tutorial include:
+     - estimated time,
+     - prerequisites/dependencies,
+     - clear success criteria,
+     - runnable steps and checkpoints,
+     - short troubleshooting/fallback guidance.
+3) Learning design:
+   - Keep dual aims in each notebook:
+     - primary package-use objective,
+     - secondary scientific/computational objective.
+   - Keep BioModels early and retain explicit PyMC/SBI conceptual mini-lessons.
+4) Documentation updates:
+   - Update `README.md`, `TUTORIAL.md`, `tutorials/README.md` to notebook-only links.
+   - Update `PRD.md`, `TechSpec.md`, `CodeDesign.md`, and `Status.md` to reflect notebook-first onboarding architecture.
+5) Prompt/doc synchronization:
+   - Record this as Prompt 15 completion in `Status.md`.
+
+Constraints:
+- One commit only for this prompt.
+Acceptance:
+- Tutorials are notebook-only in `tutorials/`.
+- Onboarding structure is explicit and usable by new lab members.
+- Project docs and prompt pack are synchronized with tutorial architecture.
+- Commit message: "docs: notebook-only tutorial onboarding"
+
+### Prompt 16: tutorial execution hardening + guided pedagogy enrichment
+You are Codex working in this repository.
+Read AGENTS.md and follow it strictly.
+Do implementation in small, reviewable commits.
+Never change sampling resolution, dataset size, DOE cardinality, or runtime shortcuts unless explicitly requested.
+Always persist run provenance including seed, spec digest, artifact digest, stdout, and stderr.
+After each meaningful change: update Status.md with what changed, why, and decision notes.
+Before commit: run `ruff format .`, `ruff check .`, `pytest -q -m "not slow"`.
+If fast tests fail, do not commit.
+
+Task: run the tutorial flow yourself, fix execution blockers, and improve tutorial learning quality.
+
+Requirements:
+1) Execute tutorial command paths and record pass/fail findings.
+2) Fix blocking issues discovered during execution (example: surrogate dataset parsing mismatch).
+3) Add regression tests for discovered blockers.
+4) Improve tutorial notebooks:
+   - richer verbal guidance and “why this matters” framing,
+   - remove manual placeholders (auto-select IDs/artifacts where possible),
+   - add helpful graphics/plots in each tutorial.
+5) Ensure quality gate remains green:
+   - handle notebook lint strategy explicitly (e.g., ruff config for `.ipynb` docs).
+6) Update docs to reflect the hardening pass:
+   - `Status.md`, `PRD.md`, `TechSpec.md`, `CodeDesign.md`, `README.md`, `TUTORIAL.md`.
+
+Constraints:
+- One commit only for this prompt.
+Acceptance:
+- Tutorial 5/6 surrogate flow no longer blocked by toy-output envelope mismatch.
+- Fast suite passes.
+- Tutorial notebooks contain guided explanatory content and graphics.
+- Status.md includes concrete execution findings and remaining environment-dependent limitations.
+- Commit message: "docs: harden and enrich tutorial notebooks"
 
 ## Stop conditions
 - If Codex proposes implicit downsampling or data reduction: reject and preserve full requested computation.

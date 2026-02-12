@@ -1,0 +1,506 @@
+{
+  "$defs": {
+    "AdapterSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "input_mapping": {
+          "items": {
+            "$ref": "#/$defs/MappingSpec"
+          },
+          "title": "Input Mapping",
+          "type": "array"
+        },
+        "output_mapping": {
+          "items": {
+            "$ref": "#/$defs/MappingSpec"
+          },
+          "title": "Output Mapping",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "title": "AdapterSpec",
+      "type": "object"
+    },
+    "ArtifactSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "biomodels_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Biomodels Id"
+        },
+        "entrypoint": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Entrypoint"
+        },
+        "source_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Url"
+        },
+        "type": {
+          "enum": [
+            "local",
+            "biomodels"
+          ],
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "ArtifactSpec",
+      "type": "object"
+    },
+    "DesignSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "grid": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Grid"
+        },
+        "sobol": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sobol"
+        },
+        "strategy": {
+          "enum": [
+            "grid",
+            "sobol"
+          ],
+          "title": "Strategy",
+          "type": "string"
+        }
+      },
+      "required": [
+        "strategy"
+      ],
+      "title": "DesignSpec",
+      "type": "object"
+    },
+    "IOSchemaSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "inputs": {
+          "items": {
+            "$ref": "#/$defs/VariableSpec"
+          },
+          "minItems": 1,
+          "title": "Inputs",
+          "type": "array"
+        },
+        "outputs": {
+          "items": {
+            "$ref": "#/$defs/VariableSpec"
+          },
+          "minItems": 1,
+          "title": "Outputs",
+          "type": "array"
+        },
+        "time_grid": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TimeGridSpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "inputs",
+        "outputs"
+      ],
+      "title": "IOSchemaSpec",
+      "type": "object"
+    },
+    "MappingEndpointSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Key"
+        },
+        "kind": {
+          "minLength": 1,
+          "title": "Kind",
+          "type": "string"
+        },
+        "path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Path"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "MappingEndpointSpec",
+      "type": "object"
+    },
+    "MappingSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MappingEndpointSpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "to": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MappingEndpointSpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "var": {
+          "minLength": 1,
+          "title": "Var",
+          "type": "string"
+        }
+      },
+      "required": [
+        "var"
+      ],
+      "title": "MappingSpec",
+      "type": "object"
+    },
+    "ModelInfoSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact": {
+          "$ref": "#/$defs/ArtifactSpec"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "version": {
+          "minLength": 1,
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "version",
+        "artifact"
+      ],
+      "title": "ModelInfoSpec",
+      "type": "object"
+    },
+    "ReproducibilitySpec": {
+      "additionalProperties": false,
+      "properties": {
+        "seed": {
+          "minimum": 0,
+          "title": "Seed",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "seed"
+      ],
+      "title": "ReproducibilitySpec",
+      "type": "object"
+    },
+    "RunnerResourcesSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "cpus": {
+          "minimum": 1,
+          "title": "Cpus",
+          "type": "integer"
+        },
+        "mem_gb": {
+          "minimum": 1,
+          "title": "Mem Gb",
+          "type": "integer"
+        },
+        "walltime_min": {
+          "minimum": 1,
+          "title": "Walltime Min",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "cpus",
+        "mem_gb",
+        "walltime_min"
+      ],
+      "title": "RunnerResourcesSpec",
+      "type": "object"
+    },
+    "RunnerSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "enum": [
+            "local_process",
+            "container",
+            "hpc",
+            "http"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "resources": {
+          "$ref": "#/$defs/RunnerResourcesSpec"
+        }
+      },
+      "required": [
+        "mode",
+        "resources"
+      ],
+      "title": "RunnerSpec",
+      "type": "object"
+    },
+    "StorageSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "root": {
+          "minLength": 1,
+          "title": "Root",
+          "type": "string"
+        }
+      },
+      "required": [
+        "root"
+      ],
+      "title": "StorageSpec",
+      "type": "object"
+    },
+    "TimeGridSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "dt": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dt"
+        },
+        "n_points": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "N Points"
+        },
+        "t0": {
+          "title": "T0",
+          "type": "number"
+        },
+        "t1": {
+          "title": "T1",
+          "type": "number"
+        }
+      },
+      "required": [
+        "t0",
+        "t1"
+      ],
+      "title": "TimeGridSpec",
+      "type": "object"
+    },
+    "VariableSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "dims": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dims"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "support": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Support"
+        },
+        "type": {
+          "enum": [
+            "float",
+            "int",
+            "array",
+            "string",
+            "bool"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "units": {
+          "minLength": 1,
+          "title": "Units",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "type",
+        "units"
+      ],
+      "title": "VariableSpec",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "adapter": {
+      "$ref": "#/$defs/AdapterSpec"
+    },
+    "design": {
+      "$ref": "#/$defs/DesignSpec"
+    },
+    "io_schema": {
+      "$ref": "#/$defs/IOSchemaSpec"
+    },
+    "model": {
+      "$ref": "#/$defs/ModelInfoSpec"
+    },
+    "reproducibility": {
+      "$ref": "#/$defs/ReproducibilitySpec"
+    },
+    "runner": {
+      "$ref": "#/$defs/RunnerSpec"
+    },
+    "schema_version": {
+      "minLength": 1,
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "storage": {
+      "$ref": "#/$defs/StorageSpec"
+    }
+  },
+  "required": [
+    "schema_version",
+    "model",
+    "runner",
+    "io_schema",
+    "design",
+    "adapter",
+    "reproducibility",
+    "storage"
+  ],
+  "title": "ModelSpec",
+  "type": "object"
+}

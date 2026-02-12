@@ -1,0 +1,9 @@
+{
+  "artifact_id": "surrogate_B",
+  "spec_name": "dummy_B",
+  "backend": "pymc_gp",
+  "variable_lists": {
+    "inputs": ["y"],
+    "outputs": ["z"]
+  }
+}

@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+msg_file="$1"
+msg="$(head -n1 "$msg_file")"
+
+if ! [[ "$msg" =~ ^(feat|fix|chore|docs|test|refactor|ci|perf)(\(.+\))?:\ .+ ]]; then
+  echo "commit-msg: use conventional commit format, e.g. 'chore: scaffold repo'"
+  exit 1
+fi
