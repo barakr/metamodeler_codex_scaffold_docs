@@ -9,6 +9,7 @@ This document refines the implementation design before Prompt 1. It validates tw
 - Keep Prompt 1 focused on typed spec validation only.
 - Ensure current architecture supports real end-to-end use cases before coding model logic.
 - Preserve strict reproducibility: explicit seeds, model artifact digests, and saved stdout/stderr for each run.
+- Provide a notebook-first onboarding path so non-specialist lab members can execute the workflow progressively.
 
 ## Architectural refinement
 
@@ -117,3 +118,15 @@ Run logs:
 - Implementing Pydantic models, schema emission, or CLI command behavior.
 - Implementing surrogate fitting algorithms.
 - Implementing joint Bayesian inference.
+
+## Tutorial/onboarding design notes
+- Tutorials are delivered notebook-first in `tutorials/Tutorial_0.ipynb` to `tutorials/Tutorial_9.ipynb`.
+- Each tutorial carries two explicit aims:
+  - package operation objective (CLI/spec/artifact action),
+  - light scientific/computational objective (e.g., DOE coverage, Bayesian posterior, SBI intuition).
+- BioModels is intentionally early (Tutorial 2) so biological context precedes advanced surrogate/metamodel work.
+- Tutorials are decoupled by design:
+  - standalone bootstrap commands are included,
+  - serial execution remains supported for cumulative learning.
+- Tutorials include visual checkpoints (plots/graphics) to support rapid comprehension during onboarding.
+- Known execution blockers discovered during tutorial dry-run should be fixed in code with explicit regression tests (not only docs edits).

@@ -26,6 +26,7 @@ where = ["src"]
 [tool.ruff]
 line-length = 100
 target-version = "py314"
+extend-exclude = ["*.ipynb"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]

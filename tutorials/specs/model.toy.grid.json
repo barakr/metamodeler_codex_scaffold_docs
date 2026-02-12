@@ -1,0 +1,40 @@
+{
+  "schema_version": "1.0",
+  "model": {
+    "name": "toy_program_tutorial",
+    "version": "0.1.0",
+    "artifact": {
+      "type": "local",
+      "entrypoint": ["python", "-m", "examples.toy_program.run"]
+    }
+  },
+  "runner": {
+    "mode": "local_process",
+    "resources": { "cpus": 1, "mem_gb": 1, "walltime_min": 1 }
+  },
+  "io_schema": {
+    "inputs": [
+      { "name": "a", "type": "float", "units": "a.u.", "support": [0.0, 2.0] },
+      { "name": "b", "type": "float", "units": "a.u.", "support": [0.0, 2.0] }
+    ],
+    "outputs": [
+      { "name": "y", "type": "array", "dims": ["index"], "units": "a.u." }
+    ]
+  },
+  "design": {
+    "strategy": "grid",
+    "grid": { "a": [0.0, 1.0, 2.0], "b": [0.0, 1.0, 2.0] }
+  },
+  "adapter": {
+    "id": "python_cli_adapter_v1",
+    "input_mapping": [
+      { "var": "a", "to": { "kind": "cli_arg", "key": "--a" } },
+      { "var": "b", "to": { "kind": "cli_arg", "key": "--b" } }
+    ],
+    "output_mapping": [
+      { "var": "y", "from": { "kind": "file", "path": "out/y.json" } }
+    ]
+  },
+  "reproducibility": { "seed": 123 },
+  "storage": { "root": "tmp/tutorials/toy_store" }
+}

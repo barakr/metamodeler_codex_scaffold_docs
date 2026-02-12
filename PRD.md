@@ -42,6 +42,11 @@ Need a framework that can:
   - deterministic cache keys.
 - CLI commands: validate, plan, run, runs list/show.
 - Two examples: toy CLI model and BioModels SBML spec stub.
+- Notebook-first onboarding curriculum:
+  - Tutorial 0 hub + Tutorial 1-9 progression.
+  - Standalone and serial paths for new lab members.
+  - Light scientific concept in each tutorial, aligned to package actions.
+  - Guided narrative + visual checkpoints (plots/graphics) for each tutorial.
 
 ### Out of scope for v1
 - Production-grade joint Bayesian inference.
@@ -63,6 +68,8 @@ Need a framework that can:
 - NFR3: All model runs persist stdout/stderr and seed.
 - NFR4: Schema and shape mismatches fail early with clear errors.
 - NFR5: Documentation files remain synchronized (`PRD.md`, `TechSpec.md`, `Status.md`, `README.md`).
+- NFR6: Tutorials are delivered as Jupyter notebooks (`.ipynb`) and are runnable in a conda-based workflow.
+- NFR7: Tutorial notebooks avoid manual placeholders when practical (auto-select run IDs/artifacts for smoother onboarding).
 
 ## User stories
 - US1: As a researcher, I define one `ModelSpec` and run it without writing glue code.
@@ -70,12 +77,15 @@ Need a framework that can:
 - US3: As a developer, I can add an adapter in one module with contract tests.
 - US4: As an ML engineer, I can consume canonical run outputs for surrogate training.
 - US5: As a user, I can inspect failed runs through stored stderr and provenance.
+- US6: As a lab member, I can onboard via tutorial notebooks and complete progressively harder tasks without reading source code first.
 
 ## Success metrics
 - SM1: New simple model integration in under 2 engineering hours.
 - SM2: 100 percent of runs contain seed, spec digest, artifact digest, stdout, stderr.
 - SM3: Shape/unit mapping errors are caught before long run execution.
 - SM4: 10k-point planning and cached re-run workflow supported without schema drift.
+- SM5: New lab member can complete Tutorials 1-3 in one session and produce one interpreted scientific result.
+- SM6: Tutorial execution blockers discovered by dry-run are patched with regression tests before onboarding release.
 
 ## Risks and mitigations
 - Risk: Time-series outputs have inconsistent dimensions.

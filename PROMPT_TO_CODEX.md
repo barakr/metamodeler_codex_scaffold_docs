@@ -422,6 +422,127 @@ Acceptance:
 - `make fast` passes.
 - Commit message: "chore: surrogate backend hardening"
 
+### Prompt 14: build modular tutorial curriculum (9 parts, package-first + science-second)
+You are Codex working in this repository.
+Read AGENTS.md and follow it strictly.
+Do implementation in small, reviewable commits.
+Never change sampling resolution, dataset size, DOE cardinality, or runtime shortcuts unless explicitly requested.
+Always persist run provenance including seed, spec digest, artifact digest, stdout, and stderr.
+After each meaningful change: update Status.md with what changed, why, and decision notes.
+Before commit: run `ruff format .`, `ruff check .`, `pytest -q -m "not slow"`.
+If fast tests fail, do not commit.
+
+Task: replace the single tutorial flow with a modular learning path that is practical for package users and scientifically informative without becoming theory-heavy.
+
+Requirements:
+1) Create a `tutorials/` subfolder with:
+   - `Tutorial_0` as the main hub and serial table-of-contents.
+   - `Tutorial_1` through `Tutorial_9` with progressively harder tasks.
+2) Every tutorial must include:
+   - Primary learning aim focused on package usage (`mm` commands, specs, artifacts).
+   - Secondary learning aim focused on scientific/computational intuition.
+3) Ordering constraints:
+   - Tutorial 1 must be quick, fun, and produce a real model result.
+   - BioModels example must appear early (by Tutorial 2) and later tutorials may build on it.
+   - Tutorials 5 and 6 must explicitly explain the underlying fitting ideas:
+     - PyMC path: priors, posterior, posterior predictive.
+     - SBI path: simulator-based inference, neural posterior estimation.
+4) Decoupling constraints:
+   - Tutorials should be mostly standalone.
+   - Each tutorial must state whether it can run independently and, if needed, provide fallback bootstrap commands to recreate missing artifacts from prior tutorials.
+5) Notebook support:
+   - Provide at least a notebook entrypoint for the modular track (`Tutorial_0.ipynb`).
+6) Documentation wiring:
+   - Update top-level tutorial entry docs (`TUTORIAL.md`, `README.md`) to point to `tutorials/Tutorial_0`.
+7) Add/update tutorial-specific example specs or artifact stubs if needed to keep tutorials runnable.
+8) Update `Status.md` with tutorial architecture decisions and what remains open.
+
+Constraints:
+- One commit only for this prompt.
+Acceptance:
+- Modular 9-part tutorial track exists and is discoverable from README.
+- Tutorial 0 provides clear serial roadmap and execution-mode guidance (standalone vs serial).
+- Status.md updated.
+- Commit message: "docs: modular tutorial track"
+
+### Prompt 15: convert tutorial system to pure Jupyter onboarding track
+You are Codex working in this repository.
+Read AGENTS.md and follow it strictly.
+Do implementation in small, reviewable commits.
+Never change sampling resolution, dataset size, DOE cardinality, or runtime shortcuts unless explicitly requested.
+Always persist run provenance including seed, spec digest, artifact digest, stdout, and stderr.
+After each meaningful change: update Status.md with what changed, why, and decision notes.
+Before commit: run `ruff format .`, `ruff check .`, `pytest -q -m "not slow"`.
+If fast tests fail, do not commit.
+
+Task: convert the modular tutorial content to notebook-only delivery and improve onboarding quality for lab members with general programming + biological background.
+
+Requirements:
+1) Tutorial format:
+   - Deliver tutorials as pure Jupyter notebooks:
+     - `tutorials/Tutorial_0.ipynb`
+     - `tutorials/Tutorial_1.ipynb` ... `tutorials/Tutorial_9.ipynb`
+   - Remove/retire Markdown tutorial duplicates (`tutorials/Tutorial_*.md`).
+2) Onboarding quality:
+   - For each tutorial include:
+     - estimated time,
+     - prerequisites/dependencies,
+     - clear success criteria,
+     - runnable steps and checkpoints,
+     - short troubleshooting/fallback guidance.
+3) Learning design:
+   - Keep dual aims in each notebook:
+     - primary package-use objective,
+     - secondary scientific/computational objective.
+   - Keep BioModels early and retain explicit PyMC/SBI conceptual mini-lessons.
+4) Documentation updates:
+   - Update `README.md`, `TUTORIAL.md`, `tutorials/README.md` to notebook-only links.
+   - Update `PRD.md`, `TechSpec.md`, `CodeDesign.md`, and `Status.md` to reflect notebook-first onboarding architecture.
+5) Prompt/doc synchronization:
+   - Record this as Prompt 15 completion in `Status.md`.
+
+Constraints:
+- One commit only for this prompt.
+Acceptance:
+- Tutorials are notebook-only in `tutorials/`.
+- Onboarding structure is explicit and usable by new lab members.
+- Project docs and prompt pack are synchronized with tutorial architecture.
+- Commit message: "docs: notebook-only tutorial onboarding"
+
+### Prompt 16: tutorial execution hardening + guided pedagogy enrichment
+You are Codex working in this repository.
+Read AGENTS.md and follow it strictly.
+Do implementation in small, reviewable commits.
+Never change sampling resolution, dataset size, DOE cardinality, or runtime shortcuts unless explicitly requested.
+Always persist run provenance including seed, spec digest, artifact digest, stdout, and stderr.
+After each meaningful change: update Status.md with what changed, why, and decision notes.
+Before commit: run `ruff format .`, `ruff check .`, `pytest -q -m "not slow"`.
+If fast tests fail, do not commit.
+
+Task: run the tutorial flow yourself, fix execution blockers, and improve tutorial learning quality.
+
+Requirements:
+1) Execute tutorial command paths and record pass/fail findings.
+2) Fix blocking issues discovered during execution (example: surrogate dataset parsing mismatch).
+3) Add regression tests for discovered blockers.
+4) Improve tutorial notebooks:
+   - richer verbal guidance and “why this matters” framing,
+   - remove manual placeholders (auto-select IDs/artifacts where possible),
+   - add helpful graphics/plots in each tutorial.
+5) Ensure quality gate remains green:
+   - handle notebook lint strategy explicitly (e.g., ruff config for `.ipynb` docs).
+6) Update docs to reflect the hardening pass:
+   - `Status.md`, `PRD.md`, `TechSpec.md`, `CodeDesign.md`, `README.md`, `TUTORIAL.md`.
+
+Constraints:
+- One commit only for this prompt.
+Acceptance:
+- Tutorial 5/6 surrogate flow no longer blocked by toy-output envelope mismatch.
+- Fast suite passes.
+- Tutorial notebooks contain guided explanatory content and graphics.
+- Status.md includes concrete execution findings and remaining environment-dependent limitations.
+- Commit message: "docs: harden and enrich tutorial notebooks"
+
 ## Stop conditions
 - If Codex proposes implicit downsampling or data reduction: reject and preserve full requested computation.
 - If assumptions are needed for model semantics: pause and request clarification in Status.md and prompt output.

@@ -1,189 +1,23 @@
-# Tutorial: Using Metamodeler (Prompt 0-10 Baseline)
+# Tutorial Entry Point
 
-This tutorial reflects the current implemented CLI surface.
+The tutorial is notebook-first and organized as a modular 9-part learning track.
 
-## 1) Setup
+Start here:
+- `tutorials/Tutorial_0.ipynb`
 
-```bash
-conda activate /Users/barak/miniconda3/envs/py314_metamodeling
-cd /Users/barak/Downloads/metamodeler_codex_scaffold_docs
-```
+Tutorial sequence:
+1. `tutorials/Tutorial_1.ipynb`
+2. `tutorials/Tutorial_2.ipynb`
+3. `tutorials/Tutorial_3.ipynb`
+4. `tutorials/Tutorial_4.ipynb`
+5. `tutorials/Tutorial_5.ipynb`
+6. `tutorials/Tutorial_6.ipynb`
+7. `tutorials/Tutorial_7.ipynb`
+8. `tutorials/Tutorial_8.ipynb`
+9. `tutorials/Tutorial_9.ipynb`
 
-Optional editable install:
-
-```bash
-pip install -e .
-```
-
-Optional PyMC backend support:
-
-```bash
-conda install -n py314_metamodeling -c conda-forge pymc arviz
-# or
-pip install -e '.[pymc]'
-```
-
-PyMC note: the supported package is `pymc` (PyMC v5, successor to legacy `pymc3`).
-
-Optional SBI backend support:
-
-```bash
-conda install -n py314_metamodeling -c conda-forge pytorch sbi
-# or
-pip install -e '.[sbi]'
-```
-
-Without install, use module mode:
-
-```bash
-PYTHONPATH=src python -m metamodeler.cli.main --version
-```
-
-## 2) Quick guided flow
-
-Print the built-in guided command sequence:
-
-```bash
-PYTHONPATH=src python -m metamodeler.cli.main tutorial
-```
-
-## 3) Validate and plan a model spec
-
-```bash
-PYTHONPATH=src python -m metamodeler.cli.main validate examples/toy_program/spec.toy_program.json
-PYTHONPATH=src python -m metamodeler.cli.main plan examples/toy_program/spec.toy_program.json
-```
-
-## 4) Run model sweeps and inspect runs
-
-```bash
-PYTHONPATH=src python -m metamodeler.cli.main run examples/toy_program/spec.toy_program.json
-PYTHONPATH=src python -m metamodeler.cli.main runs list
-PYTHONPATH=src python -m metamodeler.cli.main runs show <RUN_ID>
-```
-
-Primary run artifacts:
-- `examples/toy_program/store/runs/<run_id>/run.json`
-- `examples/toy_program/store/runs/<run_id>/inputs.json`
-- `examples/toy_program/store/runs/<run_id>/outputs.json`
-- `examples/toy_program/store/_active/<model>_<index>/stdout.log`
-- `examples/toy_program/store/_active/<model>_<index>/stderr.log`
-- `tmp/run_registry.json`
-
-## 5) Fit and evaluate surrogates
-
-Use a surrogate spec that points to a run-store dataset:
-
-```bash
-PYTHONPATH=src python -m metamodeler.cli.main surrogate fit examples/surrogates/surrogate.toy.pymc_gp.json
-```
-
-Evaluate with explicit input arrays:
-
-```bash
-PYTHONPATH=src python -m metamodeler.cli.main surrogate eval \
-  examples/surrogates/surrogate.toy.pymc_gp.json \
-  --inputs '{"a":[0.5,1.0],"b":[1.0,2.0]}' \
-  --n 100
-```
-
-List stored surrogate artifacts:
-
-```bash
-PYTHONPATH=src python -m metamodeler.cli.main surrogate list
-```
-
-Surrogate artifacts are stored under:
-- `tmp/surrogate_artifacts/<artifact_id>/artifact.json`
-- `tmp/surrogate_artifacts/<artifact_id>/backend_payload.json`
-- `tmp/surrogate_registry.json`
-
-## 6) Build and sample metamodels
-
-Build IR from metamodel spec:
-
-```bash
-PYTHONPATH=src python -m metamodeler.cli.main meta build examples/metamodels/metamodel.simple.json
-```
-
-Sample posterior/joint draws:
-
-```bash
-PYTHONPATH=src python -m metamodeler.cli.main meta sample \
-  examples/metamodels/metamodel.simple.json \
-  --draws 100 --tune 50 --chains 2 --seed 1
-```
-
-List metamodel artifacts and samples:
-
-```bash
-PYTHONPATH=src python -m metamodeler.cli.main meta list
-```
-
-Metamodel artifacts are stored under:
-- `tmp/metamodel_ir/<artifact_id>/artifact.json`
-- `tmp/metamodel_ir/<artifact_id>/ir.json`
-- `tmp/meta_registry.json`
-- `tmp/metamodel_samples/<sample_id>/inference_data.json`
-- `tmp/metamodel_samples/<sample_id>/samples_dataset.json`
-- `tmp/metamodel_samples_registry.json`
-
-## 7) Backend selection for metamodel sampling
-
-`MetaModelSpec` supports:
-- `ppl_backend: "pymc"`
-- `ppl_backend: "numpyro"`
-
-Both backends use the same JSON interface and write the same canonical sample artifact files.
-
-## 8) BioModels adapter workflow (slow/integration path)
-
-Example spec:
-
-```bash
-examples/biomodels/spec.prompt4.model1907260003.json
-```
-
-Run:
-
-```bash
-PYTHONPATH=src python -m metamodeler.cli.main run examples/biomodels/spec.prompt4.model1907260003.json
-```
-
-Notes:
-- Downloads SBML to `storage_root/_cache/biomodels/`.
-- Requires `libroadrunner`.
-- Slow tests may skip if dependency is unavailable.
-
-## 9) Standard quality gate
-
-```bash
-ruff format .
-ruff check .
-pytest -q -m "not slow"
-```
-
-## 10) Current baseline limitations
-
-- `pymc_gp` now uses a real PyMC probabilistic backend (Bayesian linear model) and persists posterior payload for reuse.
-- `sbi_npe` now uses a real SBI NPE probabilistic backend and persists serialized posterior payload for reuse.
-- Run logs are currently written under `_active` paths; immutable finalized log placement is still a hardening target.
-- BioModels runtime depends on environment availability of `libroadrunner`.
-
-## 11) Verify real PyMC learning path
-
-```bash
-pytest -q tests/test_surrogate_backends.py -k pymc_gp_backend_fit_sample_and_logprob
-```
-
-If your environment lacks C++ build tooling for PyTensor:
-
-```bash
-PYTENSOR_FLAGS='cxx=' pytest -q tests/test_surrogate_backends.py -k pymc_gp_backend_fit_sample_and_logprob
-```
-
-## 12) Verify real SBI learning path
-
-```bash
-pytest -q tests/test_surrogate_backends.py -k sbi_npe_backend_fit_sample_and_logprob
-```
+Each notebook module has:
+- a primary package-use objective,
+- a secondary scientific/computational learning objective,
+- standalone and serial execution paths,
+- guided explanations with visual checkpoints.

@@ -45,6 +45,17 @@ def _extract_scalar_output(value: Any, summary_config: dict[str, Any] | None) ->
     raise ValueError(f"Unsupported output value type for surrogate training: {type(value)}")
 
 
+def _normalize_output_value(raw_value: Any, out_name: str) -> Any:
+    """Normalize adapter-specific output envelopes to the scalar/array payload.
+
+    Some adapters persist outputs as `{out_name: {"inputs": ..., out_name: [...]}}`.
+    Surrogate fitting should consume the inner value for `out_name`.
+    """
+    if isinstance(raw_value, dict) and out_name in raw_value:
+        return raw_value[out_name]
+    return raw_value
+
+
 def load_tabular_dataset(spec: SurrogateSpec) -> tuple[np.ndarray, np.ndarray, str]:
     dataset_root = _resolve_dataset_root(spec.dataset_ref)
     runs_root = dataset_root / "runs"
@@ -68,7 +79,8 @@ def load_tabular_dataset(spec: SurrogateSpec) -> tuple[np.ndarray, np.ndarray, s
         out_name = spec.outputs[0]
         if out_name not in outputs:
             raise ValueError(f"Output '{out_name}' missing in {outputs_path}")
-        y_rows.append(_extract_scalar_output(outputs[out_name], spec.summary_config))
+        normalized_value = _normalize_output_value(outputs[out_name], out_name)
+        y_rows.append(_extract_scalar_output(normalized_value, spec.summary_config))
 
     if not x_rows:
         raise ValueError(f"No usable runs found in {runs_root}")

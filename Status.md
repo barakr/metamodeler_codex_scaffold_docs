@@ -1,12 +1,13 @@
 # Status: Metamodeling Automation Framework
 
 ## High level state
-- Stage: Prompt 13 implementation complete (surrogate backend hardening)
-- Current focus: post-prompt hardening and integration follow-ups
+- Stage: Prompt 15 implementation complete (notebook-only tutorial onboarding)
+- Current focus: tutorial hardening and onboarding reliability validation
 
 ## Folder structure
 - src/metamodeler/: library code
 - examples/: example specs and toy models
+- tutorials/: modular tutorial curriculum, tutorial specs, and notebook entrypoint
 - tests/: unit and integration tests
 - tmp/: scratch and temporary files, not committed
 - githooks/: git hooks that enforce formatting, lint, and fast tests
@@ -176,8 +177,9 @@
   - Added fast UX/repro tests:
     - `tests/test_cli_ux_commands.py`
 - Documentation update:
-  - Added user-facing usage tutorial:
+  - Added top-level tutorial entry pointers:
     - `TUTORIAL.md`
+    - `TUTORIAL.ipynb`
   - Linked tutorial from:
     - `README.md`
   - Refreshed tutorial after Prompts 6-10 to reflect real commands and backend behavior:
@@ -185,6 +187,19 @@
     - `mm surrogate list`
     - `mm meta list`
     - real surrogate fit/eval and metamodel build/sample flow
+- Tutorial architecture update (modular track):
+  - Added `tutorials/` subfolder with 9-part progression and notebook hub:
+    - `tutorials/Tutorial_0.ipynb`
+    - `tutorials/Tutorial_1.ipynb` ... `tutorials/Tutorial_9.ipynb`
+  - Added tutorial-specific runnable specs and artifact stubs:
+    - `tutorials/specs/`
+    - `tutorials/artifacts/`
+  - Added standalone vs serial execution guidance, prerequisites, estimated times, checkpoints, and troubleshooting in each notebook.
+  - Converted tutorials to notebook-only delivery by retiring `tutorials/Tutorial_*.md` files.
+  - Re-pointed top-level docs:
+    - `README.md` now links to notebook-only tutorial track.
+    - `TUTORIAL.md` now points to notebook-only sequence.
+    - `TUTORIAL.ipynb` now points to `tutorials/Tutorial_0.ipynb`.
 - Prompt 11 implemented:
   - Replaced placeholder `pymc_gp` backend with a real PyMC probabilistic fit path in:
     - `src/metamodeler/surrogates/backends.py`
@@ -245,6 +260,43 @@
       - optional dual-backend integration path (slow, dependency-gated)
   - Added troubleshooting section for surrogate fit/eval guardrails:
     - `README.md`
+- Prompt 15 implemented:
+  - Converted tutorial delivery to notebook-only (`.ipynb`) in:
+    - `tutorials/Tutorial_0.ipynb` ... `tutorials/Tutorial_9.ipynb`
+  - Removed markdown tutorial duplicates:
+    - retired `tutorials/Tutorial_*.md`
+  - Upgraded onboarding structure across all tutorials:
+    - estimated time
+    - prerequisites/dependencies
+    - success criteria
+    - runnable checkpoints
+    - troubleshooting/fallback guidance
+  - Synchronized tutorial architecture across docs:
+    - `README.md`
+    - `TUTORIAL.md`
+    - `tutorials/README.md`
+    - `PRD.md`
+    - `TechSpec.md`
+    - `CodeDesign.md`
+    - `PROMPT_TO_CODEX.md`
+- Tutorial hardening pass (post-Prompt 15):
+  - Fixed surrogate tutorial blocker in dataset parsing:
+    - `src/metamodeler/surrogates/dataset.py`
+    - now supports adapter output envelope shape `{out_name: {\"inputs\": ..., out_name: [...]}}`.
+  - Added regression coverage:
+    - `tests/test_surrogate_dataset_loading.py`
+  - Notebook quality-gate compatibility:
+    - `pyproject.toml` updated with Ruff `extend-exclude = [\"*.ipynb\"]` so docs notebooks do not break repo lint gate.
+  - Regenerated tutorial notebooks with richer guided pedagogy:
+    - explicit prerequisites, time estimates, success criteria, and troubleshooting.
+    - added graphics/plots in each tutorial notebook.
+    - removed manual `RUN_ID` placeholder in Tutorial 1 (auto-selects latest tutorial run).
+  - Validation results:
+    - `ruff format .` / `ruff check .` / `pytest -q -m \"not slow\"` pass in `py314_metamodeling`.
+    - PyMC and SBI tutorial fit/eval commands verified in dependency-capable env:
+      - `tmp/conda_pymc_verify`.
+    - New dataset parser regression test passes:
+      - `pytest -q tests/test_surrogate_dataset_loading.py`
 
 ## Provenance log (design verification runs)
 - BioModels sample source used:
@@ -286,9 +338,9 @@
     - `1 passed` (2026-02-11)
 
 ## Next steps, ordered
-1) Persist immutable run logs inside finalized run artifact directories
-2) Expand slow integration coverage for real BioModels + metamodel sampling
-3) Push branch to origin and open review
+1) Validate notebook onboarding flow with a first-time lab member and collect friction notes
+2) Improve Tutorial 2 offline-mode guidance (BioModels download/network dependency in restricted environments)
+3) Persist immutable run logs inside finalized run artifact directories
 
 ## Decisions log
 - 2026-02-11: Prioritize execution/reproducibility core before advanced Bayesian coupling.
@@ -318,8 +370,12 @@
 - 2026-02-11: Prompt 12 acceptance criteria retroactively tightened to require at least one executed real-SBI verification test run and log in `Status.md`.
 - 2026-02-11: Verified real SBI surrogate learning test passes in isolated conda env (`tmp/conda_pymc_verify`).
 - 2026-02-11: Prompt 13 implemented backend-config validation, artifact compatibility checks, and improved surrogate CLI error reporting.
+- 2026-02-12: Consolidated tutorial requests into Prompt 14 and implemented a modular 9-part tutorial curriculum with BioModels moved early and per-tutorial scientific side-aims.
+- 2026-02-12: Prompt 15 converted tutorials to notebook-only delivery and upgraded onboarding structure (time estimates, prerequisites, success criteria, checkpoints, troubleshooting).
+- 2026-02-12: Hardened tutorial execution by fixing surrogate dataset envelope parsing and regenerating all notebooks with guided explanations and graphics.
 
 ## Open issues
+- Tutorial 2 full run depends on external BioModels download; in restricted/offline sandboxes this step will fail while validate/plan still pass.
 - PyMC backend tests skip automatically when `pymc` is not installed in the active environment.
 - PyMC is currently not installed in `/Users/barak/miniconda3/envs/py314_metamodeling`; fast suite there remains skip-safe for PyMC-specific tests.
 - SBI backend tests skip automatically when `sbi`/`torch` are not installed in the active environment.

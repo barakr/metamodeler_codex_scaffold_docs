@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0",
+  "name": "tutorial_toy_surrogate_sbi",
+  "kind": "conditional",
+  "inputs": ["a", "b"],
+  "outputs": ["y"],
+  "backend": "sbi_npe",
+  "backend_config": {
+    "density_estimator": "maf",
+    "max_num_epochs": 80,
+    "training_batch_size": 16,
+    "learning_rate": 0.0005,
+    "validation_fraction": 0.1,
+    "stop_after_epochs": 20,
+    "show_train_summary": false,
+    "summary_samples": 256
+  },
+  "dataset_ref": {
+    "run_store_root": "tmp/tutorials/toy_store"
+  },
+  "seed": 123,
+  "summary_config": {
+    "kind": "index",
+    "index": 0
+  }
+}
