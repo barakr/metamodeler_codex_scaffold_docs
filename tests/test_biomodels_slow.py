@@ -9,6 +9,7 @@ require network access.
 """
 
 import copy
+import csv
 import json
 from pathlib import Path
 from uuid import uuid4
@@ -49,7 +50,11 @@ def test_biomodels_adapter_fetch_and_simulate_slow(monkeypatch, capsys, tmp_path
     run_id = next(iter(registry.keys()))
     record = json.loads(Path(registry[run_id]).read_text())
 
-    outputs_path = Path(record["outputs_path"])
-    outputs = json.loads(outputs_path.read_text())
-    assert "time_series" in outputs
-    assert "rows" in outputs["time_series"]
+    sweep_rows_path = Path(record["sweep_rows_path"])
+    with sweep_rows_path.open(newline="", encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+    assert len(rows) == 1
+    assert rows[0]["status"] == "success"
+
+    timeseries_payload = json.loads(rows[0]["time_series__json"])
+    assert "rows" in timeseries_payload

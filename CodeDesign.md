@@ -114,6 +114,71 @@ Run logs:
 - Two target workflows are represented with concrete JSON examples.
 - Real BioModels artifact execution path was verified and logged.
 
+## Centralized sweep table + synchronized parallel writing (implemented in Prompt 17)
+
+### Problem being solved
+Tutorial 1 currently reconstructs sweep outputs by traversing per-point run folders.
+For DOE grids, this is inefficient and hard to analyze directly.
+
+### Target behavior
+- A DOE sweep should emit one centralized table artifact for numeric results.
+- The same artifact contract must work for:
+  - serial local execution,
+  - local parallel execution,
+  - MPI-coordinated execution.
+- Tutorial 1 should consume this table directly and render two heatmaps:
+  - `sum = a + b`
+  - `product = a * b`
+
+### Proposed artifact contract
+- `sweep_rows.csv`:
+  - one row per DOE point
+  - deterministic `point_index` column
+  - one column per input variable
+  - flattened output columns (toy example: `y__0`, `y__1`)
+  - status/error/timing columns
+- `sweep_manifest.json`:
+  - spec digest, seed, DOE cardinality, column schema, execution mode, completion status
+- `sweep_logs.jsonl`:
+  - one record per point with stdout/stderr references or payload snippets
+
+This preserves the "no per-point output file/folder for numeric results" goal while keeping per-point observability and provenance.
+
+### Synchronization design
+- Single-writer rule:
+  - exactly one writer owns `sweep_rows.csv` at a time.
+- Serial mode:
+  - executor writes rows directly through writer API.
+- Local parallel mode:
+  - workers return row payloads through a queue;
+  - coordinator process performs all file writes.
+- MPI mode:
+  - rank 0 is the only writer;
+  - worker ranks send row/log payloads to rank 0 (message passing);
+  - rank 0 finalizes and closes artifacts after barrier.
+- Deterministic finalize step:
+  - enforce ordering by `point_index` before digesting and registering artifact.
+
+### Interface impact (planned)
+- Runner/spec additions:
+  - execution mode selector: `serial | parallel_local | mpi`
+  - parallel config (`workers` for local parallel, MPI process count external)
+- Store additions:
+  - centralized sweep writer API
+  - sweep artifact registry fields in `run.json`
+- Backward compatibility:
+  - keep per-run provenance/log records;
+  - migrate Tutorial 1 and future surrogate dataset loaders to consume sweep table first.
+
+### Test strategy for this extension
+- Fast tests:
+  - sweep table schema and deterministic ordering
+  - serial and local-parallel produce equivalent `sweep_rows.csv` content
+  - tutorial toy parser builds two heatmap matrices from centralized CSV
+- Slow/optional tests:
+  - MPI integration: one centralized output file with correct row count and no corruption
+  - marker: `mpi`
+
 ## Out of scope in this document
 - Implementing Pydantic models, schema emission, or CLI command behavior.
 - Implementing surrogate fitting algorithms.

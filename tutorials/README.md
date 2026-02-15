@@ -10,3 +10,4 @@ Notes:
 - Each notebook includes prerequisites, estimated time, success criteria, and troubleshooting.
 - Each notebook includes at least one visual checkpoint (plot/graphic).
 - Tutorials are mostly standalone; serial execution is also supported.
+- Tutorial 1 uses centralized sweep artifacts (`sweep_rows.csv`) to visualize toy outputs.

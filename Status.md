@@ -1,8 +1,8 @@
 # Status: Metamodeling Automation Framework
 
 ## High level state
-- Stage: Prompt 15 implementation complete (notebook-only tutorial onboarding)
-- Current focus: environment portability hardening for optional surrogate backends (`pymc`, `sbi`)
+- Stage: Prompt 17 implementation complete
+- Current focus: validating centralized sweep output behavior across tutorial and optional MPI environments
 
 ## Folder structure
 - src/metamodeler/: library code
@@ -13,6 +13,41 @@
 - githooks/: git hooks that enforce formatting, lint, and fast tests
 
 ## Implemented
+- Prompt 17 implemented: centralized sweep output + synchronized execution modes (2026-02-15):
+  - Replaced per-point numeric result persistence in `mm run` with one centralized sweep artifact set:
+    - `sweep_rows.csv`
+    - `sweep_manifest.json`
+    - `sweep_logs.jsonl`
+  - Added synchronized execution modes in `RunnerSpec` and `mm run`:
+    - `runner.sweep_mode`: `serial` (default), `parallel_local`, `mpi`
+    - `runner.workers` (parallel-local only; defaults to runner CPUs)
+  - Single-writer guarantees:
+    - serial: direct writer
+    - parallel_local: coordinator writes centralized files
+    - mpi: rank 0 writes centralized files; non-root ranks synchronize via broadcast
+  - Added centralized sweep helpers:
+    - `src/metamodeler/storage/sweep_store.py`
+  - Added sweep persistence contract:
+    - `src/metamodeler/storage/run_store.py` (`persist_sweep`)
+    - run registry now tracks sweep records with `sweep_rows_path`, `sweep_manifest_path`, `sweep_logs_path`
+  - Updated surrogate dataset loading to support centralized sweep CSV stores (with legacy `runs/*` fallback):
+    - `src/metamodeler/surrogates/dataset.py`
+  - Tutorial updates:
+    - `tutorials/Tutorial_1.ipynb` now reads centralized `sweep_rows.csv` and renders two heatmaps (`sum`, `product`)
+    - helper module for Tutorial 1 heatmap loading:
+      - `src/metamodeler/tutorials/toy_heatmap.py`
+  - Test updates:
+    - `tests/test_run_pipeline.py` now validates centralized sweep CSV and serial-vs-parallel equivalence
+    - `tests/test_sweep_store.py` added for flattening and deterministic CSV order
+    - `tests/test_tutorial_toy_heatmap.py` added for Tutorial 1 CSV-to-heatmap parsing
+    - `tests/test_surrogate_dataset_loading.py` now covers centralized sweep dataset loading
+    - `tests/test_modelspec_validation.py` now covers `sweep_mode`/`workers`
+    - `tests/test_biomodels_slow.py` updated to consume centralized sweep rows
+    - optional MPI integration test:
+      - `tests/test_mpi_sweep_integration.py`
+  - Schema/docs updates:
+    - `src/metamodeler/spec/modelspec.schema.json`
+    - `README.md`, `tutorials/README.md`, `PRD.md`, `TechSpec.md`, `CodeDesign.md`, `TEST_PLAN.md`, `PROMPT_TO_CODEX.md`
 - Runner/env portability + optional backend test controls (2026-02-12):
   - Added optional `runner.execution_env` to `ModelSpec` (`default={}`), currently supporting:
     - `conda_env` (validated key; whitespace normalized).
@@ -378,9 +413,9 @@
     - `1 passed` (2026-02-11)
 
 ## Next steps, ordered
-1) Validate notebook onboarding flow with a first-time lab member and collect friction notes
-2) Improve Tutorial 2 offline-mode guidance (BioModels download/network dependency in restricted environments)
-3) Persist immutable run logs inside finalized run artifact directories
+1) Run optional MPI integration path under `mpirun` and record environment/result details
+2) Migrate remaining tutorial notebooks that still read legacy `runs/*` folders to centralized sweep paths
+3) Extend centralized sweep schema validation for higher-dimensional/non-scalar outputs
 
 ## Decisions log
 - 2026-02-11: Prioritize execution/reproducibility core before advanced Bayesian coupling.
@@ -425,6 +460,9 @@
 - 2026-02-15: Refined `tutorials/Tutorial_0.ipynb` for safer onboarding (manual install guidance only, no hardcoded path/env assumptions) and re-validated notebook execution (`tmp/Tutorial_0.executed.ipynb`).
 - 2026-02-15: Simplified `tutorials/Tutorial_0.ipynb` to a standard notebook flow: explicit "use a pre-set kernel environment" guidance, CLI preflight with `PYTHONPATH` wiring, manual/commented install examples only, and successful end-to-end execution check (`tmp/Tutorial_0.executed.ipynb`).
 - 2026-02-15: Expanded `examples/toy_program/run.py` module docstring to document toy-run behavior and its role in local integration testing.
+- 2026-02-15: Added Prompt 17 design package (PRD/TechSpec/CodeDesign/TEST_PLAN/PROMPT_TO_CODEX updates) for centralized DOE sweep CSV output and synchronized serial/local-parallel/MPI writing; no runtime implementation in this step.
+- 2026-02-15: Completed Prompt 17 implementation with centralized sweep artifacts, synchronized serial/local-parallel/MPI execution modes, Tutorial 1 dual-heatmap update, and updated fast/slow test coverage.
+- 2026-02-15: Hardened `tutorials/Tutorial_1.ipynb` against stale registry paths and missing prior sweep records by auto-running the toy sweep when needed; verified end-to-end notebook execution to `tmp/Tutorial_1.executed.ipynb`.
 
 ## Open issues
 - Tutorial 2 full run depends on external BioModels download; in restricted/offline sandboxes this step will fail while validate/plan still pass.
@@ -435,3 +473,4 @@
 - `py312` environment currently has dependency conflicts due direct `pip` install of `libroadrunner`; this was used for design verification only and should be isolated before production workflows.
 - `libroadrunner` may not be available in the py314 environment; slow BioModels test is expected to skip when dependency is absent.
 - `py314_metamodeling_sbi` currently resolves with Python `3.12`; consider renaming to `py312_metamodeling_sbi` for prefix/version consistency.
+- Optional MPI integration test requires launching pytest under `mpirun`; standard local fast test runs skip MPI coverage.

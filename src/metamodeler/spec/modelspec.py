@@ -51,6 +51,8 @@ class RunnerSpec(BaseModel):
     mode: Literal["local_process", "container", "hpc", "http"]
     resources: RunnerResourcesSpec
     execution_env: dict[str, str] = Field(default_factory=dict)
+    sweep_mode: Literal["serial", "parallel_local", "mpi"] = "serial"
+    workers: int | None = Field(default=None, ge=1)
 
     @model_validator(mode="after")
     def check_execution_env(self) -> "RunnerSpec":
@@ -64,6 +66,12 @@ class RunnerSpec(BaseModel):
         if "conda_env" in self.execution_env:
             conda_env = self.execution_env["conda_env"].strip()
             self.execution_env["conda_env"] = conda_env
+        if self.sweep_mode != "parallel_local" and self.workers is not None:
+            raise ValueError(
+                "runner.workers is supported only when runner.sweep_mode='parallel_local'."
+            )
+        if self.sweep_mode == "parallel_local" and self.workers is None:
+            self.workers = max(1, self.resources.cpus)
         return self
 
 

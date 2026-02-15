@@ -338,6 +338,29 @@
         },
         "resources": {
           "$ref": "#/$defs/RunnerResourcesSpec"
+        },
+        "sweep_mode": {
+          "default": "serial",
+          "enum": [
+            "serial",
+            "parallel_local",
+            "mpi"
+          ],
+          "title": "Sweep Mode",
+          "type": "string"
+        },
+        "workers": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Workers"
         }
       },
       "required": [

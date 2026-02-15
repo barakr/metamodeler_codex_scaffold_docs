@@ -11,6 +11,7 @@ from metamodeler.storage.run_store import (
     StoredRun,
     list_registered_runs,
     persist_run,
+    persist_sweep,
     show_registered_run,
 )
 from metamodeler.storage.surrogate_store import (
@@ -33,6 +34,7 @@ __all__ = [
     "list_surrogate_artifacts",
     "persist_ir_artifact",
     "persist_run",
+    "persist_sweep",
     "persist_surrogate_artifact",
     "show_registered_run",
 ]

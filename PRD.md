@@ -40,6 +40,14 @@ Need a framework that can:
   - full stdout/stderr logs,
   - seed and digest metadata,
   - deterministic cache keys.
+- Centralized sweep-result artifact for DOE execution:
+  - one aggregated table per sweep (initial format: CSV),
+  - no separate output file/folder per grid point for numeric results,
+  - stable row identity (`point_index`) for reproducibility and joins.
+- Local sweep execution modes:
+  - serial mode,
+  - local parallel mode,
+  - MPI-coordinated mode with synchronized writes to one centralized sweep artifact.
 - CLI commands: validate, plan, run, runs list/show.
 - Two examples: toy CLI model and BioModels SBML spec stub.
 - Notebook-first onboarding curriculum:
@@ -61,6 +69,9 @@ Need a framework that can:
 - FR4: User can replay the same run plan with exact provenance.
 - FR5: User can inspect run metadata and logs from CLI.
 - FR6: Adapter API is minimal and typed, with contract tests.
+- FR7: DOE sweep results are persisted in one centralized, tabular artifact per sweep (CSV in the first rollout).
+- FR8: The same centralized output contract is used in serial, local parallel, and MPI execution modes.
+- FR9: Tutorial 1 demonstrates centralized sweep output by plotting both toy outputs (`sum`, `product`) as heatmaps.
 
 ## Non-functional requirements
 - NFR1: Fast local test suite under 30 seconds (`not slow` marker set).
@@ -70,6 +81,8 @@ Need a framework that can:
 - NFR5: Documentation files remain synchronized (`PRD.md`, `TechSpec.md`, `Status.md`, `README.md`).
 - NFR6: Tutorials are delivered as Jupyter notebooks (`.ipynb`) and are runnable in a conda-based workflow.
 - NFR7: Tutorial notebooks avoid manual placeholders when practical (auto-select run IDs/artifacts for smoother onboarding).
+- NFR8: Centralized sweep output must be deterministic and mergeable across execution modes (stable `point_index` ordering).
+- NFR9: Parallel/MPI synchronization must avoid row corruption and partial-write ambiguity in the centralized artifact.
 
 ## User stories
 - US1: As a researcher, I define one `ModelSpec` and run it without writing glue code.
@@ -78,6 +91,7 @@ Need a framework that can:
 - US4: As an ML engineer, I can consume canonical run outputs for surrogate training.
 - US5: As a user, I can inspect failed runs through stored stderr and provenance.
 - US6: As a lab member, I can onboard via tutorial notebooks and complete progressively harder tasks without reading source code first.
+- US7: As a modeler, I can load one sweep CSV and directly analyze full response surfaces without traversing per-point run folders.
 
 ## Success metrics
 - SM1: New simple model integration in under 2 engineering hours.
@@ -86,6 +100,7 @@ Need a framework that can:
 - SM4: 10k-point planning and cached re-run workflow supported without schema drift.
 - SM5: New lab member can complete Tutorials 1-3 in one session and produce one interpreted scientific result.
 - SM6: Tutorial execution blockers discovered by dry-run are patched with regression tests before onboarding release.
+- SM7: Tutorial 1 produces two heatmaps (`sum`, `product`) from one centralized sweep artifact with no per-point output traversal.
 
 ## Risks and mitigations
 - Risk: Time-series outputs have inconsistent dimensions.
@@ -94,10 +109,13 @@ Need a framework that can:
   - Mitigation: Stage surrogate choices behind explicit evaluation contracts.
 - Risk: BioModels/SBML edge cases.
   - Mitigation: Mark as slow/integration and isolate adapter-specific tests.
+- Risk: Parallel/MPI writes to one artifact can cause races or nondeterministic row ordering.
+  - Mitigation: single-writer synchronization model + deterministic finalize step keyed by `point_index`.
 
 ## Roadmap
 - Phase 0: scaffold + typed specs + hooks + basic tests.
 - Phase 1: DOE + local runner + canonical run store + toy end-to-end.
+- Phase 1.5: Centralized sweep artifact + synchronized serial/parallel/MPI write path + Tutorial 1 heatmap upgrade.
 - Phase 2: BioModels adapter milestone + slow integration tests.
 - Phase 3: Surrogate training baseline (single-model).
 - Phase 4: Coupling spec and joint metamodel builder (multi-model).

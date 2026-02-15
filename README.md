@@ -26,6 +26,22 @@ This repository is currently in planning/scaffold phase. The code implementation
 4) `mm runs list`
 5) `mm runs show RUN_ID`
 
+## Centralized DOE Output
+`mm run` persists DOE numeric results in one centralized sweep artifact per run:
+- `sweep_rows.csv`: one row per DOE point (`point_index`, inputs, flattened outputs, status/error/timing)
+- `sweep_manifest.json`: sweep metadata, digests, and schema
+- `sweep_logs.jsonl`: per-point stdout/stderr payloads
+
+This is the canonical path for DOE sweep numeric results across:
+- `runner.sweep_mode: "serial"`
+- `runner.sweep_mode: "parallel_local"`
+- `runner.sweep_mode: "mpi"` (single-writer on rank 0)
+
+`mm run` now writes centralized DOE sweep artifacts (one table per sweep):
+- `sweep_rows.csv` (all grid/sobol points in one file),
+- `sweep_manifest.json`,
+- `sweep_logs.jsonl`.
+
 ## Examples (spec stubs)
 - `examples/toy_program/spec.toy_program.json`: local CLI toy model.
 - `examples/biomodels/spec.biomodels.json`: BioModels SBML model by BioModels id.
@@ -56,15 +72,45 @@ The surrogate interface is backend-neutral, but some backends require optional d
 - `runner.execution_env` is optional and defaults to `{}`.
 - If set, supported keys are:
   - `conda_env`: run model commands via `conda run -n <conda_env> ...`.
+- `runner.sweep_mode` controls local execution strategy for DOE sweeps:
+  - `serial` (default)
+  - `parallel_local` (uses `runner.workers`, defaults to `runner.resources.cpus`)
+  - `mpi` (requires `mpi4py` + MPI launcher; rank 0 writes centralized sweep files)
 - Example:
 ```json
 {
   "runner": {
     "mode": "local_process",
     "resources": {"cpus": 1, "mem_gb": 1, "walltime_min": 5},
-    "execution_env": {"conda_env": "py312_metamodeling_pymc"}
+    "execution_env": {"conda_env": "py312_metamodeling_pymc"},
+    "sweep_mode": "parallel_local",
+    "workers": 4
   }
 }
+```
+
+## Sweep Execution Modes
+- `runner.sweep_mode` controls how DOE points are executed:
+  - `serial` (default),
+  - `parallel_local` (threaded local coordinator + single centralized writer),
+  - `mpi` (rank 0 centralized writer).
+- `runner.workers` is supported only with `runner.sweep_mode: "parallel_local"`.
+
+Example:
+```json
+{
+  "runner": {
+    "mode": "local_process",
+    "resources": {"cpus": 4, "mem_gb": 4, "walltime_min": 10},
+    "sweep_mode": "parallel_local",
+    "workers": 4
+  }
+}
+```
+
+MPI example (launch):
+```bash
+mpirun -n 4 PYTHONPATH=src python -m metamodeler.cli.main run tutorials/specs/model.toy.grid.json
 ```
 
 ## Surrogate Troubleshooting

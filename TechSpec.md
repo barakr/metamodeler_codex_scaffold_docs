@@ -27,6 +27,10 @@
   - subprocess execution,
   - bounded resources (where feasible),
   - stdout/stderr capture to artifacts.
+- Sweep orchestrator:
+  - dispatch DOE points in `serial`, `parallel_local`, or `mpi` mode,
+  - normalize each point result into one canonical row payload,
+  - forward normalized rows to a synchronized centralized writer.
 
 ### Layer 3: Storage and lineage
 - Run store layout (deterministic paths from digests):
@@ -42,6 +46,25 @@
   - artifact digest/version,
   - runner mode/version,
   - timestamps and status.
+- Centralized sweep artifact layout:
+  - `sweep_manifest.json`:
+    - spec digest, seed, DOE size, output schema, execution mode, completion status.
+  - `sweep_rows.csv`:
+    - one row per DOE point with deterministic `point_index`,
+    - input columns and flattened output columns (example: `y__0`, `y__1`).
+  - `sweep_logs.jsonl`:
+    - per-point stdout/stderr references or inline payloads keyed by `point_index`.
+
+### Layer 3b: Synchronized writer model
+- Centralized writer contract:
+  - `open(manifest) -> handle`
+  - `append_row(row)`
+  - `append_log(log_record)`
+  - `finalize()`
+- Concurrency model:
+  - serial/local-parallel: one coordinator writer process receives worker results and writes rows.
+  - MPI: rank 0 is the only filesystem writer; worker ranks send row/log payloads to rank 0.
+  - finalize step enforces deterministic ordering by `point_index` before digesting artifacts.
 
 ### Layer 4: Surrogate and metamodel (post-v1 core)
 - v1 provides interfaces and placeholders only.
@@ -56,6 +79,8 @@
   - Adapter registry and base contracts.
   - Local process runner.
   - Run store + cache key utilities.
+  - Centralized sweep output sink (`sweep_rows.csv` + manifest/log sidecars).
+  - Execution mode selector for `serial`, `parallel_local`, `mpi` with synchronized centralized writing.
   - CLI commands:
     - `mm validate <spec>`
     - `mm plan <spec>`
@@ -77,6 +102,17 @@
   - units,
   - values.
 - Preferred internal representation: `xarray.Dataset`; serialization format chosen per adapter (`json` for toy examples, `netcdf` optional later).
+- Centralized sweep contract (tabular):
+  - required columns:
+    - `point_index`,
+    - all input variables,
+    - flattened scalar/vector outputs,
+    - `status` and `error` (if failed),
+    - optional timing fields.
+  - deterministic row ordering:
+    - sorted by `point_index` at finalize time for all execution modes.
+  - tutorial target:
+    - Tutorial 1 reads this table directly and plots toy `sum` and `product` heatmaps.
 
 ## Target repo layout
 - `src/metamodeler/spec/`
@@ -140,10 +176,14 @@ Decision for implementation phases after v1:
   - DOE bounds and determinism,
   - adapter contracts,
   - local runner smoke,
-  - cache digest behavior.
+  - cache digest behavior,
+  - centralized sweep-writer determinism and schema checks,
+  - Tutorial 1 toy post-processing from one sweep CSV (including two heatmap-ready matrices).
 - Slow suite:
-  - BioModels integration and heavy simulations.
+  - BioModels integration and heavy simulations,
+  - optional MPI integration path validating synchronized centralized writes to one sweep artifact.
 - Markers:
   - `slow`
   - `integration`
   - `contract`
+  - `mpi` (optional, environment-dependent)

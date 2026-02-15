@@ -87,6 +87,9 @@ def test_modelspec_schema_artifact_exists():
 
     assert payload["title"] == "ModelSpec"
     assert "$defs" in payload
+    runner_props = payload["$defs"]["RunnerSpec"]["properties"]
+    assert "sweep_mode" in runner_props
+    assert "workers" in runner_props
 
 
 def test_runner_execution_env_defaults_to_empty():
@@ -107,3 +110,25 @@ def test_runner_execution_env_normalizes_conda_env_whitespace():
     payload["runner"]["execution_env"] = {"conda_env": "  py312_metamodeling_pymc  "}
     spec = load_and_validate_modelspec(payload)
     assert spec.runner.execution_env["conda_env"] == "py312_metamodeling_pymc"
+
+
+def test_runner_sweep_mode_defaults_to_serial():
+    payload = _read_json(Path("examples/toy_program/spec.toy_program.json"))
+    spec = load_and_validate_modelspec(payload)
+    assert spec.runner.sweep_mode == "serial"
+
+
+def test_runner_parallel_local_autofills_workers_from_cpus():
+    payload = _read_json(Path("examples/toy_program/spec.toy_program.json"))
+    payload["runner"]["resources"]["cpus"] = 3
+    payload["runner"]["sweep_mode"] = "parallel_local"
+    spec = load_and_validate_modelspec(payload)
+    assert spec.runner.workers == 3
+
+
+def test_runner_workers_rejected_for_non_parallel_mode():
+    payload = _read_json(Path("examples/toy_program/spec.toy_program.json"))
+    payload["runner"]["sweep_mode"] = "serial"
+    payload["runner"]["workers"] = 2
+    with pytest.raises(ValidationError, match="runner.workers is supported only"):
+        load_and_validate_modelspec(payload)

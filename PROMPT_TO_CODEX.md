@@ -543,6 +543,68 @@ Acceptance:
 - Status.md includes concrete execution findings and remaining environment-dependent limitations.
 - Commit message: "docs: harden and enrich tutorial notebooks"
 
+### Prompt 17: centralized DOE sweep output + synchronized serial/parallel/MPI writer
+You are Codex working in this repository.
+Read AGENTS.md and follow it strictly.
+Do implementation in small, reviewable commits.
+Never change sampling resolution, dataset size, DOE cardinality, or runtime shortcuts unless explicitly requested.
+Always persist run provenance including seed, spec digest, artifact digest, stdout, and stderr.
+After each meaningful change: update Status.md with what changed, why, and decision notes.
+Before commit: run `ruff format .`, `ruff check .`, `pytest -q -m "not slow"`.
+If fast tests fail, do not commit.
+
+Task: replace per-point numeric output scattering for DOE sweeps with one centralized tabular output artifact, and upgrade Tutorial 1 to consume it.
+
+Requirements:
+1) Centralized sweep sink:
+   - Add a sweep artifact writer that emits:
+     - `sweep_rows.csv` (one row per DOE point),
+     - `sweep_manifest.json`,
+     - `sweep_logs.jsonl` (per-point stdout/stderr references or payload snippets).
+   - `sweep_rows.csv` must include:
+     - deterministic `point_index`,
+     - input columns,
+     - flattened numeric output columns (e.g., `y__0`, `y__1`),
+     - status/error/timing fields.
+2) Execution modes and synchronization:
+   - Extend run execution mode handling to support:
+     - `serial`,
+     - `parallel_local`,
+     - `mpi`.
+   - Synchronization contract:
+     - one writer process/rank writes the centralized files,
+     - worker processes/ranks send row/log payloads to that writer,
+     - finalize step enforces deterministic row ordering by `point_index`.
+3) Provenance compatibility:
+   - Keep existing reproducibility/provenance guarantees (seed/spec/artifact digests, stdout/stderr persistence).
+   - Keep existing run registry flows functional (`mm runs list/show`), while exposing sweep artifact paths.
+4) Tutorial 1 upgrade:
+   - Update `tutorials/Tutorial_1.ipynb` to read centralized `sweep_rows.csv` (no per-run folder traversal).
+   - Plot two heatmaps from toy outputs:
+     - `sum` (`y__0`),
+     - `product` (`y__1`).
+   - Keep notebook robust to running from repo root or `tutorials/`.
+5) Tests (must be updated):
+   - Fast:
+     - centralized CSV schema/row count/order checks,
+     - serial vs local-parallel equivalence on toy sweep,
+     - Tutorial 1 data-loading logic from centralized CSV.
+   - Slow/optional:
+     - MPI synchronized writer integration test (single output file, no row corruption).
+6) Docs:
+   - Update `README.md`, `PRD.md`, `TechSpec.md`, `CodeDesign.md`, `TEST_PLAN.md`, and `Status.md`.
+   - Ensure docs explicitly state that centralized sweep output is the canonical path for DOE numeric results.
+
+Constraints:
+- One commit only for this prompt.
+- Do not downsample or alter DOE cardinality.
+
+Acceptance:
+- Fast suite passes.
+- Tutorial 1 produces both heatmaps from one centralized CSV output.
+- MPI path is tested or clearly skipped with actionable reason in test output.
+- Commit message: "feat: centralized sweep output and synchronized execution modes"
+
 ## Stop conditions
 - If Codex proposes implicit downsampling or data reduction: reject and preserve full requested computation.
 - If assumptions are needed for model semantics: pause and request clarification in Status.md and prompt output.
