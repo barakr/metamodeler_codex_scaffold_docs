@@ -1,0 +1,58 @@
+from __future__ import annotations
+
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+from metamodeler.adapters.base import AdapterMaterialization
+from metamodeler.runners.local_process import LocalProcessRunner
+
+
+def test_local_process_runner_uses_current_environment_by_default(monkeypatch, tmp_path):
+    seen: dict[str, list[str]] = {}
+
+    def _fake_run(command, **kwargs):
+        seen["command"] = list(command)
+        return subprocess.CompletedProcess(command, 0, stdout="ok", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", _fake_run)
+
+    runner = LocalProcessRunner()
+    run_dir = tmp_path / "run"
+    run_dir.mkdir(parents=True)
+    materialization = AdapterMaterialization(
+        command=["python", "-c", "print('x')"],
+        cwd=Path("."),
+        execution_env={},
+    )
+    result = runner.run(materialization=materialization, run_dir=run_dir)
+
+    expected_prefix = "python" if shutil.which("python") else sys.executable
+    assert seen["command"] == [expected_prefix, "-c", "print('x')"]
+    assert result.returncode == 0
+    assert result.stdout_path.exists()
+    assert result.stderr_path.exists()
+
+
+def test_local_process_runner_can_prefix_conda_environment(monkeypatch, tmp_path):
+    seen: dict[str, list[str]] = {}
+
+    def _fake_run(command, **kwargs):
+        seen["command"] = list(command)
+        return subprocess.CompletedProcess(command, 0, stdout="ok", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", _fake_run)
+
+    runner = LocalProcessRunner()
+    run_dir = tmp_path / "run"
+    run_dir.mkdir(parents=True)
+    materialization = AdapterMaterialization(
+        command=["python", "-c", "print('x')"],
+        cwd=Path("."),
+        execution_env={"conda_env": "py312_metamodeling_pymc"},
+    )
+    runner.run(materialization=materialization, run_dir=run_dir)
+
+    assert seen["command"][:4] == ["conda", "run", "-n", "py312_metamodeling_pymc"]
+    assert seen["command"][4:] == ["python", "-c", "print('x')"]

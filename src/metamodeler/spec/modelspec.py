@@ -50,6 +50,21 @@ class RunnerSpec(BaseModel):
 
     mode: Literal["local_process", "container", "hpc", "http"]
     resources: RunnerResourcesSpec
+    execution_env: dict[str, str] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def check_execution_env(self) -> "RunnerSpec":
+        allowed = {"conda_env"}
+        unknown = sorted(set(self.execution_env) - allowed)
+        if unknown:
+            raise ValueError(
+                f"runner.execution_env contains unsupported keys: {unknown}. "
+                "Allowed keys: ['conda_env']."
+            )
+        if "conda_env" in self.execution_env:
+            conda_env = self.execution_env["conda_env"].strip()
+            self.execution_env["conda_env"] = conda_env
+        return self
 
 
 class VariableSpec(BaseModel):

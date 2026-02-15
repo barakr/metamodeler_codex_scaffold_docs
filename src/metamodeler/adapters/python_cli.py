@@ -29,7 +29,11 @@ class PythonCLIAdapter:
             command.extend([mapping.to.key, str(point[mapping.var])])
 
         command.extend(["--run-dir", str(run_dir)])
-        return AdapterMaterialization(command=command, cwd=repo_root)
+        return AdapterMaterialization(
+            command=command,
+            cwd=repo_root,
+            execution_env=dict(spec.runner.execution_env),
+        )
 
     def parse_outputs(self, *, spec: ModelSpec, run_dir: Path) -> dict:
         outputs: dict = {}

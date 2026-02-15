@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 
 import requests
@@ -56,7 +55,7 @@ class BioModelsSBMLAdapter:
 
         worker_path = repo_root / "src" / "metamodeler" / "adapters" / "biomodels_worker.py"
         command = [
-            sys.executable,
+            "python",
             str(worker_path),
             "--sbml-path",
             str(sbml_path),
@@ -69,7 +68,11 @@ class BioModelsSBMLAdapter:
                 spec.io_schema.time_grid.model_dump(mode="json") if spec.io_schema.time_grid else {}
             ),
         ]
-        return AdapterMaterialization(command=command, cwd=repo_root)
+        return AdapterMaterialization(
+            command=command,
+            cwd=repo_root,
+            execution_env=dict(spec.runner.execution_env),
+        )
 
     def parse_outputs(self, *, spec: ModelSpec, run_dir: Path) -> dict:
         outputs: dict = {}

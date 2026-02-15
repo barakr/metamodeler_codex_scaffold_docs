@@ -13,6 +13,7 @@ from metamodeler.spec import ModelSpec
 class AdapterMaterialization:
     command: list[str]
     cwd: Path
+    execution_env: dict[str, str]
 
 
 class Adapter(Protocol):

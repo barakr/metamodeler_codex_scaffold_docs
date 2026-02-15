@@ -420,6 +420,7 @@
 - 2026-02-12: Updated `tutorials/Tutorial_0.ipynb` to run no install commands at all; replaced with a manual "Loading environment" guidance box and commented conda examples (`py314_metamodeling` kept as recommendation/example only).
 - 2026-02-15: Removed redundant root tutorial files (`TUTORIAL.md`, `TUTORIAL.ipynb`); tutorials now live only under `tutorials/` with `tutorials/Tutorial_0.ipynb` as the entry point.
 - 2026-02-15: Hardened `tutorials/Tutorial_0.ipynb` preflight cell to auto-detect repo root from either repo-root or `tutorials/` execution context; verified by executing notebook end-to-end in `py314_metamodeling` (`tmp/Tutorial_0.executed.ipynb`).
+- 2026-02-15: Commit pass: finalized runner `execution_env` plumbing (spec validation, adapter materialization, local runner conda prefixing, and dedicated runner/spec tests).
 
 ## Open issues
 - Tutorial 2 full run depends on external BioModels download; in restricted/offline sandboxes this step will fail while validate/plan still pass.

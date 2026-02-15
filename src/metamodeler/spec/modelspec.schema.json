@@ -319,6 +319,13 @@
     "RunnerSpec": {
       "additionalProperties": false,
       "properties": {
+        "execution_env": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Execution Env",
+          "type": "object"
+        },
         "mode": {
           "enum": [
             "local_process",

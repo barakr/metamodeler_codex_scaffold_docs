@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+import pytest
 from pydantic import ValidationError
 
 from metamodeler.cli.main import main
@@ -86,3 +87,23 @@ def test_modelspec_schema_artifact_exists():
 
     assert payload["title"] == "ModelSpec"
     assert "$defs" in payload
+
+
+def test_runner_execution_env_defaults_to_empty():
+    payload = _read_json(Path("examples/toy_program/spec.toy_program.json"))
+    spec = load_and_validate_modelspec(payload)
+    assert spec.runner.execution_env == {}
+
+
+def test_runner_execution_env_rejects_unsupported_keys():
+    payload = _read_json(Path("examples/toy_program/spec.toy_program.json"))
+    payload["runner"]["execution_env"] = {"python_path": "python", "conda_env": "x"}
+    with pytest.raises(ValidationError, match="unsupported keys"):
+        load_and_validate_modelspec(payload)
+
+
+def test_runner_execution_env_normalizes_conda_env_whitespace():
+    payload = _read_json(Path("examples/toy_program/spec.toy_program.json"))
+    payload["runner"]["execution_env"] = {"conda_env": "  py312_metamodeling_pymc  "}
+    spec = load_and_validate_modelspec(payload)
+    assert spec.runner.execution_env["conda_env"] == "py312_metamodeling_pymc"
