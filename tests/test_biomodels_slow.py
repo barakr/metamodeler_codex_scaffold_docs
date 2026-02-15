@@ -1,3 +1,13 @@
+"""Slow integration tests for the BioModels adapter.
+
+These tests validate two behaviors:
+- fetching a BioModels model by identifier
+- simulating the fetched model and persisting outputs
+
+They are marked `slow` because model fetch/simulate can take time and may
+require network access.
+"""
+
 import copy
 import json
 from pathlib import Path
