@@ -424,6 +424,7 @@
 - 2026-02-15: Commit pass: finalized optional-backend test controls (`optional_backend` marker + `MM_SKIP_OPTIONAL_BACKEND_TESTS`) and generalized backend install guidance to use `<env_name>`.
 - 2026-02-15: Refined `tutorials/Tutorial_0.ipynb` for safer onboarding (manual install guidance only, no hardcoded path/env assumptions) and re-validated notebook execution (`tmp/Tutorial_0.executed.ipynb`).
 - 2026-02-15: Simplified `tutorials/Tutorial_0.ipynb` to a standard notebook flow: explicit "use a pre-set kernel environment" guidance, CLI preflight with `PYTHONPATH` wiring, manual/commented install examples only, and successful end-to-end execution check (`tmp/Tutorial_0.executed.ipynb`).
+- 2026-02-15: Expanded `examples/toy_program/run.py` module docstring to document toy-run behavior and its role in local integration testing.
 
 ## Open issues
 - Tutorial 2 full run depends on external BioModels download; in restricted/offline sandboxes this step will fail while validate/plan still pass.
