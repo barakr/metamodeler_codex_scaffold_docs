@@ -463,6 +463,10 @@
 - 2026-02-15: Added Prompt 17 design package (PRD/TechSpec/CodeDesign/TEST_PLAN/PROMPT_TO_CODEX updates) for centralized DOE sweep CSV output and synchronized serial/local-parallel/MPI writing; no runtime implementation in this step.
 - 2026-02-15: Completed Prompt 17 implementation with centralized sweep artifacts, synchronized serial/local-parallel/MPI execution modes, Tutorial 1 dual-heatmap update, and updated fast/slow test coverage.
 - 2026-02-15: Hardened `tutorials/Tutorial_1.ipynb` against stale registry paths and missing prior sweep records by auto-running the toy sweep when needed; verified end-to-end notebook execution to `tmp/Tutorial_1.executed.ipynb`.
+- 2026-02-15: Refactored `tutorials/Tutorial_1.ipynb` CLI helper naming/usage to `run_mm_cli` consistently (removed mixed `run_mm`/`run_mm_CLI` calls and shell-style invocation remnants).
+- 2026-02-15: Refactored `tutorials/Tutorial_2.ipynb` to notebook-native CLI execution via `run_mm_cli`, added dense/wider `k_on` sweep generation (11-point grid over `[8e-05, 1.2e-04]`), switched analysis to centralized sweep CSV parsing, and added time-vs-`k_on` heatmap plus biological interpretation guidance.
+- 2026-02-15: Hardened `tutorials/Tutorial_2.ipynb` for offline BioModels execution by seeding dense-run SBML cache from existing local cache/file when available; fixed heatmap parsing to use centralized columns (`time_series__rows__json` + `time_series__columns__*`).
+- 2026-02-15: Verified Tutorial 2 in `py313_metamodeling_pymc` using notebook code cells (3/5/7/9): dense BioModels run completed successfully with 11/11 successful points (`run_id=ed4db1e01b1d449684784f5503fa56f8`).
 
 ## Open issues
 - Tutorial 2 full run depends on external BioModels download; in restricted/offline sandboxes this step will fail while validate/plan still pass.
