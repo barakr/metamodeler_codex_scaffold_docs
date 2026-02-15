@@ -347,7 +347,7 @@ def _tutorial_command() -> int:
     print('5) Eval surrogate: mm surrogate eval <spec> --inputs \'{"a":[0.5],"b":[1.0]}\' --n 100')
     print("6) Build metamodel: mm meta build examples/metamodels/metamodel.simple.json")
     print("7) Sample metamodel: mm meta sample <spec> --draws 100 --tune 50 --chains 2 --seed 1")
-    print("See also: TUTORIAL.md")
+    print("See also: tutorials/Tutorial_0.ipynb")
     return 0
 
 

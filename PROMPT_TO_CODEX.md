@@ -335,7 +335,7 @@ Requirements:
      - if the environment lacks a local C++ toolchain, run with `PYTENSOR_FLAGS='cxx='` so PyMC/PyTensor uses non-C fallback for verification.
      - Record the executed command, environment details, and pass/fail result in `Status.md`.
 5) Docs:
-   - Update `README.md` and `TUTORIAL.md` with PyMC backend usage and install notes.
+   - Update `README.md` and `tutorials/Tutorial_0.ipynb` with PyMC backend usage and install notes.
    - Update `Status.md`.
 
 Constraints:
@@ -377,7 +377,7 @@ Requirements:
      - `pytest -q tests/test_surrogate_backends.py -k sbi_npe_backend_fit_sample_and_logprob`
      - Record the executed command, environment details, and pass/fail result in `Status.md`.
 5) Docs:
-   - Update `README.md` and `TUTORIAL.md` with SBI backend usage and install notes.
+   - Update `README.md` and `tutorials/Tutorial_0.ipynb` with SBI backend usage and install notes.
    - Update `Status.md`.
 
 Constraints:
@@ -453,7 +453,7 @@ Requirements:
 5) Notebook support:
    - Provide at least a notebook entrypoint for the modular track (`Tutorial_0.ipynb`).
 6) Documentation wiring:
-   - Update top-level tutorial entry docs (`TUTORIAL.md`, `README.md`) to point to `tutorials/Tutorial_0`.
+   - Update tutorial entry docs (`README.md`, `tutorials/README.md`) to point to `tutorials/Tutorial_0`.
 7) Add/update tutorial-specific example specs or artifact stubs if needed to keep tutorials runnable.
 8) Update `Status.md` with tutorial architecture decisions and what remains open.
 
@@ -496,7 +496,7 @@ Requirements:
      - secondary scientific/computational objective.
    - Keep BioModels early and retain explicit PyMC/SBI conceptual mini-lessons.
 4) Documentation updates:
-   - Update `README.md`, `TUTORIAL.md`, `tutorials/README.md` to notebook-only links.
+   - Update `README.md` and `tutorials/README.md` to notebook-only links.
    - Update `PRD.md`, `TechSpec.md`, `CodeDesign.md`, and `Status.md` to reflect notebook-first onboarding architecture.
 5) Prompt/doc synchronization:
    - Record this as Prompt 15 completion in `Status.md`.
@@ -532,7 +532,7 @@ Requirements:
 5) Ensure quality gate remains green:
    - handle notebook lint strategy explicitly (e.g., ruff config for `.ipynb` docs).
 6) Update docs to reflect the hardening pass:
-   - `Status.md`, `PRD.md`, `TechSpec.md`, `CodeDesign.md`, `README.md`, `TUTORIAL.md`.
+   - `Status.md`, `PRD.md`, `TechSpec.md`, `CodeDesign.md`, `README.md`, `tutorials/README.md`.
 
 Constraints:
 - One commit only for this prompt.

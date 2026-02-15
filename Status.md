@@ -2,7 +2,7 @@
 
 ## High level state
 - Stage: Prompt 15 implementation complete (notebook-only tutorial onboarding)
-- Current focus: tutorial hardening and onboarding reliability validation
+- Current focus: environment portability hardening for optional surrogate backends (`pymc`, `sbi`)
 
 ## Folder structure
 - src/metamodeler/: library code
@@ -13,6 +13,50 @@
 - githooks/: git hooks that enforce formatting, lint, and fast tests
 
 ## Implemented
+- Runner/env portability + optional backend test controls (2026-02-12):
+  - Added optional `runner.execution_env` to `ModelSpec` (`default={}`), currently supporting:
+    - `conda_env` (validated key; whitespace normalized).
+  - Plumbed `runner.execution_env` through adapter materialization into local process runner:
+    - `src/metamodeler/adapters/base.py`
+    - `src/metamodeler/adapters/python_cli.py`
+    - `src/metamodeler/adapters/biomodels_sbml.py`
+    - `src/metamodeler/runners/local_process.py`
+  - Local runner behavior:
+    - If `conda_env` is set, run commands via `conda run -n <conda_env> ...`.
+    - If no `conda_env` and command starts with `python` but no `python` on PATH, fallback to current `sys.executable`.
+  - Removed hardcoded environment names from runtime backend dependency error messages:
+    - now uses generic `conda install -n <env_name> ...` guidance.
+  - Added optional backend test controls and reporting:
+    - env flag: `MM_SKIP_OPTIONAL_BACKEND_TESTS=1`
+    - pytest report header now prints optional backend availability and skip-flag state
+    - optional backend tests are marked and can be skipped explicitly via the flag
+    - files:
+      - `tests/backend_support.py`
+      - `tests/conftest.py`
+      - `tests/test_surrogate_backends.py`
+      - `tests/test_surrogate_backend_hardening.py`
+      - `pytest.ini`
+  - Added tests for env execution behavior and ModelSpec validation:
+    - `tests/test_local_process_runner.py`
+    - `tests/test_modelspec_validation.py`
+  - Regenerated schema artifact:
+    - `src/metamodeler/spec/modelspec.schema.json`
+  - Created permanent backend-specific conda environments:
+    - `/Users/barak/miniconda3/envs/py312_metamodeling_pymc`
+    - `/Users/barak/miniconda3/envs/py314_metamodeling_sbi`
+  - Renamed PyMC env prefix to match actual Python version:
+    - removed `/Users/barak/miniconda3/envs/py314_metamodeling_pymc`
+    - active env is `/Users/barak/miniconda3/envs/py312_metamodeling_pymc`
+  - Installed backend stacks:
+    - `py312_metamodeling_pymc`: Python `3.12.12`, `pymc 5.27.1`, `arviz 0.23.4`
+    - `py314_metamodeling_sbi`: Python `3.12.12`, `torch 2.10.0`, `sbi 0.23.3`
+  - Verified both PyMC tracks in the renamed env:
+    - `HOME=$(pwd)/tmp/home_for_tests MPLCONFIGDIR=$(pwd)/tmp/home_for_tests/.mpl PYTENSOR_FLAGS='cxx=' PYTHONPATH=src /Users/barak/miniconda3/envs/py312_metamodeling_pymc/bin/python -m pytest -q tests/test_surrogate_backends.py -k pymc_gp_backend_fit_sample_and_logprob` -> `1 passed`
+    - `HOME=$(pwd)/tmp/home_for_tests MPLCONFIGDIR=$(pwd)/tmp/home_for_tests/.mpl PYTENSOR_FLAGS='cxx=' PYTHONPATH=src /Users/barak/miniconda3/envs/py312_metamodeling_pymc/bin/python -m pytest -q tests/test_metamodel_sampling.py -k two_surrogates` -> `1 passed`
+  - Validation commands (passed):
+    - `ruff format .`
+    - `ruff check .`
+    - `pytest -q -m "not slow"`
 - Scaffold created:
   - Python package skeleton under `src/metamodeler/` including target subpackages from TechSpec.
   - `pyproject.toml` added with setuptools build, Python package metadata, and CLI entry point `mm`.
@@ -177,11 +221,9 @@
   - Added fast UX/repro tests:
     - `tests/test_cli_ux_commands.py`
 - Documentation update:
-  - Added top-level tutorial entry pointers:
-    - `TUTORIAL.md`
-    - `TUTORIAL.ipynb`
-  - Linked tutorial from:
+  - Linked tutorial notebooks from:
     - `README.md`
+    - `tutorials/README.md`
   - Refreshed tutorial after Prompts 6-10 to reflect real commands and backend behavior:
     - `mm tutorial`
     - `mm surrogate list`
@@ -198,8 +240,7 @@
   - Converted tutorials to notebook-only delivery by retiring `tutorials/Tutorial_*.md` files.
   - Re-pointed top-level docs:
     - `README.md` now links to notebook-only tutorial track.
-    - `TUTORIAL.md` now points to notebook-only sequence.
-    - `TUTORIAL.ipynb` now points to `tutorials/Tutorial_0.ipynb`.
+    - tutorials are indexed from `tutorials/README.md` and `tutorials/Tutorial_0.ipynb`.
 - Prompt 11 implemented:
   - Replaced placeholder `pymc_gp` backend with a real PyMC probabilistic fit path in:
     - `src/metamodeler/surrogates/backends.py`
@@ -216,7 +257,7 @@
   - Strengthened PyMC fit test with a real-learning quality assertion (bounded predictive MSE on synthetic mapping).
   - Updated user docs with backend install and behavior notes:
     - `README.md`
-    - `TUTORIAL.md`
+    - `tutorials/Tutorial_0.ipynb`
 - Prompt 12 implemented:
   - Replaced placeholder `sbi_npe` backend with real SBI NPE fit/eval flow in:
     - `src/metamodeler/surrogates/backends.py`
@@ -234,7 +275,7 @@
     - backend selection helpers for integration tests so fast suite remains stable without optional deps
   - Updated docs with SBI install and verification commands:
     - `README.md`
-    - `TUTORIAL.md`
+    - `tutorials/Tutorial_0.ipynb`
 - Prompt 13 implemented:
   - Added explicit backend-config validation contract with actionable errors:
     - `src/metamodeler/surrogate_config.py`
@@ -273,7 +314,6 @@
     - troubleshooting/fallback guidance
   - Synchronized tutorial architecture across docs:
     - `README.md`
-    - `TUTORIAL.md`
     - `tutorials/README.md`
     - `PRD.md`
     - `TechSpec.md`
@@ -373,6 +413,13 @@
 - 2026-02-12: Consolidated tutorial requests into Prompt 14 and implemented a modular 9-part tutorial curriculum with BioModels moved early and per-tutorial scientific side-aims.
 - 2026-02-12: Prompt 15 converted tutorials to notebook-only delivery and upgraded onboarding structure (time estimates, prerequisites, success criteria, checkpoints, troubleshooting).
 - 2026-02-12: Hardened tutorial execution by fixing surrogate dataset envelope parsing and regenerating all notebooks with guided explanations and graphics.
+- 2026-02-12: Introduced `runner.execution_env` (default empty) and explicit `conda_env` support so runtime environment is user-configurable via JSON, not hardcoded.
+- 2026-02-12: Added `MM_SKIP_OPTIONAL_BACKEND_TESTS` to make optional backend tests warning/skip-friendly when `pymc`/`sbi` are intentionally unavailable.
+- 2026-02-12: Created dedicated backend conda envs and installed `pymc`/`sbi` stacks there; kept the main project env skip-safe.
+- 2026-02-12: Renamed `py314_metamodeling_pymc` to `py312_metamodeling_pymc` and re-verified surrogate-PyMC plus metamodel-PyMC test tracks in the renamed env.
+- 2026-02-12: Updated `tutorials/Tutorial_0.ipynb` to run no install commands at all; replaced with a manual "Loading environment" guidance box and commented conda examples (`py314_metamodeling` kept as recommendation/example only).
+- 2026-02-15: Removed redundant root tutorial files (`TUTORIAL.md`, `TUTORIAL.ipynb`); tutorials now live only under `tutorials/` with `tutorials/Tutorial_0.ipynb` as the entry point.
+- 2026-02-15: Hardened `tutorials/Tutorial_0.ipynb` preflight cell to auto-detect repo root from either repo-root or `tutorials/` execution context; verified by executing notebook end-to-end in `py314_metamodeling` (`tmp/Tutorial_0.executed.ipynb`).
 
 ## Open issues
 - Tutorial 2 full run depends on external BioModels download; in restricted/offline sandboxes this step will fail while validate/plan still pass.
@@ -382,3 +429,4 @@
 - `sbi`/`torch` are currently not installed in `/Users/barak/miniconda3/envs/py314_metamodeling`; fast suite there remains skip-safe for SBI-specific tests.
 - `py312` environment currently has dependency conflicts due direct `pip` install of `libroadrunner`; this was used for design verification only and should be isolated before production workflows.
 - `libroadrunner` may not be available in the py314 environment; slow BioModels test is expected to skip when dependency is absent.
+- `py314_metamodeling_sbi` currently resolves with Python `3.12`; consider renaming to `py312_metamodeling_sbi` for prefix/version consistency.

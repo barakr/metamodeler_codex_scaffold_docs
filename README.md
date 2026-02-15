@@ -14,8 +14,7 @@ This repository is currently in planning/scaffold phase. The code implementation
 - Code design validation: `/Users/barak/Downloads/metamodeler_codex_scaffold_docs/CodeDesign.md`
 - Tutorial hub (notebook): `/Users/barak/Downloads/metamodeler_codex_scaffold_docs/tutorials/Tutorial_0.ipynb`
 - Tutorial sequence (notebooks): `/Users/barak/Downloads/metamodeler_codex_scaffold_docs/tutorials/Tutorial_1.ipynb` ... `/Users/barak/Downloads/metamodeler_codex_scaffold_docs/tutorials/Tutorial_9.ipynb`
-- Tutorial entry pointer: `/Users/barak/Downloads/metamodeler_codex_scaffold_docs/TUTORIAL.md`
-  - includes guided onboarding text, auto-discovery of key artifacts, and visual checkpoints
+- Tutorial folder index: `/Users/barak/Downloads/metamodeler_codex_scaffold_docs/tutorials/README.md`
 - Project execution status and decisions: `/Users/barak/Downloads/metamodeler_codex_scaffold_docs/Status.md`
 - Prompt workflow for Codex: `/Users/barak/Downloads/metamodeler_codex_scaffold_docs/PROMPT_TO_CODEX.md`
 - Agent operating constraints: `/Users/barak/Downloads/metamodeler_codex_scaffold_docs/AGENTS.md`
@@ -37,10 +36,10 @@ This repository is currently in planning/scaffold phase. The code implementation
 The surrogate interface is backend-neutral, but some backends require optional dependencies.
 
 - Install PyMC backend support in the project conda environment:
-  - `conda install -n py314_metamodeling -c conda-forge pymc arviz`
+  - `conda install -n <env_name> -c conda-forge pymc arviz`
   - or `pip install -e '.[pymc]'`
 - Install SBI backend support in the project conda environment:
-  - `conda install -n py314_metamodeling -c conda-forge pytorch sbi`
+  - `conda install -n <env_name> -c conda-forge pytorch sbi`
   - or `pip install -e '.[sbi]'`
 - `pymc` is the modern package (PyMC v5), and is the supported successor to legacy `pymc3`.
 - If `pymc_gp` is selected without PyMC installed, `mm surrogate fit` raises an actionable install error.
@@ -50,6 +49,23 @@ The surrogate interface is backend-neutral, but some backends require optional d
   - In toolchain-limited environments, use: `PYTENSOR_FLAGS='cxx=' pytest -q tests/test_surrogate_backends.py -k pymc_gp_backend_fit_sample_and_logprob`
 - Real SBI verification test:
   - `pytest -q tests/test_surrogate_backends.py -k sbi_npe_backend_fit_sample_and_logprob`
+ - Optional backend tests can be disabled explicitly:
+   - `MM_SKIP_OPTIONAL_BACKEND_TESTS=1 pytest -q`
+
+## Runner Execution Environment
+- `runner.execution_env` is optional and defaults to `{}`.
+- If set, supported keys are:
+  - `conda_env`: run model commands via `conda run -n <conda_env> ...`.
+- Example:
+```json
+{
+  "runner": {
+    "mode": "local_process",
+    "resources": {"cpus": 1, "mem_gb": 1, "walltime_min": 5},
+    "execution_env": {"conda_env": "py312_metamodeling_pymc"}
+  }
+}
+```
 
 ## Surrogate Troubleshooting
 - `Surrogate fit failed: Invalid backend_config key...`
