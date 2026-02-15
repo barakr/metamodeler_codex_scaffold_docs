@@ -215,7 +215,7 @@ def _require_pymc():
         raise RuntimeError(
             "Backend 'pymc_gp' requires 'pymc'. "
             "Install in your conda env: "
-            "`conda install -n py314_metamodeling -c conda-forge pymc arviz` "
+            "`conda install -n <env_name> -c conda-forge pymc arviz` "
             "or use `pip install 'metamodeler[pymc]'`."
         ) from exc
     return pm
@@ -228,7 +228,7 @@ def _require_torch():
         raise RuntimeError(
             "Backend 'sbi_npe' requires 'torch' and 'sbi'. "
             "Install in your conda env: "
-            "`conda install -n py314_metamodeling -c conda-forge pytorch sbi` "
+            "`conda install -n <env_name> -c conda-forge pytorch sbi` "
             "or use `pip install 'metamodeler[sbi]'`."
         ) from exc
     return torch
@@ -241,7 +241,7 @@ def _require_sbi():
         raise RuntimeError(
             "Backend 'sbi_npe' requires 'sbi' and 'torch'. "
             "Install in your conda env: "
-            "`conda install -n py314_metamodeling -c conda-forge pytorch sbi` "
+            "`conda install -n <env_name> -c conda-forge pytorch sbi` "
             "or use `pip install 'metamodeler[sbi]'`."
         ) from exc
     return sbi

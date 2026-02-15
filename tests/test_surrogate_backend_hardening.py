@@ -202,6 +202,7 @@ def test_cli_surrogate_eval_reports_non_object_inputs(monkeypatch, capsys, tmp_p
 
 
 @pytest.mark.slow
+@pytest.mark.optional_backend
 def test_optional_dual_backend_fit_eval_path(monkeypatch, tmp_path):
     versions_pymc = get_backend_dependency_versions("pymc_gp")
     versions_sbi = get_backend_dependency_versions("sbi_npe")

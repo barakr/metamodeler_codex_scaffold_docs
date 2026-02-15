@@ -53,6 +53,7 @@ def _artifact_payload_path(registry_path: Path) -> Path:
     return Path(artifact["backend_payload"])
 
 
+@pytest.mark.optional_backend
 def test_pymc_gp_backend_fit_sample_and_logprob(monkeypatch, tmp_path):
     pytest.importorskip("pymc")
 
@@ -108,6 +109,7 @@ def test_pymc_gp_backend_missing_dependency_has_actionable_error(monkeypatch, tm
         fit_surrogate(spec)
 
 
+@pytest.mark.optional_backend
 def test_sbi_npe_backend_fit_sample_and_logprob(monkeypatch, tmp_path):
     pytest.importorskip("sbi")
     pytest.importorskip("torch")
@@ -178,6 +180,7 @@ def test_sbi_npe_backend_missing_dependency_has_actionable_error(monkeypatch, tm
         fit_surrogate(spec)
 
 
+@pytest.mark.optional_backend
 def test_backend_specific_fit_quality_increasing_difficulty(monkeypatch, tmp_path):
     registry = tmp_path / "reg_quality.json"
     monkeypatch.setattr(surrogate_store, "SURROGATE_REGISTRY_PATH", registry)

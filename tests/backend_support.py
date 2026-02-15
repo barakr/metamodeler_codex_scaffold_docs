@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 import pytest
 
 from metamodeler.surrogates.backends import get_backend_dependency_versions
@@ -15,7 +17,22 @@ def _has_sbi() -> bool:
     return versions.get("sbi") != "not_installed" and versions.get("torch") != "not_installed"
 
 
+def skip_optional_backend_tests() -> bool:
+    value = os.getenv("MM_SKIP_OPTIONAL_BACKEND_TESTS", "")
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def optional_backend_status() -> dict[str, bool]:
+    return {
+        "pymc": _has_pymc(),
+        "sbi": _has_sbi(),
+        "skip_optional_backend_tests": skip_optional_backend_tests(),
+    }
+
+
 def available_fit_backend() -> tuple[str, dict]:
+    if skip_optional_backend_tests():
+        pytest.skip("MM_SKIP_OPTIONAL_BACKEND_TESTS is set; optional backend tests disabled.")
     if _has_sbi():
         return (
             "sbi_npe",
@@ -41,4 +58,6 @@ def available_fit_backend() -> tuple[str, dict]:
 
 
 def has_any_optional_backend() -> bool:
+    if skip_optional_backend_tests():
+        return False
     return _has_sbi() or _has_pymc()
