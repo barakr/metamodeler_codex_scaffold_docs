@@ -61,3 +61,15 @@ def has_any_optional_backend() -> bool:
     if skip_optional_backend_tests():
         return False
     return _has_sbi() or _has_pymc()
+
+
+def is_pymc_runtime_constraint(exc: BaseException) -> bool:
+    message = str(exc)
+    markers = (
+        "pytensor.link.c.exceptions.CompileError",
+        "Compilation failed",
+        "fatal error: 'vector' file not found",
+        "MissingGXX",
+        "g++ not available",
+    )
+    return any(marker in message for marker in markers)

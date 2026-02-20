@@ -28,6 +28,11 @@ After each meaningful change: update Status.md with what changed, why, and decis
 Before commit: run `ruff format .`, `ruff check .`, `pytest -q -m "not slow"`.
 If fast tests fail, do not commit.
 
+Current backend/testing guardrails:
+- Optional backend checks should run when dependencies are available.
+- If PyMC is installed but local toolchain compilation is unavailable, treat it as a runtime constraint (skip/fallback with explicit reason) rather than a product regression.
+- Keep SBI training summary logs under `tmp/sbi-logs/` (do not write `sbi-logs/` at repo root).
+
 ## Prompt sequence
 ### Prompt 0: scaffold and guardrails
 Task:

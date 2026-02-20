@@ -132,6 +132,7 @@
 - `tests/`
 - `githooks/`
 - `tmp/`
+  - `sbi-logs/` (SBI backend training summary/tensorboard logs)
 
 ## Tutorial delivery design
 - Format: Jupyter notebooks only for tutorials (`.ipynb`).
@@ -178,7 +179,9 @@ Decision for implementation phases after v1:
   - local runner smoke,
   - cache digest behavior,
   - centralized sweep-writer determinism and schema checks,
-  - Tutorial 1 toy post-processing from one sweep CSV (including two heatmap-ready matrices).
+  - Tutorial 1 toy post-processing from one sweep CSV (including two heatmap-ready matrices),
+  - optional backend checks that exercise SBI when available and treat PyMC toolchain compile gaps as explicit runtime constraints (skip/fallback, not false regression failures),
+  - regression check that SBI summary logs are routed to `tmp/sbi-logs/` (not repo root).
 - Slow suite:
   - BioModels integration and heavy simulations,
   - optional MPI integration path validating synchronized centralized writes to one sweep artifact.

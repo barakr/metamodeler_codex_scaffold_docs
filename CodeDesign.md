@@ -175,6 +175,10 @@ This preserves the "no per-point output file/folder for numeric results" goal wh
   - sweep table schema and deterministic ordering
   - serial and local-parallel produce equivalent `sweep_rows.csv` content
   - tutorial toy parser builds two heatmap matrices from centralized CSV
+  - optional backend checks remain robust in mixed PyMC/SBI environments:
+    - exercise SBI paths when available,
+    - treat PyMC compile/toolchain gaps as explicit runtime constraints (skip/fallback)
+  - SBI training summary logs are emitted under `tmp/sbi-logs/` (not repo root)
 - Slow/optional tests:
   - MPI integration: one centralized output file with correct row count and no corruption
   - marker: `mpi`

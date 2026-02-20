@@ -83,6 +83,7 @@ Need a framework that can:
 - NFR7: Tutorial notebooks avoid manual placeholders when practical (auto-select run IDs/artifacts for smoother onboarding).
 - NFR8: Centralized sweep output must be deterministic and mergeable across execution modes (stable `point_index` ordering).
 - NFR9: Parallel/MPI synchronization must avoid row corruption and partial-write ambiguity in the centralized artifact.
+- NFR10: Optional-backend fast tests must be resilient to environment/toolchain limits (skip/fallback with explicit reason when backend runtime is unavailable, while still validating available backends).
 
 ## User stories
 - US1: As a researcher, I define one `ModelSpec` and run it without writing glue code.

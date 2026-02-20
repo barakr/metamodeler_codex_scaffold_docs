@@ -6,10 +6,13 @@ import base64
 import importlib.metadata
 import io
 import json
+import os
 import warnings
+from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 import numpy as np
 from scipy.special import logsumexp
@@ -201,15 +204,51 @@ def _fit_linear(
     )
 
 
-def _require_pymc():
+_ARVIZ_REFACTOR_WARNING_PATTERN = r"\s*ArviZ is undergoing a major refactor.*"
+
+
+@contextmanager
+def _optional_backend_import_context() -> Iterator[None]:
+    cache_root = (Path("tmp") / ".cache").resolve()
+    cache_root.mkdir(parents=True, exist_ok=True)
+    home_root = (Path("tmp") / "home").resolve()
+    home_root.mkdir(parents=True, exist_ok=True)
+    mplconfig_root = (Path("tmp") / "matplotlib").resolve()
+    mplconfig_root.mkdir(parents=True, exist_ok=True)
+
+    previous_home = os.environ.get("HOME")
+    previous_mplconfigdir = os.environ.get("MPLCONFIGDIR")
+    previous_xdg_cache_home = os.environ.get("XDG_CACHE_HOME")
+    os.environ["HOME"] = str(home_root)
+    os.environ["MPLCONFIGDIR"] = str(mplconfig_root)
+    os.environ["XDG_CACHE_HOME"] = str(cache_root)
     try:
         with warnings.catch_warnings():
-            # ArviZ currently emits a startup FutureWarning during import; keep tests stable.
+            # ArviZ emits this startup warning during import in recent releases.
             warnings.filterwarnings(
                 "ignore",
-                message="ArviZ is undergoing a major refactor*",
+                message=_ARVIZ_REFACTOR_WARNING_PATTERN,
                 category=FutureWarning,
             )
+            yield
+    finally:
+        if previous_home is None:
+            os.environ.pop("HOME", None)
+        else:
+            os.environ["HOME"] = previous_home
+        if previous_mplconfigdir is None:
+            os.environ.pop("MPLCONFIGDIR", None)
+        else:
+            os.environ["MPLCONFIGDIR"] = previous_mplconfigdir
+        if previous_xdg_cache_home is None:
+            os.environ.pop("XDG_CACHE_HOME", None)
+        else:
+            os.environ["XDG_CACHE_HOME"] = previous_xdg_cache_home
+
+
+def _require_pymc():
+    try:
+        with _optional_backend_import_context():
             import pymc as pm  # type: ignore[import-not-found]
     except ModuleNotFoundError as exc:
         raise RuntimeError(
@@ -247,16 +286,47 @@ def _require_sbi():
     return sbi
 
 
+class _NoOpSummaryWriter:
+    def __init__(self, log_dir: str) -> None:
+        self.log_dir = log_dir
+
+    def __getattr__(self, _name: str):
+        def _noop(*_args, **_kwargs):
+            return None
+
+        return _noop
+
+
+def _make_sbi_summary_writer() -> Any:
+    log_root = Path("tmp") / "sbi-logs"
+    log_root.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now(timezone.utc).isoformat().replace(":", "_")
+    log_dir = log_root / f"npe_{timestamp}"
+    try:
+        from torch.utils.tensorboard import SummaryWriter  # type: ignore[import-not-found]
+
+        return SummaryWriter(log_dir=str(log_dir))
+    except Exception:
+        # Keep runtime robust even when tensorboard writer extras are unavailable.
+        return _NoOpSummaryWriter(log_dir=str(log_dir))
+
+
 def _build_sbi_inference(density_estimator: str):
     _require_sbi()
-    try:
-        from sbi.inference import NPE  # type: ignore[import-not-found]
+    summary_writer = _make_sbi_summary_writer()
+    with _optional_backend_import_context():
+        try:
+            from sbi.inference import NPE  # type: ignore[import-not-found]
 
-        return NPE(density_estimator=density_estimator)
-    except Exception:
-        from sbi.inference import SNPE  # type: ignore[import-not-found]
+            return NPE(density_estimator=density_estimator, summary_writer=summary_writer)
+        except Exception:
+            from sbi.inference import SNPE  # type: ignore[import-not-found]
 
-        return SNPE(prior=None, density_estimator=density_estimator)
+            return SNPE(
+                prior=None,
+                density_estimator=density_estimator,
+                summary_writer=summary_writer,
+            )
 
 
 def _train_sbi_density_estimator(

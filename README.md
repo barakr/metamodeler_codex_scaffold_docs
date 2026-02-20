@@ -61,12 +61,19 @@ The surrogate interface is backend-neutral, but some backends require optional d
 - If `pymc_gp` is selected without PyMC installed, `mm surrogate fit` raises an actionable install error.
 - If `sbi_npe` is selected without `sbi`/`torch` installed, `mm surrogate fit` raises an actionable install error.
 - Real PyMC verification test:
-  - `pytest -q tests/test_surrogate_backends.py -k pymc_gp_backend_fit_sample_and_logprob`
-  - In toolchain-limited environments, use: `PYTENSOR_FLAGS='cxx=' pytest -q tests/test_surrogate_backends.py -k pymc_gp_backend_fit_sample_and_logprob`
+  - `PYTHONPATH=src python -m pytest -q tests/test_surrogate_backends.py -k pymc_gp_backend_fit_sample_and_logprob`
+  - In toolchain-limited environments, use:
+    - `PYTENSOR_FLAGS='cxx=' PYTHONPATH=src python -m pytest -q tests/test_surrogate_backends.py -k pymc_gp_backend_fit_sample_and_logprob`
 - Real SBI verification test:
-  - `pytest -q tests/test_surrogate_backends.py -k sbi_npe_backend_fit_sample_and_logprob`
- - Optional backend tests can be disabled explicitly:
-   - `MM_SKIP_OPTIONAL_BACKEND_TESTS=1 pytest -q`
+  - `PYTHONPATH=src python -m pytest -q tests/test_surrogate_backends.py -k sbi_npe_backend_fit_sample_and_logprob`
+- Optional backend fast-suite behavior:
+  - optional-backend tests run when dependencies are installed and runtime-compatible.
+  - if PyMC is installed but local toolchain compilation is unavailable, PyMC optional tests are skipped/fallback while SBI paths continue to run.
+- Optional backend tests can be disabled explicitly:
+  - `MM_SKIP_OPTIONAL_BACKEND_TESTS=1 PYTHONPATH=src python -m pytest -q`
+- SBI training summary logs are written under:
+  - `tmp/sbi-logs/`
+- Tutorial 6 notebook commands are path-portable and can run from either repo root or `tutorials/`.
 
 ## Runner Execution Environment
 - `runner.execution_env` is optional and defaults to `{}`.
