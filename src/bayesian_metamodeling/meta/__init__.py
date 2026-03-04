@@ -3,6 +3,7 @@
 from bayesian_metamodeling.meta.builder import build_ir_from_metamodel_spec
 from bayesian_metamodeling.meta.compiler import CompiledMetaModel, compile_metamodel
 from bayesian_metamodeling.meta.ir import (
+    DEFAULT_COUPLING_SIGMA,
     CouplingFactorIR,
     MetamodelIR,
     PriorFactorIR,
@@ -16,6 +17,7 @@ from bayesian_metamodeling.meta.sampling import META_SAMPLE_REGISTRY_PATH, sampl
 __all__ = [
     "CompiledMetaModel",
     "CouplingFactorIR",
+    "DEFAULT_COUPLING_SIGMA",
     "META_SAMPLE_REGISTRY_PATH",
     "MetamodelIR",
     "PriorFactorIR",

@@ -45,6 +45,9 @@ class SurrogateLikelihoodFactorIR(BaseModel):
     outputs: list[str] = Field(min_length=1)
 
 
+DEFAULT_COUPLING_SIGMA: float = 0.1
+
+
 class MetamodelIR(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

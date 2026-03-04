@@ -7,12 +7,16 @@ from dataclasses import dataclass
 import numpy as np
 
 from bayesian_metamodeling.meta.ir import (
+    DEFAULT_COUPLING_SIGMA,
     CouplingFactorIR,
     MetamodelIR,
     PriorFactorIR,
     SurrogateLikelihoodFactorIR,
 )
 from bayesian_metamodeling.surrogates import SurrogateModel
+
+_DETERMINISTIC_PENALTY = -1e6
+_DETERMINISTIC_TOL = 1e-9
 
 
 @dataclass
@@ -48,9 +52,13 @@ class CompiledMetaModel:
                     transformed = source
 
                 if factor.coupling_type == "deterministic_transform":
-                    total += -1e6 if abs(target - transformed) > 1e-9 else 0.0
+                    total += (
+                        _DETERMINISTIC_PENALTY
+                        if abs(target - transformed) > _DETERMINISTIC_TOL
+                        else 0.0
+                    )
                 else:
-                    sigma = float(factor.sigma or 1.0)
+                    sigma = float(factor.sigma or DEFAULT_COUPLING_SIGMA)
                     var = sigma**2
                     residual = target - transformed
                     total += -0.5 * (np.log(2 * np.pi * var) + (residual**2) / var)

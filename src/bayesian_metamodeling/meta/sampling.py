@@ -12,8 +12,14 @@ from uuid import uuid4
 import numpy as np
 
 from bayesian_metamodeling.meta.compiler import compile_metamodel
-from bayesian_metamodeling.meta.ir import CouplingFactorIR, MetamodelIR, PriorFactorIR
+from bayesian_metamodeling.meta.ir import (
+    DEFAULT_COUPLING_SIGMA,
+    CouplingFactorIR,
+    MetamodelIR,
+    PriorFactorIR,
+)
 from bayesian_metamodeling.spec import MetaModelSpec
+from bayesian_metamodeling.storage._filelock import locked_registry
 
 META_SAMPLE_REGISTRY_PATH = Path("tmp/metamodel_samples_registry.json")
 
@@ -52,6 +58,13 @@ def _sample_core(
     chains: int,
     seed: int,
 ) -> dict[str, str]:
+    """Generate samples from a metamodel IR using prior draws and coupling transforms.
+
+    Note: coupling constraints are applied as a post-draw transform approximation.
+    This means soft couplings inject noise *after* the prior draw rather than being
+    jointly sampled. The approximation is exact for deterministic transforms but
+    introduces a bias for soft/Gaussian links compared to full MCMC sampling.
+    """
     compiled = compile_metamodel(ir, backend=backend)
     priors = _prior_params(ir)
 
@@ -77,8 +90,9 @@ def _sample_core(
         if factor.coupling_type == "deterministic_transform":
             samples[factor.target] = transformed
         else:
-            sigma = float(factor.sigma or 0.1)
-            noise_scale = sigma if backend == "pymc" else sigma * 1.05
+            sigma = float(factor.sigma or DEFAULT_COUPLING_SIGMA)
+            _NUMPYRO_NOISE_SCALE_FACTOR = 1.05
+            noise_scale = sigma if backend == "pymc" else sigma * _NUMPYRO_NOISE_SCALE_FACTOR
             samples[factor.target] = transformed + rng.normal(
                 0.0, noise_scale, size=(chains, draws)
             )
@@ -129,12 +143,13 @@ def _sample_core(
         "created_at": datetime.now(UTC).isoformat(),
     }
 
-    registry = {}
-    if META_SAMPLE_REGISTRY_PATH.exists():
-        registry = json.loads(META_SAMPLE_REGISTRY_PATH.read_text())
-    registry[sample_id] = registry_entry
-    META_SAMPLE_REGISTRY_PATH.parent.mkdir(parents=True, exist_ok=True)
-    META_SAMPLE_REGISTRY_PATH.write_text(json.dumps(registry, indent=2, sort_keys=True))
+    with locked_registry(META_SAMPLE_REGISTRY_PATH):
+        registry = {}
+        if META_SAMPLE_REGISTRY_PATH.exists():
+            registry = json.loads(META_SAMPLE_REGISTRY_PATH.read_text())
+        registry[sample_id] = registry_entry
+        META_SAMPLE_REGISTRY_PATH.parent.mkdir(parents=True, exist_ok=True)
+        META_SAMPLE_REGISTRY_PATH.write_text(json.dumps(registry, indent=2, sort_keys=True))
 
     # Ensure compiled backend is executable.
     probe = {name: float(samples[name][0, 0]) for name in sample_vars}
