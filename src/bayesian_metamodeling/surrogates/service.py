@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -100,17 +101,20 @@ def fit_surrogate(spec: SurrogateSpec) -> dict[str, str]:
         seed=spec.seed,
     )
 
-    tmp_payload = Path("tmp") / "_surrogate_backend_payload.json"
+    tmp_payload = Path("tmp") / f"_surrogate_payload_{uuid.uuid4().hex}.json"
     tmp_payload.parent.mkdir(parents=True, exist_ok=True)
-    save_backend_payload(model, tmp_payload)
-    dependency_versions = get_backend_dependency_versions(spec.backend)
+    try:
+        save_backend_payload(model, tmp_payload)
+        dependency_versions = get_backend_dependency_versions(spec.backend)
 
-    return persist_surrogate_artifact(
-        spec=spec,
-        dataset_digest=dataset_digest,
-        payload_path=tmp_payload,
-        dependency_versions=dependency_versions,
-    )
+        return persist_surrogate_artifact(
+            spec=spec,
+            dataset_digest=dataset_digest,
+            payload_path=tmp_payload,
+            dependency_versions=dependency_versions,
+        )
+    finally:
+        tmp_payload.unlink(missing_ok=True)
 
 
 def eval_surrogate(spec: SurrogateSpec, inputs_payload: dict[str, list[float]], n: int) -> dict:
