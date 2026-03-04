@@ -17,3 +17,13 @@ Fast tests (required, <30s):
 Slow tests:
 - BioModels integration: fetch and simulate at least one model id (marked slow)
 - MPI integration (optional env): synchronized single-writer output to one centralized sweep CSV without row corruption
+
+## Test markers (registered in pytest.ini)
+
+| Marker | Meaning |
+|--------|---------|
+| `slow` | Tests that may exceed 30 seconds (BioModels, MPI) |
+| `integration` | End-to-end tests across multiple components |
+| `contract` | Interface contract tests for adapters and runners |
+| `optional_backend` | Tests requiring optional backend dependencies (pymc and/or sbi); skipped gracefully when missing or when `MM_SKIP_OPTIONAL_BACKEND_TESTS=1` is set |
+| `mpi` | Tests requiring an MPI launcher and mpi4py |

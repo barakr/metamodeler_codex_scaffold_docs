@@ -121,3 +121,5 @@ Need a framework that can:
 - Phase 3: Surrogate training baseline (single-model).
 - Phase 4: Coupling spec and joint metamodel builder (multi-model).
 - Phase 5: Calibration diagnostics, docs hardening, and packaging polish.
+
+**Implementation note (2026-03)**: Phases 3-5 have been implemented through the Prompt 6-17 sequence. Surrogate backends (pymc_gp, sbi_npe), metamodel IR, coupling specs, and joint sampling are functional. The "Out of scope for v1" items refer to the original v1 planning baseline; the implementation has progressed beyond that scope. See Status.md for detailed implementation log.

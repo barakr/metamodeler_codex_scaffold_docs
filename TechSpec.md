@@ -31,6 +31,9 @@
   - dispatch DOE points in `serial`, `parallel_local`, or `mpi` mode,
   - normalize each point result into one canonical row payload,
   - forward normalized rows to a synchronized centralized writer.
+- Runner environment support:
+  - `runner.execution_env` dict with optional `conda_env` key (added post-v1, see Status.md 2026-02-12).
+  - When `conda_env` is set, commands execute via `conda run -n <env> ...`.
 
 ### Layer 3: Storage and lineage
 - Run store layout (deterministic paths from digests):
@@ -71,6 +74,7 @@
 - Initial strategy after v1:
   - start with practical baselines (e.g., GP/BNN-compatible interfaces),
   - add calibration diagnostics before advanced coupling.
+- Spec-to-IR mapping note: `MetamodelCouplingSpec.kind="deterministic"` is mapped to `CouplingFactorIR.coupling_type="deterministic_transform"` by the IR builder (`meta/builder.py`). The IR uses the more explicit name to distinguish from other deterministic operations.
 
 ## v1 implementation scope
 - Implement:
@@ -189,4 +193,5 @@ Decision for implementation phases after v1:
   - `slow`
   - `integration`
   - `contract`
+  - `optional_backend` (requires pymc and/or sbi; skipped when missing)
   - `mpi` (optional, environment-dependent)
