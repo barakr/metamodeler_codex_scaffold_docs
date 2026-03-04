@@ -9,8 +9,8 @@ run_pytest() {
     pytest "$@"
     return
   fi
-  if [[ -x "/Users/barak/miniconda3/envs/py314_metamodeling/bin/pytest" ]]; then
-    /Users/barak/miniconda3/envs/py314_metamodeling/bin/pytest "$@"
+  if [[ -x "${HOME}/miniconda3/envs/py314_metamodeling/bin/pytest" ]]; then
+    "${HOME}/miniconda3/envs/py314_metamodeling/bin/pytest" "$@"
     return
   fi
   echo "pre-push: pytest not found in PATH and fallback env is unavailable."

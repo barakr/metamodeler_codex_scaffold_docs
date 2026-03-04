@@ -17,8 +17,8 @@ run_ruff() {
     ruff "$@"
     return
   fi
-  if [[ -x "/Users/barak/miniconda3/envs/py314_metamodeling/bin/ruff" ]]; then
-    /Users/barak/miniconda3/envs/py314_metamodeling/bin/ruff "$@"
+  if [[ -x "${HOME}/miniconda3/envs/py314_metamodeling/bin/ruff" ]]; then
+    "${HOME}/miniconda3/envs/py314_metamodeling/bin/ruff" "$@"
     return
   fi
   echo "pre-commit: ruff not found in PATH and fallback env is unavailable."
@@ -30,8 +30,8 @@ run_pytest() {
     pytest "$@"
     return
   fi
-  if [[ -x "/Users/barak/miniconda3/envs/py314_metamodeling/bin/pytest" ]]; then
-    /Users/barak/miniconda3/envs/py314_metamodeling/bin/pytest "$@"
+  if [[ -x "${HOME}/miniconda3/envs/py314_metamodeling/bin/pytest" ]]; then
+    "${HOME}/miniconda3/envs/py314_metamodeling/bin/pytest" "$@"
     return
   fi
   echo "pre-commit: pytest not found in PATH and fallback env is unavailable."
