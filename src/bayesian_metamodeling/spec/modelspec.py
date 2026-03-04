@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any, Literal
 
@@ -65,6 +66,8 @@ class RunnerSpec(BaseModel):
             )
         if "conda_env" in self.execution_env:
             conda_env = self.execution_env["conda_env"].strip()
+            if not re.match(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$", conda_env):
+                raise ValueError(f"Invalid conda environment name: {conda_env!r}")
             self.execution_env["conda_env"] = conda_env
         if self.sweep_mode != "parallel_local" and self.workers is not None:
             raise ValueError(
@@ -193,8 +196,11 @@ class StorageSpec(BaseModel):
     @field_validator("root")
     @classmethod
     def check_not_absolute(cls, value: str) -> str:
-        if Path(value).is_absolute():
+        p = Path(value)
+        if p.is_absolute():
             raise ValueError("storage.root must be a project-relative path")
+        if ".." in p.parts:
+            raise ValueError("storage.root must not contain directory traversal (..) sequences")
         return value
 
 

@@ -7,6 +7,7 @@ import importlib.metadata
 import io
 import json
 import os
+import threading
 import warnings
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -206,6 +207,8 @@ def _fit_linear(
 
 _ARVIZ_REFACTOR_WARNING_PATTERN = r"\s*ArviZ is undergoing a major refactor.*"
 
+_ENV_LOCK = threading.Lock()
+
 
 @contextmanager
 def _optional_backend_import_context() -> Iterator[None]:
@@ -216,34 +219,35 @@ def _optional_backend_import_context() -> Iterator[None]:
     mplconfig_root = (Path("tmp") / "matplotlib").resolve()
     mplconfig_root.mkdir(parents=True, exist_ok=True)
 
-    previous_home = os.environ.get("HOME")
-    previous_mplconfigdir = os.environ.get("MPLCONFIGDIR")
-    previous_xdg_cache_home = os.environ.get("XDG_CACHE_HOME")
-    os.environ["HOME"] = str(home_root)
-    os.environ["MPLCONFIGDIR"] = str(mplconfig_root)
-    os.environ["XDG_CACHE_HOME"] = str(cache_root)
-    try:
-        with warnings.catch_warnings():
-            # ArviZ emits this startup warning during import in recent releases.
-            warnings.filterwarnings(
-                "ignore",
-                message=_ARVIZ_REFACTOR_WARNING_PATTERN,
-                category=FutureWarning,
-            )
-            yield
-    finally:
-        if previous_home is None:
-            os.environ.pop("HOME", None)
-        else:
-            os.environ["HOME"] = previous_home
-        if previous_mplconfigdir is None:
-            os.environ.pop("MPLCONFIGDIR", None)
-        else:
-            os.environ["MPLCONFIGDIR"] = previous_mplconfigdir
-        if previous_xdg_cache_home is None:
-            os.environ.pop("XDG_CACHE_HOME", None)
-        else:
-            os.environ["XDG_CACHE_HOME"] = previous_xdg_cache_home
+    with _ENV_LOCK:
+        previous_home = os.environ.get("HOME")
+        previous_mplconfigdir = os.environ.get("MPLCONFIGDIR")
+        previous_xdg_cache_home = os.environ.get("XDG_CACHE_HOME")
+        os.environ["HOME"] = str(home_root)
+        os.environ["MPLCONFIGDIR"] = str(mplconfig_root)
+        os.environ["XDG_CACHE_HOME"] = str(cache_root)
+        try:
+            with warnings.catch_warnings():
+                # ArviZ emits this startup warning during import in recent releases.
+                warnings.filterwarnings(
+                    "ignore",
+                    message=_ARVIZ_REFACTOR_WARNING_PATTERN,
+                    category=FutureWarning,
+                )
+                yield
+        finally:
+            if previous_home is None:
+                os.environ.pop("HOME", None)
+            else:
+                os.environ["HOME"] = previous_home
+            if previous_mplconfigdir is None:
+                os.environ.pop("MPLCONFIGDIR", None)
+            else:
+                os.environ["MPLCONFIGDIR"] = previous_mplconfigdir
+            if previous_xdg_cache_home is None:
+                os.environ.pop("XDG_CACHE_HOME", None)
+            else:
+                os.environ["XDG_CACHE_HOME"] = previous_xdg_cache_home
 
 
 def _require_pymc():
@@ -496,10 +500,19 @@ def _serialize_torch_object(payload: Any) -> str:
 def _deserialize_torch_object(serialized: str) -> Any:
     torch = _require_torch()
     buffer = io.BytesIO(base64.b64decode(serialized.encode("ascii")))
+    # Security: weights_only=False is required because SBI posteriors are full Python
+    # objects (not just tensors). We validate the loaded object conforms to the expected
+    # posterior interface to guard against loading arbitrary objects from tampered artifacts.
     try:
-        return torch.load(buffer, map_location="cpu", weights_only=False)
+        obj = torch.load(buffer, map_location="cpu", weights_only=False)
     except TypeError:
-        return torch.load(buffer, map_location="cpu")
+        obj = torch.load(buffer, map_location="cpu")
+    if not hasattr(obj, "sample") or not hasattr(obj, "log_prob"):
+        raise ValueError(
+            "Deserialized torch object does not implement the expected posterior interface "
+            "(sample, log_prob). Artifact may be corrupted or tampered with."
+        )
+    return obj
 
 
 def save_backend_payload(model: SurrogateModel, payload_path: Path) -> None:

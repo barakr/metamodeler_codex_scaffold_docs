@@ -19,6 +19,12 @@ class PythonCLIAdapter:
             raise ValueError("model.artifact.entrypoint is required for python_cli_adapter_v1")
 
         command = list(spec.model.artifact.entrypoint)
+        # Security: entrypoint is user-controlled by design (CLI-first tool where user
+        # controls the spec). Validate that path-like entrypoints don't traverse outside repo.
+        if len(command) > 1 and "/" in command[1]:
+            ep_path = Path(command[1]).resolve()
+            if not ep_path.is_relative_to(repo_root.resolve()):
+                raise ValueError(f"Entrypoint path must be within repo root: {command[1]}")
         for mapping in spec.adapter.input_mapping:
             if mapping.to is None:
                 continue
@@ -43,6 +49,8 @@ class PythonCLIAdapter:
                 continue
             if endpoint.kind != "file" or endpoint.path is None:
                 raise ValueError("python_cli_adapter_v1 expects file-based output mappings")
-            output_path = run_dir / endpoint.path
+            output_path = (run_dir / endpoint.path).resolve()
+            if not output_path.is_relative_to(run_dir.resolve()):
+                raise ValueError(f"Path traversal detected in output mapping: {endpoint.path}")
             outputs[mapping.var] = json.loads(output_path.read_text())
         return outputs

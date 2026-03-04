@@ -31,7 +31,7 @@ class BioModelsSBMLAdapter:
                 f"?filename={biomodels_id}_url.xml"
             )
 
-        response = requests.get(source_url, timeout=60)
+        response = requests.get(source_url, timeout=60, verify=True)
         response.raise_for_status()
         out_path.write_bytes(response.content)
         return out_path

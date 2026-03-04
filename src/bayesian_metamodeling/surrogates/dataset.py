@@ -15,10 +15,14 @@ from bayesian_metamodeling.spec import SurrogateSpec
 
 def _resolve_dataset_root(dataset_ref: str | dict[str, Any]) -> Path:
     if isinstance(dataset_ref, str):
-        return Path(dataset_ref)
-    if "run_store_root" in dataset_ref:
-        return Path(dataset_ref["run_store_root"])
-    raise ValueError("dataset_ref must be a string path or include 'run_store_root'")
+        p = Path(dataset_ref)
+    elif "run_store_root" in dataset_ref:
+        p = Path(dataset_ref["run_store_root"])
+    else:
+        raise ValueError("dataset_ref must be a string path or include 'run_store_root'")
+    if ".." in p.parts:
+        raise ValueError(f"Dataset path must not contain directory traversal (..): {p}")
+    return p
 
 
 def _extract_scalar_output(value: Any, summary_config: dict[str, Any] | None) -> float:
