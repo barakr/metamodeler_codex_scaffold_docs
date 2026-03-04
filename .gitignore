@@ -10,3 +10,5 @@ tmp/
 .codex/sessions/
 .DS_Store
 .ipynb_checkpoints/
+projects/*/store/*
+!projects/*/store/.gitkeep

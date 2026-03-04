@@ -6,6 +6,15 @@
 
 ## Decision Log
 
+### 2026-03-05: Add TCR signaling case study (Neve-Oz, Sherman & Raveh 2024)
+- Created `projects/` top-level directory for real-world scientific reproductions
+- First project: `projects/tcr_signaling/` — reproduces Bayesian metamodeling of
+  early TCR signaling from Frontiers in Immunology 2024
+- 4 partial models: membrane topography, kinetic segregation, Lck activity, TCR phosphorylation
+- 4 ModelSpecs (2 grid DOE, 2 sobol DOE), 4 SurrogateSpecs, 1 MetaModelSpec
+- 4 Jupyter notebooks for exploration, surrogate fitting, inference, and figure reproduction
+- All model specs pass `bayesmm validate`; all fast tests pass
+
 ### 2026-03-04: Rename package from metamodeler to bayesian-metamodeling
 - pip name: `bayesian-metamodeling`
 - import name: `bayesian_metamodeling`
@@ -16,6 +25,7 @@
 ## Folder structure
 - src/bayesian_metamodeling/: library code
 - examples/: example specs and toy models
+- projects/: real-world scientific case studies using the framework
 - tutorials/: modular tutorial curriculum, tutorial specs, and notebook entrypoint
 - tests/: unit and integration tests
 - tmp/: scratch and temporary files, not committed
@@ -503,6 +513,20 @@
     - `tmp/sbi_verify_2026-02-20/tutorial6_step2_eval.log`
     - `tmp/sbi_verify_2026-02-20/tutorial6_step4_pytest.log`
 
+### 2026-03-04: Security hardening audit and remediation
+- Performed comprehensive security audit and applied fixes across 9 files:
+  - **C1 (Critical)**: `surrogates/backends.py` — added type validation on `torch.load` deserialized objects (must implement `sample`/`log_prob` posterior interface)
+  - **H1 (High)**: `adapters/python_cli.py` — added entrypoint path confinement to repo root
+  - **H2 (High)**: `adapters/python_cli.py` — added path traversal guard on output mapping paths (confined to `run_dir`)
+  - **H3 (High)**: `storage/run_store.py` — added registry path confinement (must resolve within CWD or `tmp/`)
+  - **H4 (High)**: `spec/modelspec.py` — added regex validation for `conda_env` names (rejects injection characters)
+  - **M1 (Medium)**: `surrogates/dataset.py` — added `..` traversal guard on dataset paths
+  - **M2 (Medium)**: `surrogates/service.py` — replaced predictable temp file with UUID-based name + `finally` cleanup
+  - **M4 (Medium)**: `adapters/biomodels_sbml.py` — added explicit `verify=True` on `requests.get`
+  - **L1 (Low)**: `spec/modelspec.py` — added `..` traversal guard on `storage.root` validator
+- Added security test suite: `tests/test_security_hardening.py` (23 tests covering all guards)
+- Validation: `ruff format .`, `ruff check .`, `pytest -q -m "not slow"` all pass
+
 ## Next steps, ordered
 1) Run optional MPI integration path under `mpirun` and record environment/result details
 2) Migrate remaining tutorial notebooks that still read legacy `runs/*` folders to centralized sweep paths
@@ -565,6 +589,39 @@
 - 2026-02-20: Removed stale root `sbi-logs/` directory left by earlier SBI runs; canonical location is `tmp/sbi-logs/`.
 - 2026-02-20: Added a dedicated 20-test SBI backend coverage suite (`tests/test_sbi_backend_extended.py`) and re-validated both baseline and SBI-enabled fast suites.
 - 2026-02-20: Hardened optional backend imports for sandboxed environments by routing ArviZ/matplotlib cache writes to `tmp/` (`HOME`, `MPLCONFIGDIR`, `XDG_CACHE_HOME`) and suppressing ArviZ startup warning during import; validated with `conda run -n py312_bayesmm_sbi ruff format .`, `ruff check .`, and `pytest -q -m "not slow"`.
+
+### 2026-03-04: Production hardening (8-commit series)
+- **Commit 1** `fix(cli): replace broad exception handlers with specific types`
+  - `src/bayesian_metamodeling/cli/main.py`: replaced two `except Exception` blocks with specific exception types (`ValueError`, `FileNotFoundError`, `json.JSONDecodeError`, `KeyError`, `OSError`, `subprocess.SubprocessError`)
+  - Added tests: `tests/test_cli_ux_commands.py` (specific exception catch + unexpected propagation)
+- **Commit 2** `fix(runner): add subprocess timeout from walltime_min`
+  - `src/bayesian_metamodeling/runners/local_process.py`: added `__init__` with `timeout_sec`, `subprocess.TimeoutExpired` handling
+  - `src/bayesian_metamodeling/cli/main.py`: plumbed `walltime_min * 60` into `LocalProcessRunner`
+  - Added tests: `tests/test_local_process_runner.py` (timeout pass-through + TimeoutExpired handling)
+- **Commit 3** `fix(storage): add file locking to registry operations`
+  - New: `src/bayesian_metamodeling/storage/_filelock.py` — `locked_registry()` context manager using `fcntl.flock()`
+  - Modified: `run_store.py`, `surrogate_store.py`, `meta_store.py`, `meta/sampling.py` — wrapped registry writes
+  - Added tests: `tests/test_storage_unit.py` (concurrent write safety)
+- **Commit 4** `fix(meta): unify coupling sigma default and document approximation`
+  - `src/bayesian_metamodeling/meta/ir.py`: added `DEFAULT_COUPLING_SIGMA = 0.1`
+  - `src/bayesian_metamodeling/meta/compiler.py`: named constants `_DETERMINISTIC_PENALTY`, `_DETERMINISTIC_TOL`, use shared default
+  - `src/bayesian_metamodeling/meta/sampling.py`: use shared default, added `_NUMPYRO_NOISE_SCALE_FACTOR`, docstring for `_sample_core()`
+  - Added tests: `tests/test_meta_ir_edge_cases.py` (sigma default consistency)
+- **Commit 5** `fix: thread-safe backend imports, CLI input size limit`
+  - `src/bayesian_metamodeling/surrogates/backends.py`: `_ENV_LOCK = threading.Lock()` around env var manipulation
+  - `src/bayesian_metamodeling/cli/main.py`: `_MAX_INPUTS_JSON_BYTES = 10 MB` size check before JSON parse
+  - Added tests: `tests/test_surrogate_backend_hardening.py` (lock exists + oversized input rejection)
+- **Commit 6** `test: add tier-1 unit tests` (~80 tests across 9 files)
+  - New test files: `test_spec_edge_cases.py`, `test_adapter_unit.py`, `test_runner_unit.py`, `test_storage_unit.py` (expanded), `test_dataset_edge_cases.py`, `test_surrogate_model_contract.py`, `test_meta_ir_edge_cases.py` (expanded), `test_compiler_edge_cases.py`, `test_sampling_edge_cases.py`
+  - Shared helpers added to `tests/conftest.py`
+- **Commit 7** `test: add tier-2/3 integration and tutorial regression tests`
+  - New test files: `test_cli_error_paths.py`, `test_run_failure_handling.py`, `test_tutorial_portability.py`, `test_example_specs.py`, `test_surrogate_quality_extended.py`, `test_metamodel_coupling_quality.py`
+- **Commit 8** `docs: fix tutorials, update Status.md`
+  - `tutorials/Tutorial_2.ipynb`: removed legacy `tmp/Old/` cache path reference
+  - `tutorials/Tutorial_3.ipynb`: added markdown cells showing expected validator output inline
+  - `tutorials/Tutorial_9.ipynb`: added pre-flight cell checking which prior tutorial artifacts exist
+  - `Status.md`: recorded all 8 fixes
+- Validation: `ruff format .`, `ruff check .`, `pytest -q -m "not slow"` all pass
 
 ## Open issues
 - Tutorial 2 full run depends on external BioModels download; in restricted/offline sandboxes this step will fail while validate/plan still pass.

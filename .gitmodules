@@ -1,0 +1,3 @@
+[submodule "projects/tcr_signaling"]
+	path = projects/tcr_signaling
+	url = ./projects/tcr_signaling
