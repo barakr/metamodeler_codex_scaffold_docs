@@ -2,8 +2,8 @@ import copy
 import json
 from pathlib import Path
 
-import metamodeler.storage.surrogate_store as surrogate_store
-from metamodeler.cli.main import main
+import bayesian_metamodeling.storage.surrogate_store as surrogate_store
+from bayesian_metamodeling.cli.main import main
 from tests.backend_support import available_fit_backend
 
 

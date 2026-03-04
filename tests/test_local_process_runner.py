@@ -5,8 +5,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-from metamodeler.adapters.base import AdapterMaterialization
-from metamodeler.runners.local_process import LocalProcessRunner
+from bayesian_metamodeling.adapters.base import AdapterMaterialization
+from bayesian_metamodeling.runners.local_process import LocalProcessRunner
 
 
 def test_local_process_runner_uses_current_environment_by_default(monkeypatch, tmp_path):

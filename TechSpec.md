@@ -86,13 +86,13 @@
   - Centralized sweep output sink (`sweep_rows.csv` + manifest/log sidecars).
   - Execution mode selector for `serial`, `parallel_local`, `mpi` with synchronized centralized writing.
   - CLI commands:
-    - `mm validate <spec>`
-    - `mm plan <spec>`
-    - `mm run <spec>`
-    - `mm runs list`
-    - `mm runs show <run_id>`
+    - `bayesmm validate <spec>`
+    - `bayesmm plan <spec>`
+    - `bayesmm run <spec>`
+    - `bayesmm runs list`
+    - `bayesmm runs show <run_id>`
 - Defer:
-  - `mm surrogate *` and `mm meta *` full functionality.
+  - `bayesmm surrogate *` and `bayesmm meta *` full functionality.
 
 ## Canonical data contracts
 ### Inputs
@@ -119,14 +119,14 @@
     - Tutorial 1 reads this table directly and plots toy `sum` and `product` heatmaps.
 
 ## Target repo layout
-- `src/metamodeler/spec/`
-- `src/metamodeler/designs/`
-- `src/metamodeler/adapters/`
-- `src/metamodeler/runners/`
-- `src/metamodeler/storage/`
-- `src/metamodeler/cli/`
-- `src/metamodeler/surrogates/` (placeholder in v1)
-- `src/metamodeler/meta/` (placeholder in v1)
+- `src/bayesian_metamodeling/spec/`
+- `src/bayesian_metamodeling/designs/`
+- `src/bayesian_metamodeling/adapters/`
+- `src/bayesian_metamodeling/runners/`
+- `src/bayesian_metamodeling/storage/`
+- `src/bayesian_metamodeling/cli/`
+- `src/bayesian_metamodeling/surrogates/` (placeholder in v1)
+- `src/bayesian_metamodeling/meta/` (placeholder in v1)
 - `examples/`
 - `tutorials/` (notebook-first onboarding track)
   - `Tutorial_0.ipynb` (hub)

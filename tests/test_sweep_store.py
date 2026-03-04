@@ -1,7 +1,7 @@
 import csv
 import json
 
-from metamodeler.storage.sweep_store import flatten_outputs_for_row, write_sweep_rows_csv
+from bayesian_metamodeling.storage.sweep_store import flatten_outputs_for_row, write_sweep_rows_csv
 
 
 def test_flatten_outputs_for_row_unwraps_toy_envelope():

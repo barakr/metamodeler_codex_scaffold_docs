@@ -1,6 +1,6 @@
 import numpy as np
 
-from metamodeler.surrogates import MockGaussianConditionalSurrogate
+from bayesian_metamodeling.surrogates import MockGaussianConditionalSurrogate
 
 
 def _make_dataset(seed: int, noise: float, nonlinear: bool = False):

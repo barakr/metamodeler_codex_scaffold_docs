@@ -4,8 +4,8 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from metamodeler.cli.main import main
-from metamodeler.spec import load_and_validate_modelspec
+from bayesian_metamodeling.cli.main import main
+from bayesian_metamodeling.spec import load_and_validate_modelspec
 
 
 def _read_json(path: Path) -> dict:
@@ -82,7 +82,7 @@ def test_mm_validate_passes_for_toy_spec(monkeypatch, capsys):
 
 
 def test_modelspec_schema_artifact_exists():
-    schema_path = Path("src/metamodeler/spec/modelspec.schema.json")
+    schema_path = Path("src/bayesian_metamodeling/spec/modelspec.schema.json")
     payload = json.loads(schema_path.read_text())
 
     assert payload["title"] == "ModelSpec"

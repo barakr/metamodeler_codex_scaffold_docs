@@ -4,8 +4,8 @@ from pathlib import Path
 
 import numpy as np
 
-from metamodeler.spec import SurrogateSpec
-from metamodeler.surrogates.dataset import load_tabular_dataset
+from bayesian_metamodeling.spec import SurrogateSpec
+from bayesian_metamodeling.surrogates.dataset import load_tabular_dataset
 
 
 def _write_nested_output_run_store(root: Path) -> None:

@@ -1,4 +1,4 @@
-from metamodeler.cli.main import main
+from bayesian_metamodeling.cli.main import main
 
 
 def test_main_help_runs(monkeypatch, capsys):
@@ -7,4 +7,4 @@ def test_main_help_runs(monkeypatch, capsys):
     out = capsys.readouterr().out
 
     assert code == 0
-    assert "Metamodeler CLI" in out
+    assert "Bayesian Metamodeling CLI" in out

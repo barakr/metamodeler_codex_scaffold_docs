@@ -51,7 +51,7 @@ Acceptance:
 Task:
 - Implement `ModelSpec` and required nested specs with Pydantic v2.
 - Emit JSON Schema artifact for external validation.
-- Implement `mm validate <spec>` with actionable errors.
+- Implement `bayesmm validate <spec>` with actionable errors.
 
 Acceptance:
 - Fast tests for valid and invalid specs.
@@ -61,7 +61,7 @@ Acceptance:
 ### Prompt 2: DOE planner
 Task:
 - Implement DOE strategies `grid` and `sobol`.
-- Implement `mm plan <spec>` with deterministic preview output.
+- Implement `bayesmm plan <spec>` with deterministic preview output.
 
 Acceptance:
 - Fast tests for bounds, point counts, and determinism.
@@ -73,7 +73,7 @@ Task:
 - Implement adapter base interface + registry.
 - Implement local process runner.
 - Implement run store with provenance and stdout/stderr persistence.
-- Implement `mm run <spec>`, `mm runs list`, `mm runs show <run_id>`.
+- Implement `bayesmm run <spec>`, `bayesmm runs list`, `bayesmm runs show <run_id>`.
 - Add toy example E2E integration test (fast).
 
 Acceptance:
@@ -137,7 +137,7 @@ Requirements:
    - compile_metamodel(ir, backend="pymc") implemented
    - compile_metamodel(ir, backend="numpyro") stub that raises NotImplementedError with clear message
 5) Add CLI wiring stubs that operate on IR only:
-   - `mm meta build metamodel.json` must output an IR artifact to the run store
+   - `bayesmm meta build metamodel.json` must output an IR artifact to the run store
 6) Tests, fast:
    - IR roundtrip serialization test
    - compile(IR, pymc) smoke test using a tiny synthetic IR with one Gaussian factor and one surrogate factor where surrogate is a mocked SurrogateModel returning a simple log_prob
@@ -178,8 +178,8 @@ Requirements:
    - artifact.json: backend, versions, spec digest, dataset digest, variable lists, seed
    - backend payload: saved model files for the chosen backend
 4) CLI:
-   - `mm surrogate fit surrogate.json` trains and stores the artifact
-   - `mm surrogate eval surrogate.json --inputs <json> --n 1000` loads artifact and outputs samples plus summary stats
+   - `bayesmm surrogate fit surrogate.json` trains and stores the artifact
+   - `bayesmm surrogate eval surrogate.json --inputs <json> --n 1000` loads artifact and outputs samples plus summary stats
 5) Dataset handling:
    - training data must be pulled from the run store canonical outputs
    - no implicit downsampling or thinning
@@ -217,11 +217,11 @@ Requirements:
    - variables: optional explicit declarations for X,Y,A,B,C
    - couplings: list of coupling factor specs
    - priors: list of prior specs
-2) Implement `mm meta build metamodel.json`:
+2) Implement `bayesmm meta build metamodel.json`:
    - loads surrogate artifacts
    - builds metamodel IR containing coupling and surrogate factors
    - stores IR artifact in the run store
-3) Implement `mm meta sample metamodel.json --draws D --tune T --chains C --seed S`:
+3) Implement `bayesmm meta sample metamodel.json --draws D --tune T --chains C --seed S`:
    - compiles IR with backend selected in MetamodelSpec
    - for backend "pymc": run sampling and store ArviZ InferenceData plus a canonical xarray Dataset of samples
    - for backend "numpyro": raise NotImplementedError, clear message that Prompt 9 will add it
@@ -287,8 +287,8 @@ If fast tests fail, do not commit.
 Task: improve the user experience so a user can go from model spec to surrogates to a joint metamodel with minimal friction.
 
 Requirements:
-1) Add `mm tutorial` that prints a short guided flow and points to examples
-2) Add `mm surrogate list` and `mm meta list` commands that show stored artifacts
+1) Add `bayesmm tutorial` that prints a short guided flow and points to examples
+2) Add `bayesmm surrogate list` and `bayesmm meta list` commands that show stored artifacts
 3) Add schema validation for SurrogateSpec and MetamodelSpec with actionable errors
 4) Ensure every artifact has:
    - spec digest
@@ -324,12 +324,12 @@ Requirements:
    - Add clear runtime error messages when `pymc` is unavailable (how to install in conda env).
    - Keep `mm` interface unchanged.
 2) Backend implementation:
-   - Implement a real `pymc_gp` fit path in `src/metamodeler/surrogates/backends.py`.
+   - Implement a real `pymc_gp` fit path in `src/bayesian_metamodeling/surrogates/backends.py`.
    - Use a probabilistic model in PyMC (minimum: Bayesian linear Gaussian; preferred: GP if feasible with current interface).
    - Preserve backend-neutral `sample`, `log_prob`, and `summary` behavior.
 3) Artifact persistence:
    - Persist backend payload in a stable format (JSON/NPZ/etc.) and include dependency/version metadata.
-   - Ensure loading works across CLI sessions (`mm surrogate eval` after `mm surrogate fit`).
+   - Ensure loading works across CLI sessions (`bayesmm surrogate eval` after `bayesmm surrogate fit`).
 4) Tests:
    - Add focused tests for real PyMC fit/eval behavior.
    - Tests must skip gracefully when `pymc` is not installed, not fail.
@@ -372,7 +372,7 @@ Requirements:
    - Implement backend-neutral `sample`, `log_prob`, and `summary` using trained posterior/density estimator.
    - Keep deterministic seeding where supported and document any unavoidable stochasticity.
 3) Artifact persistence:
-   - Persist model payload (state dict/config/scalers) so `mm surrogate eval` can load without retraining.
+   - Persist model payload (state dict/config/scalers) so `bayesmm surrogate eval` can load without retraining.
    - Record dependency versions in surrogate artifact metadata.
 4) Tests:
    - Add focused tests for `sbi_npe` fit/eval behavior.
@@ -409,7 +409,7 @@ Requirements:
    - Validate backend-specific `backend_config` keys with actionable errors.
    - Fail fast when artifact backend and requested backend mismatch.
 2) CLI robustness:
-   - Improve `mm surrogate fit` / `mm surrogate eval` error messages for missing artifacts, missing dependencies, and malformed input payloads.
+   - Improve `bayesmm surrogate fit` / `bayesmm surrogate eval` error messages for missing artifacts, missing dependencies, and malformed input payloads.
    - Keep command signatures unchanged.
 3) Compatibility checks:
    - Ensure artifacts include enough metadata to prevent wrong-input ordering or output-name mismatch.
@@ -582,7 +582,7 @@ Requirements:
      - finalize step enforces deterministic row ordering by `point_index`.
 3) Provenance compatibility:
    - Keep existing reproducibility/provenance guarantees (seed/spec/artifact digests, stdout/stderr persistence).
-   - Keep existing run registry flows functional (`mm runs list/show`), while exposing sweep artifact paths.
+   - Keep existing run registry flows functional (`bayesmm runs list/show`), while exposing sweep artifact paths.
 4) Tutorial 1 upgrade:
    - Update `tutorials/Tutorial_1.ipynb` to read centralized `sweep_rows.csv` (no per-run folder traversal).
    - Plot two heatmaps from toy outputs:

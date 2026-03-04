@@ -5,8 +5,8 @@
 **Metamodeler** is a CLI-first framework for automated probabilistic metamodeling. It automates heterogeneous source-model execution across parameter sweeps, generates canonical datasets with full provenance, and layers surrogate learning and joint metamodel sampling on top.
 
 - **Repo**: https://github.com/barakr/metamodeler_codex_scaffold_docs
-- **Package**: `metamodeler` (source in `src/metamodeler/`)
-- **CLI entrypoint**: `mm` → `metamodeler.cli.main:main`
+- **Package**: `bayesian-metamodeling` (source in `src/bayesian_metamodeling/`)
+- **CLI entrypoint**: `bayesmm` → `bayesian_metamodeling.cli.main:main`
 - **Python**: ≥ 3.14
 - **Core deps**: pydantic ≥2, requests ≥2, scipy ≥1.11
 - **Optional backends**: `pip install -e '.[pymc]'` or `pip install -e '.[sbi]'`
@@ -24,7 +24,7 @@ pip install -e .  # editable install
 ## Project Structure
 
 ```
-src/metamodeler/
+src/bayesian_metamodeling/
 ├── spec/           # Pydantic v2 specs: ModelSpec, SurrogateSpec, MetaModelSpec
 ├── designs/        # DOE planning (grid, sobol)
 ├── adapters/       # Adapter protocol + implementations (python_cli, biomodels_sbml)
@@ -127,32 +127,32 @@ filterwarnings = error
 ## CLI Reference
 
 ```
-mm validate <spec.json>           # Validate ModelSpec
-mm plan <spec.json>               # Preview DOE points
-mm run <spec.json>                # Execute sweep
+bayesmm validate <spec.json>           # Validate ModelSpec
+bayesmm plan <spec.json>               # Preview DOE points
+bayesmm run <spec.json>                # Execute sweep
 
-mm runs list                      # List run IDs
-mm runs show <run_id>             # Show run metadata
+bayesmm runs list                      # List run IDs
+bayesmm runs show <run_id>             # Show run metadata
 
-mm surrogate fit <spec.json>      # Train surrogate
-mm surrogate eval <spec.json> --inputs <json> --n N
-mm surrogate list                 # List surrogate artifacts
+bayesmm surrogate fit <spec.json>      # Train surrogate
+bayesmm surrogate eval <spec.json> --inputs <json> --n N
+bayesmm surrogate list                 # List surrogate artifacts
 
-mm meta build <spec.json>         # Build metamodel IR
-mm meta sample <spec.json> --draws D --tune T
-mm meta list                      # List metamodel samples
+bayesmm meta build <spec.json>         # Build metamodel IR
+bayesmm meta sample <spec.json> --draws D --tune T
+bayesmm meta list                      # List metamodel samples
 
-mm tutorial                       # Print workflow guide
-mm --version
+bayesmm tutorial                       # Print workflow guide
+bayesmm --version
 ```
 
 ## Conda Environments
 
 | Environment | Purpose |
 |-------------|---------|
-| `py314_metamodeling` | Main dev (Python 3.14) |
-| `py312_metamodeling_pymc` | PyMC 5.27.1 + ArviZ |
-| `py312_metamodeling_sbi` | SBI 0.23.3 + Torch 2.10.0 |
+| `py314_bayesmm` | Main dev (Python 3.14) |
+| `py312_bayesmm_pymc` | PyMC 5.27.1 + ArviZ |
+| `py312_bayesmm_sbi` | SBI 0.23.3 + Torch 2.10.0 |
 
 ## Git Hooks (in `githooks/`)
 

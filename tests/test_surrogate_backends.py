@@ -4,11 +4,11 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-import metamodeler.storage.surrogate_store as surrogate_store
-import metamodeler.surrogates.backends as backends
-from metamodeler.spec import SurrogateSpec
-from metamodeler.surrogates import eval_surrogate, fit_surrogate
-from metamodeler.surrogates.backends import load_backend_model
+import bayesian_metamodeling.storage.surrogate_store as surrogate_store
+import bayesian_metamodeling.surrogates.backends as backends
+from bayesian_metamodeling.spec import SurrogateSpec
+from bayesian_metamodeling.surrogates import eval_surrogate, fit_surrogate
+from bayesian_metamodeling.surrogates.backends import load_backend_model
 from tests.backend_support import is_pymc_runtime_constraint
 
 

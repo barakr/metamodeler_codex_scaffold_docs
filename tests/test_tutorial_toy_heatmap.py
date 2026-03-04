@@ -3,7 +3,7 @@ from pathlib import Path
 
 import numpy as np
 
-from metamodeler.tutorials import load_toy_heatmap_grids
+from bayesian_metamodeling.tutorials import load_toy_heatmap_grids
 
 
 def _write_sweep_csv(path: Path) -> None:

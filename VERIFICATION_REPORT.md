@@ -8,30 +8,30 @@
 
 ## 1. CLI Commands: Docs vs Implementation
 
-### Ground truth (src/metamodeler/cli/main.py)
+### Ground truth (src/bayesian_metamodeling/cli/main.py)
 
 | Command | Implemented |
 |---|---|
-| `mm --version` | Yes |
-| `mm validate <spec>` | Yes |
-| `mm plan <spec>` | Yes |
-| `mm run <spec>` | Yes |
-| `mm runs list` | Yes |
-| `mm runs show <run_id>` | Yes |
-| `mm surrogate fit <spec>` | Yes |
-| `mm surrogate eval <spec> --inputs --n` | Yes |
-| `mm surrogate list` | Yes |
-| `mm meta build <spec>` | Yes |
-| `mm meta sample <spec> --draws --tune --chains --seed` | Yes |
-| `mm meta list` | Yes |
-| `mm tutorial` | Yes |
+| `bayesmm --version` | Yes |
+| `bayesmm validate <spec>` | Yes |
+| `bayesmm plan <spec>` | Yes |
+| `bayesmm run <spec>` | Yes |
+| `bayesmm runs list` | Yes |
+| `bayesmm runs show <run_id>` | Yes |
+| `bayesmm surrogate fit <spec>` | Yes |
+| `bayesmm surrogate eval <spec> --inputs --n` | Yes |
+| `bayesmm surrogate list` | Yes |
+| `bayesmm meta build <spec>` | Yes |
+| `bayesmm meta sample <spec> --draws --tune --chains --seed` | Yes |
+| `bayesmm meta list` | Yes |
+| `bayesmm tutorial` | Yes |
 
 ### Cross-check results
 
 | Document | Claims | Status |
 |---|---|---|
 | **PRD.md** | "CLI commands: validate, plan, run, runs list/show" | **Consistent** — PRD explicitly scopes v1 CLI to these 5; surrogate/meta are Phase 3-5 roadmap items. |
-| **TechSpec.md** | Lists validate, plan, run, runs list, runs show; defers `mm surrogate *` and `mm meta *` | **Consistent** — implementation went beyond v1 scope (surrogate/meta fully implemented), but TechSpec correctly labeled them as deferred. |
+| **TechSpec.md** | Lists validate, plan, run, runs list, runs show; defers `bayesmm surrogate *` and `bayesmm meta *` | **Consistent** — implementation went beyond v1 scope (surrogate/meta fully implemented), but TechSpec correctly labeled them as deferred. |
 | **CLAUDE.md** | Lists all 13 commands | **Consistent** — matches implementation exactly. |
 | **Status.md** | Documents surrogate/meta CLI additions in Prompts 7-10 | **Consistent**. |
 
@@ -167,7 +167,7 @@ PROMPT_TO_CODEX.md Prompt 6 requirements match the implementation:
 
 ### 6d. Git hooks: hardcoded paths
 
-**Issue found**: `githooks/pre-commit` and `githooks/pre-push` contain hardcoded fallback path `/Users/barak/miniconda3/envs/py314_metamodeling/bin/` (note: `/Users/barak/`, not `/Users/barakraveh/`). This path does not exist on the current machine.
+**Issue found**: `githooks/pre-commit` and `githooks/pre-push` contain hardcoded fallback path `/Users/barak/miniconda3/envs/py314_bayesmm/bin/` (note: `/Users/barak/`, not `/Users/barakraveh/`). This path does not exist on the current machine.
 
 **Severity**: Low — hooks try `PATH` first and only fall back to the hardcoded path. The hooks work correctly when tools are on PATH.
 **Recommendation**: Document this in Status.md open issues or update paths.
@@ -188,7 +188,7 @@ PROMPT_TO_CODEX.md Prompt 6 requirements match the implementation:
 
 ## 7. Example and Tutorial Spec Validation
 
-All specs validated successfully with `mm validate`:
+All specs validated successfully with `bayesmm validate`:
 
 | Spec | Result |
 |---|---|
@@ -200,25 +200,25 @@ All specs validated successfully with `mm validate`:
 | `tutorials/specs/model.toy.sobol.json` | Pass |
 | `tutorials/specs/model.biomodels.quick.json` | Pass |
 
-Surrogate and metamodel specs (`tutorials/specs/surrogate.*.json`, `tutorials/specs/metamodel.*.json`, `examples/surrogates/*.json`, `examples/metamodels/*.json`) are not ModelSpecs and cannot be validated with `mm validate`, but they are exercised by the test suite.
+Surrogate and metamodel specs (`tutorials/specs/surrogate.*.json`, `tutorials/specs/metamodel.*.json`, `examples/surrogates/*.json`, `examples/metamodels/*.json`) are not ModelSpecs and cannot be validated with `bayesmm validate`, but they are exercised by the test suite.
 
 ---
 
 ## 8. Tutorial Notebook Spot-Check
 
 All 10 tutorials (Tutorial_0 through Tutorial_9) were checked for:
-- Python imports from `metamodeler` — do referenced modules/functions exist?
+- Python imports from `bayesian_metamodeling` — do referenced modules/functions exist?
 - Spec file paths — do referenced JSON specs exist?
 
-**All 5 unique metamodeler imports resolve correctly:**
+**All 5 unique bayesian_metamodeling imports resolve correctly:**
 
 | Import | Source |
 |---|---|
-| `metamodeler.cli.main.main` | `src/metamodeler/cli/main.py` |
-| `metamodeler.tutorials.load_toy_heatmap_grids` | `src/metamodeler/tutorials/toy_heatmap.py` |
-| `metamodeler.spec.SurrogateSpec` | `src/metamodeler/spec/surrogate.py` |
-| `metamodeler.surrogates.eval_surrogate` | `src/metamodeler/surrogates/service.py` |
-| `python -m metamodeler.cli.main` (subprocess) | `src/metamodeler/cli/main.py` |
+| `bayesian_metamodeling.cli.main.main` | `src/bayesian_metamodeling/cli/main.py` |
+| `bayesian_metamodeling.tutorials.load_toy_heatmap_grids` | `src/bayesian_metamodeling/tutorials/toy_heatmap.py` |
+| `bayesian_metamodeling.spec.SurrogateSpec` | `src/bayesian_metamodeling/spec/surrogate.py` |
+| `bayesian_metamodeling.surrogates.eval_surrogate` | `src/bayesian_metamodeling/surrogates/service.py` |
+| `python -m bayesian_metamodeling.cli.main` (subprocess) | `src/bayesian_metamodeling/cli/main.py` |
 
 **All 8 unique spec files referenced exist** under `tutorials/specs/`.
 
@@ -234,23 +234,23 @@ All 10 tutorials (Tutorial_0 through Tutorial_9) were checked for:
 
 | Environment | Python | Backend | Packages |
 |---|---|---|---|
-| `py314_metamodeling` | 3.14.3 | (none) | Core deps only |
-| `py312_metamodeling_pymc` | 3.12 | PyMC | pymc 5.28.1, arviz 0.23.4 |
-| `py312_metamodeling_sbi` | 3.12 | SBI (+PyMC) | sbi 0.25.0, torch 2.5.1, pymc 5.28.1 (transitive) |
+| `py314_bayesmm` | 3.14.3 | (none) | Core deps only |
+| `py312_bayesmm_pymc` | 3.12 | PyMC | pymc 5.28.1, arviz 0.23.4 |
+| `py312_bayesmm_sbi` | 3.12 | SBI (+PyMC) | sbi 0.25.0, torch 2.5.1, pymc 5.28.1 (transitive) |
 
 Note: `requires-python >= 3.14` in `pyproject.toml` prevents `pip install -e .` on py312 envs. Tests run via `PYTHONPATH=src:tests` instead.
 
 ### Test results
 
-**py314_metamodeling (core, no optional backends)**:
+**py314_bayesmm (core, no optional backends)**:
 - Fast suite: **67 passed, 8 skipped**, 3 deselected (0.99s)
 - Optional backend tests correctly skipped
 
-**py312_metamodeling_pymc**:
+**py312_bayesmm_pymc**:
 - Optional backend tests: **2 passed, 2 skipped** (SBI tests skipped — not installed in this env)
 - Full fast suite: **74 passed, 1 skipped**, 3 deselected (9.90s)
 
-**py312_metamodeling_sbi** (also has PyMC via transitive deps):
+**py312_bayesmm_sbi** (also has PyMC via transitive deps):
 - Optional backend tests: **4 passed, 0 skipped** (both PyMC and SBI tests run)
 - Full fast suite: **75 passed**, 3 deselected (14.41s)
 
@@ -265,7 +265,7 @@ Note: `requires-python >= 3.14` in `pyproject.toml` prevents `pip install -e .` 
 
 ## 10. Environment Setup Finding
 
-**Issue**: The `py314_metamodeling` conda environment referenced in CLAUDE.md, Status.md, and git hooks did not exist on this machine. It was created during this verification session.
+**Issue**: The `py314_bayesmm` conda environment referenced in CLAUDE.md, Status.md, and git hooks did not exist on this machine. It was created during this verification session.
 
 **Severity**: Medium — without it, `make fast` cannot run and git hooks fail (though they fall back gracefully when tools are on PATH).
 
@@ -290,12 +290,12 @@ Note: `requires-python >= 3.14` in `pyproject.toml` prevents `pip install -e .` 
 | 13 | TechSpec.md missing optional_backend marker | Gap | Low |
 | 14 | TechSpec.md missing runner.execution_env | Gap | Low |
 | 15 | Git hooks: hardcoded stale paths | Issue | Low |
-| 16 | py314_metamodeling env missing | Issue | Medium |
+| 16 | py314_bayesmm env missing | Issue | Medium |
 | 17 | Example/tutorial spec validation | All pass | — |
 | 18 | Tutorial imports and spec refs | All valid | — |
 | 19 | Tutorials 3-9: hardcoded checkout paths | Issue | Medium |
-| 20 | PyMC optional_backend tests (py312_metamodeling_pymc) | 2 passed, 2 skipped | — |
-| 21 | SBI optional_backend tests (py312_metamodeling_sbi) | 4 passed | — |
+| 20 | PyMC optional_backend tests (py312_bayesmm_pymc) | 2 passed, 2 skipped | — |
+| 21 | SBI optional_backend tests (py312_bayesmm_sbi) | 4 passed | — |
 | 22 | Full fast suite in PyMC env | 74 passed, 1 skipped | — |
 | 23 | Full fast suite in SBI env | 75 passed | — |
 

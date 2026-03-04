@@ -45,10 +45,10 @@ Each run record must include:
 Run three independent model programs over scanned variables, learn one surrogate per model, then build a coupled joint distribution.
 
 ### Data flow
-1. `mm plan model_A.json` / `model_B.json` / `model_C.json`
-2. `mm run ...` for each model to produce canonical datasets + provenance
-3. `mm surrogate fit surrogate_A.json` (and B/C)
-4. `mm meta build metamodel_ABC.json` with coupling variables and constraints
+1. `bayesmm plan model_A.json` / `model_B.json` / `model_C.json`
+2. `bayesmm run ...` for each model to produce canonical datasets + provenance
+3. `bayesmm surrogate fit surrogate_A.json` (and B/C)
+4. `bayesmm meta build metamodel_ABC.json` with coupling variables and constraints
 
 ### Minimal coupling representation
 Coupling must support:
@@ -62,7 +62,7 @@ See `/Users/barak/Downloads/metamodeler_codex_scaffold_docs/examples/coupled/spe
 
 ### What implementation code should look like (shape only)
 ```python
-# src/metamodeler/meta/builder.py
+# src/bayesian_metamodeling/meta/builder.py
 
 def build_joint_metamodel(surrogate_artifacts, coupling_spec):
     validate_compatibility(surrogate_artifacts, coupling_spec)
@@ -71,8 +71,8 @@ def build_joint_metamodel(surrogate_artifacts, coupling_spec):
 ```
 
 ```python
-# src/metamodeler/cli/main.py (future)
-# mm meta build metamodel_ABC.json
+# src/bayesian_metamodeling/cli/main.py (future)
+# bayesmm meta build metamodel_ABC.json
 ```
 
 ## Use case 2: BioModels SBML execution + surrogate-ready dataset

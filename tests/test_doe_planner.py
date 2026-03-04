@@ -2,9 +2,9 @@ import copy
 import json
 from pathlib import Path
 
-from metamodeler.cli.main import main
-from metamodeler.designs import plan_points
-from metamodeler.spec import load_and_validate_modelspec
+from bayesian_metamodeling.cli.main import main
+from bayesian_metamodeling.designs import plan_points
+from bayesian_metamodeling.spec import load_and_validate_modelspec
 
 
 def _read_json(path: Path) -> dict:

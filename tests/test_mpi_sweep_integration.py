@@ -5,8 +5,8 @@ from uuid import uuid4
 
 import pytest
 
-import metamodeler.storage.run_store as run_store
-from metamodeler.cli.main import main
+import bayesian_metamodeling.storage.run_store as run_store
+from bayesian_metamodeling.cli.main import main
 
 
 @pytest.mark.slow

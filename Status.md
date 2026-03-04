@@ -4,8 +4,17 @@
 - Stage: Prompt 17 implementation complete
 - Current focus: validating centralized sweep output behavior across tutorial and optional MPI environments
 
+## Decision Log
+
+### 2026-03-04: Rename package from metamodeler to bayesian-metamodeling
+- pip name: `bayesian-metamodeling`
+- import name: `bayesian_metamodeling`
+- CLI command: `bayesmm` (was `mm`)
+- Source directory: `src/bayesian_metamodeling/` (was `src/metamodeler/`)
+- Conda envs: `py314_bayesmm`, `py312_bayesmm_pymc`, `py312_bayesmm_sbi`
+
 ## Folder structure
-- src/metamodeler/: library code
+- src/bayesian_metamodeling/: library code
 - examples/: example specs and toy models
 - tutorials/: modular tutorial curriculum, tutorial specs, and notebook entrypoint
 - tests/: unit and integration tests
@@ -14,11 +23,11 @@
 
 ## Implemented
 - Prompt 17 implemented: centralized sweep output + synchronized execution modes (2026-02-15):
-  - Replaced per-point numeric result persistence in `mm run` with one centralized sweep artifact set:
+  - Replaced per-point numeric result persistence in `bayesmm run` with one centralized sweep artifact set:
     - `sweep_rows.csv`
     - `sweep_manifest.json`
     - `sweep_logs.jsonl`
-  - Added synchronized execution modes in `RunnerSpec` and `mm run`:
+  - Added synchronized execution modes in `RunnerSpec` and `bayesmm run`:
     - `runner.sweep_mode`: `serial` (default), `parallel_local`, `mpi`
     - `runner.workers` (parallel-local only; defaults to runner CPUs)
   - Single-writer guarantees:
@@ -26,16 +35,16 @@
     - parallel_local: coordinator writes centralized files
     - mpi: rank 0 writes centralized files; non-root ranks synchronize via broadcast
   - Added centralized sweep helpers:
-    - `src/metamodeler/storage/sweep_store.py`
+    - `src/bayesian_metamodeling/storage/sweep_store.py`
   - Added sweep persistence contract:
-    - `src/metamodeler/storage/run_store.py` (`persist_sweep`)
+    - `src/bayesian_metamodeling/storage/run_store.py` (`persist_sweep`)
     - run registry now tracks sweep records with `sweep_rows_path`, `sweep_manifest_path`, `sweep_logs_path`
   - Updated surrogate dataset loading to support centralized sweep CSV stores (with legacy `runs/*` fallback):
-    - `src/metamodeler/surrogates/dataset.py`
+    - `src/bayesian_metamodeling/surrogates/dataset.py`
   - Tutorial updates:
     - `tutorials/Tutorial_1.ipynb` now reads centralized `sweep_rows.csv` and renders two heatmaps (`sum`, `product`)
     - helper module for Tutorial 1 heatmap loading:
-      - `src/metamodeler/tutorials/toy_heatmap.py`
+      - `src/bayesian_metamodeling/tutorials/toy_heatmap.py`
   - Test updates:
     - `tests/test_run_pipeline.py` now validates centralized sweep CSV and serial-vs-parallel equivalence
     - `tests/test_sweep_store.py` added for flattening and deterministic CSV order
@@ -46,16 +55,16 @@
     - optional MPI integration test:
       - `tests/test_mpi_sweep_integration.py`
   - Schema/docs updates:
-    - `src/metamodeler/spec/modelspec.schema.json`
+    - `src/bayesian_metamodeling/spec/modelspec.schema.json`
     - `README.md`, `tutorials/README.md`, `PRD.md`, `TechSpec.md`, `CodeDesign.md`, `TEST_PLAN.md`, `PROMPT_TO_CODEX.md`
 - Runner/env portability + optional backend test controls (2026-02-12):
   - Added optional `runner.execution_env` to `ModelSpec` (`default={}`), currently supporting:
     - `conda_env` (validated key; whitespace normalized).
   - Plumbed `runner.execution_env` through adapter materialization into local process runner:
-    - `src/metamodeler/adapters/base.py`
-    - `src/metamodeler/adapters/python_cli.py`
-    - `src/metamodeler/adapters/biomodels_sbml.py`
-    - `src/metamodeler/runners/local_process.py`
+    - `src/bayesian_metamodeling/adapters/base.py`
+    - `src/bayesian_metamodeling/adapters/python_cli.py`
+    - `src/bayesian_metamodeling/adapters/biomodels_sbml.py`
+    - `src/bayesian_metamodeling/runners/local_process.py`
   - Local runner behavior:
     - If `conda_env` is set, run commands via `conda run -n <conda_env> ...`.
     - If no `conda_env` and command starts with `python` but no `python` on PATH, fallback to current `sys.executable`.
@@ -75,27 +84,27 @@
     - `tests/test_local_process_runner.py`
     - `tests/test_modelspec_validation.py`
   - Regenerated schema artifact:
-    - `src/metamodeler/spec/modelspec.schema.json`
+    - `src/bayesian_metamodeling/spec/modelspec.schema.json`
   - Created permanent backend-specific conda environments:
-    - `/Users/barak/miniconda3/envs/py312_metamodeling_pymc`
-    - `/Users/barak/miniconda3/envs/py312_metamodeling_sbi`
+    - `/Users/barak/miniconda3/envs/py312_bayesmm_pymc`
+    - `/Users/barak/miniconda3/envs/py312_bayesmm_sbi`
   - Renamed PyMC env prefix to match actual Python version:
-    - removed `/Users/barak/miniconda3/envs/py314_metamodeling_pymc`
-    - active env is `/Users/barak/miniconda3/envs/py312_metamodeling_pymc`
+    - removed `/Users/barak/miniconda3/envs/py314_bayesmm_pymc`
+    - active env is `/Users/barak/miniconda3/envs/py312_bayesmm_pymc`
   - Installed backend stacks:
-    - `py312_metamodeling_pymc`: Python `3.12.12`, `pymc 5.27.1`, `arviz 0.23.4`
-    - `py312_metamodeling_sbi`: Python `3.12.12`, `torch 2.10.0`, `sbi 0.23.3`
+    - `py312_bayesmm_pymc`: Python `3.12.12`, `pymc 5.27.1`, `arviz 0.23.4`
+    - `py312_bayesmm_sbi`: Python `3.12.12`, `torch 2.10.0`, `sbi 0.23.3`
   - Verified both PyMC tracks in the renamed env:
-    - `HOME=$(pwd)/tmp/home_for_tests MPLCONFIGDIR=$(pwd)/tmp/home_for_tests/.mpl PYTENSOR_FLAGS='cxx=' PYTHONPATH=src /Users/barak/miniconda3/envs/py312_metamodeling_pymc/bin/python -m pytest -q tests/test_surrogate_backends.py -k pymc_gp_backend_fit_sample_and_logprob` -> `1 passed`
-    - `HOME=$(pwd)/tmp/home_for_tests MPLCONFIGDIR=$(pwd)/tmp/home_for_tests/.mpl PYTENSOR_FLAGS='cxx=' PYTHONPATH=src /Users/barak/miniconda3/envs/py312_metamodeling_pymc/bin/python -m pytest -q tests/test_metamodel_sampling.py -k two_surrogates` -> `1 passed`
+    - `HOME=$(pwd)/tmp/home_for_tests MPLCONFIGDIR=$(pwd)/tmp/home_for_tests/.mpl PYTENSOR_FLAGS='cxx=' PYTHONPATH=src /Users/barak/miniconda3/envs/py312_bayesmm_pymc/bin/python -m pytest -q tests/test_surrogate_backends.py -k pymc_gp_backend_fit_sample_and_logprob` -> `1 passed`
+    - `HOME=$(pwd)/tmp/home_for_tests MPLCONFIGDIR=$(pwd)/tmp/home_for_tests/.mpl PYTENSOR_FLAGS='cxx=' PYTHONPATH=src /Users/barak/miniconda3/envs/py312_bayesmm_pymc/bin/python -m pytest -q tests/test_metamodel_sampling.py -k two_surrogates` -> `1 passed`
   - Validation commands (passed):
     - `ruff format .`
     - `ruff check .`
     - `pytest -q -m "not slow"`
 - Scaffold created:
-  - Python package skeleton under `src/metamodeler/` including target subpackages from TechSpec.
+  - Python package skeleton under `src/bayesian_metamodeling/` including target subpackages from TechSpec.
   - `pyproject.toml` added with setuptools build, Python package metadata, and CLI entry point `mm`.
-  - Minimal CLI scaffold at `src/metamodeler/cli/main.py`.
+  - Minimal CLI scaffold at `src/bayesian_metamodeling/cli/main.py`.
   - Baseline pytest smoke test at `tests/test_scaffold_smoke.py`.
   - Git hooks implemented in `githooks/`:
     - `pre-commit` runs format/lint/fast tests, blocks main/master commits by default, and enforces `Status.md` staging when `src/` or `examples/` are staged.
@@ -112,48 +121,48 @@
     - `examples/biomodels/surrogate.model1907260003.json`
   - `TechSpec.md` and `README.md` updated to reference design-validation scenarios and `CodeDesign.md`.
 - Prompt 1 implemented:
-  - Added typed Pydantic v2 spec model hierarchy in `src/metamodeler/spec/modelspec.py`:
+  - Added typed Pydantic v2 spec model hierarchy in `src/bayesian_metamodeling/spec/modelspec.py`:
     - `ModelSpec`, `VariableSpec`, `AdapterSpec`, `RunnerSpec` and nested contract models.
-  - Added schema export helper in `src/metamodeler/spec/schema.py`.
+  - Added schema export helper in `src/bayesian_metamodeling/spec/schema.py`.
   - Added JSON schema artifact:
-    - `src/metamodeler/spec/modelspec.schema.json`
-  - Added `mm validate <spec>` command with actionable validation output in:
-    - `src/metamodeler/cli/main.py`
+    - `src/bayesian_metamodeling/spec/modelspec.schema.json`
+  - Added `bayesmm validate <spec>` command with actionable validation output in:
+    - `src/bayesian_metamodeling/cli/main.py`
   - Added fast tests in:
     - `tests/test_modelspec_validation.py`
   - Added shared test path setup in:
     - `tests/conftest.py`
 - Prompt 2 implemented:
   - Added DOE planner module in:
-    - `src/metamodeler/designs/planner.py`
+    - `src/bayesian_metamodeling/designs/planner.py`
   - Added strategy support:
     - `grid` cartesian product planning
     - `sobol` deterministic low-discrepancy planning with bounds scaling
-  - Added `mm plan <spec>` CLI command with deterministic preview output.
+  - Added `bayesmm plan <spec>` CLI command with deterministic preview output.
   - Added fast tests in:
     - `tests/test_doe_planner.py`
 - Prompt 3 implemented:
   - Added adapter interfaces and registry:
-    - `src/metamodeler/adapters/base.py`
-    - `src/metamodeler/adapters/python_cli.py`
-    - `src/metamodeler/adapters/registry.py`
+    - `src/bayesian_metamodeling/adapters/base.py`
+    - `src/bayesian_metamodeling/adapters/python_cli.py`
+    - `src/bayesian_metamodeling/adapters/registry.py`
   - Added local process runner:
-    - `src/metamodeler/runners/local_process.py`
+    - `src/bayesian_metamodeling/runners/local_process.py`
   - Added run store + registry with provenance and stdout/stderr references:
-    - `src/metamodeler/storage/run_store.py`
+    - `src/bayesian_metamodeling/storage/run_store.py`
   - Added CLI commands:
-    - `mm run <spec>`
-    - `mm runs list`
-    - `mm runs show <run_id>`
+    - `bayesmm run <spec>`
+    - `bayesmm runs list`
+    - `bayesmm runs show <run_id>`
   - Added toy executable program:
     - `examples/toy_program/run.py`
   - Added fast end-to-end integration test:
     - `tests/test_run_pipeline.py`
 - Prompt 4 implemented:
   - Added BioModels SBML adapter baseline:
-    - `src/metamodeler/adapters/biomodels_sbml.py`
+    - `src/bayesian_metamodeling/adapters/biomodels_sbml.py`
   - Added SBML worker script for simulation:
-    - `src/metamodeler/adapters/biomodels_worker.py`
+    - `src/bayesian_metamodeling/adapters/biomodels_worker.py`
   - Adapter registry now resolves `biomodels_sbml_adapter_v1`.
   - Added BioModels example spec:
     - `examples/biomodels/spec.prompt4.model1907260003.json`
@@ -161,30 +170,30 @@
     - `tests/test_biomodels_slow.py`
 - Prompt 5 implemented:
   - Added typed placeholder surrogate spec:
-    - `src/metamodeler/spec/surrogate.py`
+    - `src/bayesian_metamodeling/spec/surrogate.py`
   - Added typed placeholder metamodel spec:
-    - `src/metamodeler/spec/metamodel.py`
+    - `src/bayesian_metamodeling/spec/metamodel.py`
   - Added CLI placeholder commands:
-    - `mm surrogate fit <spec>`
-    - `mm surrogate eval <spec>`
-    - `mm meta build <spec>`
+    - `bayesmm surrogate fit <spec>`
+    - `bayesmm surrogate eval <spec>`
+    - `bayesmm meta build <spec>`
   - Added fast tests for placeholder CLI wiring:
     - `tests/test_surrogate_meta_placeholders.py`
 - Prompt 6 implemented:
   - Refined `SurrogateSpec` to backend-neutral contract fields (`kind`, `inputs`, `outputs`, `backend`, `backend_config`, `dataset_ref`, `seed`).
   - Added backend-neutral `SurrogateModel` wrapper interface:
-    - `src/metamodeler/surrogates/base.py`
+    - `src/bayesian_metamodeling/surrogates/base.py`
   - Added metamodel IR schema and helpers:
-    - `src/metamodeler/meta/ir.py`
+    - `src/bayesian_metamodeling/meta/ir.py`
   - Added compiler boundary:
-    - `src/metamodeler/meta/compiler.py`
+    - `src/bayesian_metamodeling/meta/compiler.py`
     - `compile_metamodel(..., backend=\"pymc\")` implemented
     - `compile_metamodel(..., backend=\"numpyro\")` stubbed with clear `NotImplementedError`
   - Added metamodel IR builder + artifact store:
-    - `src/metamodeler/meta/builder.py`
-    - `src/metamodeler/storage/meta_store.py`
+    - `src/bayesian_metamodeling/meta/builder.py`
+    - `src/bayesian_metamodeling/storage/meta_store.py`
   - Updated CLI:
-    - `mm meta build <spec>` now writes IR artifact to `tmp/metamodel_ir/` and registers it in `tmp/meta_registry.json`
+    - `bayesmm meta build <spec>` now writes IR artifact to `tmp/metamodel_ir/` and registers it in `tmp/meta_registry.json`
   - Added tests:
     - IR roundtrip serialization: `tests/test_meta_ir_roundtrip.py`
     - Compiler smoke with mocked surrogate factor: `tests/test_meta_compiler_smoke.py`
@@ -193,35 +202,35 @@
   - Added backend implementations behind wrapper contract:
     - `pymc_gp` (pragmatic linear-Gaussian baseline API)
     - `sbi_npe` (pragmatic linear-Gaussian baseline API)
-    - module: `src/metamodeler/surrogates/backends.py`
+    - module: `src/bayesian_metamodeling/surrogates/backends.py`
   - Added dataset loader from canonical run store:
-    - `src/metamodeler/surrogates/dataset.py`
+    - `src/bayesian_metamodeling/surrogates/dataset.py`
     - no implicit downsampling/thinning
   - Added backend-neutral surrogate artifact persistence:
-    - `src/metamodeler/storage/surrogate_store.py`
+    - `src/bayesian_metamodeling/storage/surrogate_store.py`
     - includes spec digest, dataset digest, variable lists, seed, dependency versions
   - Added surrogate fit/eval service layer:
-    - `src/metamodeler/surrogates/service.py`
+    - `src/bayesian_metamodeling/surrogates/service.py`
   - Updated CLI:
-    - `mm surrogate fit surrogate.json`
-    - `mm surrogate eval surrogate.json --inputs '<json>' --n 1000`
+    - `bayesmm surrogate fit surrogate.json`
+    - `bayesmm surrogate eval surrogate.json --inputs '<json>' --n 1000`
   - Added examples:
     - `examples/surrogates/surrogate.toy.pymc_gp.json`
   - Added fast tests:
     - `tests/test_surrogate_backends.py`
     - updated `tests/test_surrogate_meta_placeholders.py` for real fit/eval flow
 - Prompt 8 implemented:
-  - Added MetamodelSpec v1 fields in `src/metamodeler/spec/metamodel.py`:
+  - Added MetamodelSpec v1 fields in `src/bayesian_metamodeling/spec/metamodel.py`:
     - `ppl_backend`, `surrogate_refs`, `variables`, `couplings`, `priors`
   - Updated IR builder to load surrogate artifacts and include surrogate likelihood factors:
-    - `src/metamodeler/meta/builder.py`
+    - `src/bayesian_metamodeling/meta/builder.py`
   - Added metamodel sampling module and artifacts:
-    - `src/metamodeler/meta/sampling.py`
+    - `src/bayesian_metamodeling/meta/sampling.py`
     - stores `inference_data.json` and canonical `samples_dataset.json`
     - registry: `tmp/metamodel_samples_registry.json`
   - Updated CLI:
-    - `mm meta build metamodel.json`
-    - `mm meta sample metamodel.json --draws D --tune T --chains C --seed S`
+    - `bayesmm meta build metamodel.json`
+    - `bayesmm meta sample metamodel.json --draws D --tune T --chains C --seed S`
     - backend behavior:
       - `pymc`: sampling path implemented
       - `numpyro`: explicit `NotImplementedError` pending Prompt 9
@@ -232,9 +241,9 @@
     - `tests/test_metamodel_sampling.py`
 - Prompt 9 implemented:
   - Enabled `compile_metamodel(ir, backend=\"numpyro\")` path:
-    - `src/metamodeler/meta/compiler.py`
+    - `src/bayesian_metamodeling/meta/compiler.py`
   - Enabled `ppl_backend: \"numpyro\"` sampling mode using same metamodel spec interface:
-    - `src/metamodeler/meta/sampling.py`
+    - `src/bayesian_metamodeling/meta/sampling.py`
   - Kept canonical sample storage format aligned with pymc path:
     - `inference_data.json`
     - `samples_dataset.json`
@@ -243,10 +252,10 @@
   - Added backend-switch documentation and known numerical differences in `README.md`.
 - Prompt 10 implemented:
   - Added guided CLI command:
-    - `mm tutorial`
+    - `bayesmm tutorial`
   - Added artifact listing commands:
-    - `mm surrogate list`
-    - `mm meta list`
+    - `bayesmm surrogate list`
+    - `bayesmm meta list`
   - Hardened artifact metadata fields across surrogate/meta artifacts:
     - `spec_digest`
     - `dataset_digest`
@@ -260,9 +269,9 @@
     - `README.md`
     - `tutorials/README.md`
   - Refreshed tutorial after Prompts 6-10 to reflect real commands and backend behavior:
-    - `mm tutorial`
-    - `mm surrogate list`
-    - `mm meta list`
+    - `bayesmm tutorial`
+    - `bayesmm surrogate list`
+    - `bayesmm meta list`
     - real surrogate fit/eval and metamodel build/sample flow
 - Tutorial architecture update (modular track):
   - Added `tutorials/` subfolder with 9-part progression and notebook hub:
@@ -278,13 +287,13 @@
     - tutorials are indexed from `tutorials/README.md` and `tutorials/Tutorial_0.ipynb`.
 - Prompt 11 implemented:
   - Replaced placeholder `pymc_gp` backend with a real PyMC probabilistic fit path in:
-    - `src/metamodeler/surrogates/backends.py`
+    - `src/bayesian_metamodeling/surrogates/backends.py`
   - Added posterior-based surrogate methods (`sample`, `log_prob`, `summary`) backed by PyMC posterior draws.
   - Added actionable missing-dependency error for `pymc_gp` with conda/pip install guidance.
   - Added warning-safe PyMC import path to avoid ArviZ startup warning failures under `filterwarnings = error`.
   - Added backend dependency version capture and persistence into surrogate artifacts:
-    - `src/metamodeler/surrogates/service.py`
-    - `src/metamodeler/storage/surrogate_store.py`
+    - `src/bayesian_metamodeling/surrogates/service.py`
+    - `src/bayesian_metamodeling/storage/surrogate_store.py`
   - Added optional dependency extra for PyMC:
     - `pyproject.toml`
   - Updated tests for real PyMC backend behavior and graceful skip/error handling:
@@ -295,7 +304,7 @@
     - `tutorials/Tutorial_0.ipynb`
 - Prompt 12 implemented:
   - Replaced placeholder `sbi_npe` backend with real SBI NPE fit/eval flow in:
-    - `src/metamodeler/surrogates/backends.py`
+    - `src/bayesian_metamodeling/surrogates/backends.py`
   - Added dependency guards with actionable runtime errors for missing `sbi` / `torch`.
   - Added warning-safe SBI training path to ignore known non-fatal 1D-flow warning under `filterwarnings = error`.
   - Added persisted SBI backend payload format:
@@ -313,21 +322,21 @@
     - `tutorials/Tutorial_0.ipynb`
 - Prompt 13 implemented:
   - Added explicit backend-config validation contract with actionable errors:
-    - `src/metamodeler/surrogate_config.py`
-    - wired into `SurrogateSpec` validation in `src/metamodeler/spec/surrogate.py`
+    - `src/bayesian_metamodeling/surrogate_config.py`
+    - wired into `SurrogateSpec` validation in `src/bayesian_metamodeling/spec/surrogate.py`
   - Added strict artifact compatibility checks during eval:
     - backend mismatch detection
     - artifact input/output signature mismatch detection
     - payload input/output order mismatch detection
     - backend payload presence check
-    - module: `src/metamodeler/surrogates/service.py`
+    - module: `src/bayesian_metamodeling/surrogates/service.py`
   - Added backend payload signature checks at load boundary:
-    - module: `src/metamodeler/surrogates/backends.py`
+    - module: `src/bayesian_metamodeling/surrogates/backends.py`
   - Improved CLI robustness for surrogate fit/eval failures:
     - clear `Surrogate fit failed: ...` / `Surrogate eval failed: ...` messages
-    - module: `src/metamodeler/cli/main.py`
+    - module: `src/bayesian_metamodeling/cli/main.py`
   - Hardened artifact metadata for IO compatibility:
-    - added `io_signature` fields in `src/metamodeler/storage/surrogate_store.py`
+    - added `io_signature` fields in `src/bayesian_metamodeling/storage/surrogate_store.py`
   - Added dedicated hardening tests:
     - `tests/test_surrogate_backend_hardening.py`
       - backend_config key/value validation
@@ -356,7 +365,7 @@
     - `PROMPT_TO_CODEX.md`
 - Tutorial hardening pass (post-Prompt 15):
   - Fixed surrogate tutorial blocker in dataset parsing:
-    - `src/metamodeler/surrogates/dataset.py`
+    - `src/bayesian_metamodeling/surrogates/dataset.py`
     - now supports adapter output envelope shape `{out_name: {\"inputs\": ..., out_name: [...]}}`.
   - Added regression coverage:
     - `tests/test_surrogate_dataset_loading.py`
@@ -367,7 +376,7 @@
     - added graphics/plots in each tutorial notebook.
     - removed manual `RUN_ID` placeholder in Tutorial 1 (auto-selects latest tutorial run).
   - Validation results:
-    - `ruff format .` / `ruff check .` / `pytest -q -m \"not slow\"` pass in `py314_metamodeling`.
+    - `ruff format .` / `ruff check .` / `pytest -q -m \"not slow\"` pass in `py314_bayesmm`.
     - PyMC and SBI tutorial fit/eval commands verified in dependency-capable env:
       - `tmp/conda_pymc_verify`.
     - New dataset parser regression test passes:
@@ -380,19 +389,19 @@
   - Added regression coverage for Tutorial 6 portability:
     - `tests/test_tutorial_sbi_notebook.py`
   - Environment fixes applied to support real SBI validation in the dedicated SBI env:
-    - Installed `pytest` and `pydantic` into `/Users/barak/miniconda3/envs/py312_metamodeling_sbi`.
+    - Installed `pytest` and `pydantic` into `/Users/barak/miniconda3/envs/py312_bayesmm_sbi`.
   - Validation results (2026-02-20):
-    - `HOME=$(pwd)/tmp/home_for_tests MPLCONFIGDIR=$(pwd)/tmp/home_for_tests/.mpl PYTHONPATH=src /Users/barak/miniconda3/envs/py312_metamodeling_sbi/bin/python -m pytest -q tests/test_tutorial_sbi_notebook.py` -> `1 passed`
-    - `HOME=$(pwd)/tmp/home_for_tests MPLCONFIGDIR=$(pwd)/tmp/home_for_tests/.mpl PYTHONPATH=src /Users/barak/miniconda3/envs/py312_metamodeling_sbi/bin/python -m pytest -q tests/test_surrogate_backends.py -k sbi` -> `2 passed`
-    - `HOME=$(pwd)/tmp/home_for_tests MPLCONFIGDIR=$(pwd)/tmp/home_for_tests/.mpl PYTHONPATH=src /Users/barak/miniconda3/envs/py312_metamodeling_sbi/bin/python -m pytest -q tests -k \"sbi or tutorial\"` -> `5 passed`
-    - `/Users/barak/miniconda3/envs/py314_metamodeling/bin/ruff format .` -> no changes
-    - `/Users/barak/miniconda3/envs/py314_metamodeling/bin/ruff check .` -> passed
-    - `HOME=$(pwd)/tmp/home_for_tests MPLCONFIGDIR=$(pwd)/tmp/home_for_tests/.mpl PYTHONPATH=src /Users/barak/miniconda3/envs/py314_metamodeling/bin/python -m pytest -m \"not slow\" -ra` -> passed (`47 passed`, `8 skipped`, `3 deselected`)
+    - `HOME=$(pwd)/tmp/home_for_tests MPLCONFIGDIR=$(pwd)/tmp/home_for_tests/.mpl PYTHONPATH=src /Users/barak/miniconda3/envs/py312_bayesmm_sbi/bin/python -m pytest -q tests/test_tutorial_sbi_notebook.py` -> `1 passed`
+    - `HOME=$(pwd)/tmp/home_for_tests MPLCONFIGDIR=$(pwd)/tmp/home_for_tests/.mpl PYTHONPATH=src /Users/barak/miniconda3/envs/py312_bayesmm_sbi/bin/python -m pytest -q tests/test_surrogate_backends.py -k sbi` -> `2 passed`
+    - `HOME=$(pwd)/tmp/home_for_tests MPLCONFIGDIR=$(pwd)/tmp/home_for_tests/.mpl PYTHONPATH=src /Users/barak/miniconda3/envs/py312_bayesmm_sbi/bin/python -m pytest -q tests -k \"sbi or tutorial\"` -> `5 passed`
+    - `/Users/barak/miniconda3/envs/py314_bayesmm/bin/ruff format .` -> no changes
+    - `/Users/barak/miniconda3/envs/py314_bayesmm/bin/ruff check .` -> passed
+    - `HOME=$(pwd)/tmp/home_for_tests MPLCONFIGDIR=$(pwd)/tmp/home_for_tests/.mpl PYTHONPATH=src /Users/barak/miniconda3/envs/py314_bayesmm/bin/python -m pytest -m \"not slow\" -ra` -> passed (`47 passed`, `8 skipped`, `3 deselected`)
 - Optional-backend fast-suite hardening for mixed PyMC/SBI environments (2026-02-20):
   - Added PyMC runtime-constraint classifier for optional backend tests:
     - `tests/backend_support.py` (`is_pymc_runtime_constraint`)
   - Routed SBI training summary logs from repo root into `tmp/`:
-    - `src/metamodeler/surrogates/backends.py`
+    - `src/bayesian_metamodeling/surrogates/backends.py`
       - added `_make_sbi_summary_writer()` and wired it into `_build_sbi_inference(...)`
       - default SBI tensorboard output now writes under `tmp/sbi-logs/` (fallback no-op writer when unavailable)
   - Added regression coverage for SBI log root location:
@@ -411,7 +420,7 @@
       - `test_pymc_gp_backend_fit_sample_and_logprob` now skips with explicit runtime-constraint reason when PyMC cannot compile locally.
       - `test_backend_specific_fit_quality_increasing_difficulty` now falls back to `sbi_npe` when PyMC is installed but not runtime-usable.
   - Validation result (no `PYTENSOR_FLAGS` override):
-    - `HOME=$(pwd)/tmp/home_for_tests MPLCONFIGDIR=$(pwd)/tmp/home_for_tests/.mpl PYTHONPATH=src /Users/barak/miniconda3/envs/py312_metamodeling_sbi/bin/python -m pytest -m \"not slow\" -ra` -> passed (`54 passed`, `1 skipped`, `3 deselected`)
+    - `HOME=$(pwd)/tmp/home_for_tests MPLCONFIGDIR=$(pwd)/tmp/home_for_tests/.mpl PYTHONPATH=src /Users/barak/miniconda3/envs/py312_bayesmm_sbi/bin/python -m pytest -m \"not slow\" -ra` -> passed (`54 passed`, `1 skipped`, `3 deselected`)
 - SBI backend extensive test expansion (2026-02-20):
   - Added a dedicated SBI unit/behavior coverage file:
     - `tests/test_sbi_backend_extended.py`
@@ -424,12 +433,12 @@
     - SBI payload persistence and loading (`save_backend_payload` + `load_backend_model` for `sbi_npe_posterior`).
     - `fit_backend_model` SBI dispatch + invalid-density-estimator rejection.
   - Validation results:
-    - `HOME=$(pwd)/tmp/home_for_tests MPLCONFIGDIR=$(pwd)/tmp/home_for_tests/.mpl PYTHONPATH=src /Users/barak/miniconda3/envs/py314_metamodeling/bin/python -m pytest -q tests/test_sbi_backend_extended.py -ra` -> `20 passed`
-    - `HOME=$(pwd)/tmp/home_for_tests MPLCONFIGDIR=$(pwd)/tmp/home_for_tests/.mpl PYTHONPATH=src /Users/barak/miniconda3/envs/py312_metamodeling_sbi/bin/python -m pytest -q tests/test_sbi_backend_extended.py -ra` -> `20 passed`
-    - `HOME=$(pwd)/tmp/home_for_tests MPLCONFIGDIR=$(pwd)/tmp/home_for_tests/.mpl PYTHONPATH=src /Users/barak/miniconda3/envs/py312_metamodeling_sbi/bin/python -m pytest -q tests/test_surrogate_backends.py -k sbi -ra` -> `3 passed`
-    - `HOME=$(pwd)/tmp/home_for_tests MPLCONFIGDIR=$(pwd)/tmp/home_for_tests/.mpl PYTHONPATH=src /Users/barak/miniconda3/envs/py312_metamodeling_sbi/bin/python -m pytest -q tests/test_surrogate_backend_hardening.py -ra` -> `7 passed`, `1 skipped` (optional dual-backend runtime constraint)
-    - `HOME=$(pwd)/tmp/home_for_tests MPLCONFIGDIR=$(pwd)/tmp/home_for_tests/.mpl PYTHONPATH=src /Users/barak/miniconda3/envs/py314_metamodeling/bin/python -m pytest -m \"not slow\" -ra` -> passed (`67 passed`, `8 skipped`, `3 deselected`)
-    - `HOME=$(pwd)/tmp/home_for_tests MPLCONFIGDIR=$(pwd)/tmp/home_for_tests/.mpl PYTHONPATH=src /Users/barak/miniconda3/envs/py312_metamodeling_sbi/bin/python -m pytest -m \"not slow\" -ra` -> passed (`74 passed`, `1 skipped`, `3 deselected`)
+    - `HOME=$(pwd)/tmp/home_for_tests MPLCONFIGDIR=$(pwd)/tmp/home_for_tests/.mpl PYTHONPATH=src /Users/barak/miniconda3/envs/py314_bayesmm/bin/python -m pytest -q tests/test_sbi_backend_extended.py -ra` -> `20 passed`
+    - `HOME=$(pwd)/tmp/home_for_tests MPLCONFIGDIR=$(pwd)/tmp/home_for_tests/.mpl PYTHONPATH=src /Users/barak/miniconda3/envs/py312_bayesmm_sbi/bin/python -m pytest -q tests/test_sbi_backend_extended.py -ra` -> `20 passed`
+    - `HOME=$(pwd)/tmp/home_for_tests MPLCONFIGDIR=$(pwd)/tmp/home_for_tests/.mpl PYTHONPATH=src /Users/barak/miniconda3/envs/py312_bayesmm_sbi/bin/python -m pytest -q tests/test_surrogate_backends.py -k sbi -ra` -> `3 passed`
+    - `HOME=$(pwd)/tmp/home_for_tests MPLCONFIGDIR=$(pwd)/tmp/home_for_tests/.mpl PYTHONPATH=src /Users/barak/miniconda3/envs/py312_bayesmm_sbi/bin/python -m pytest -q tests/test_surrogate_backend_hardening.py -ra` -> `7 passed`, `1 skipped` (optional dual-backend runtime constraint)
+    - `HOME=$(pwd)/tmp/home_for_tests MPLCONFIGDIR=$(pwd)/tmp/home_for_tests/.mpl PYTHONPATH=src /Users/barak/miniconda3/envs/py314_bayesmm/bin/python -m pytest -m \"not slow\" -ra` -> passed (`67 passed`, `8 skipped`, `3 deselected`)
+    - `HOME=$(pwd)/tmp/home_for_tests MPLCONFIGDIR=$(pwd)/tmp/home_for_tests/.mpl PYTHONPATH=src /Users/barak/miniconda3/envs/py312_bayesmm_sbi/bin/python -m pytest -m \"not slow\" -ra` -> passed (`74 passed`, `1 skipped`, `3 deselected`)
 
 ## Provenance log (design verification runs)
 - BioModels sample source used:
@@ -471,15 +480,15 @@
     - `1 passed` (2026-02-11)
 - SBI + Tutorial 6 verification run (2026-02-20):
   - Verification environment:
-    - `/Users/barak/miniconda3/envs/py312_metamodeling_sbi` (Python `3.12.12`, SBI `0.23.3`, Torch `2.10.0`, Pydantic `2.12.5`, Pytest `9.0.2`)
+    - `/Users/barak/miniconda3/envs/py312_bayesmm_sbi` (Python `3.12.12`, SBI `0.23.3`, Torch `2.10.0`, Pydantic `2.12.5`, Pytest `9.0.2`)
   - Spec digests (SHA256):
     - `tutorials/specs/model.toy.grid.json`: `1e9932106f67261a6ca49ed389e332cef20711d978e455e8234f9d1aae9858ae`
     - `tutorials/specs/surrogate.toy.sbi_npe.json`: `7cfd28482379c5327b3d556376d669141d3c5d12540e4172f5b8e84d8755d2f8`
   - Tutorial commands:
-    - `HOME=$(pwd)/tmp/home_for_tests MPLCONFIGDIR=$(pwd)/tmp/home_for_tests/.mpl PYTHONPATH=src /Users/barak/miniconda3/envs/py312_metamodeling_sbi/bin/python -m metamodeler.cli.main run tutorials/specs/model.toy.grid.json`
-    - `HOME=$(pwd)/tmp/home_for_tests MPLCONFIGDIR=$(pwd)/tmp/home_for_tests/.mpl PYTHONPATH=src /Users/barak/miniconda3/envs/py312_metamodeling_sbi/bin/python -m metamodeler.cli.main surrogate fit tutorials/specs/surrogate.toy.sbi_npe.json`
-    - `HOME=$(pwd)/tmp/home_for_tests MPLCONFIGDIR=$(pwd)/tmp/home_for_tests/.mpl PYTHONPATH=src /Users/barak/miniconda3/envs/py312_metamodeling_sbi/bin/python -m metamodeler.cli.main surrogate eval tutorials/specs/surrogate.toy.sbi_npe.json --inputs '{\"a\":[0.25,0.75,1.25,1.75],\"b\":[0.2,0.6,1.0,1.4]}' --n 200`
-    - `HOME=$(pwd)/tmp/home_for_tests MPLCONFIGDIR=$(pwd)/tmp/home_for_tests/.mpl PYTHONPATH=src /Users/barak/miniconda3/envs/py312_metamodeling_sbi/bin/python -m pytest -q tests/test_surrogate_backends.py -k sbi_npe_backend_fit_sample_and_logprob`
+    - `HOME=$(pwd)/tmp/home_for_tests MPLCONFIGDIR=$(pwd)/tmp/home_for_tests/.mpl PYTHONPATH=src /Users/barak/miniconda3/envs/py312_bayesmm_sbi/bin/python -m bayesian_metamodeling.cli.main run tutorials/specs/model.toy.grid.json`
+    - `HOME=$(pwd)/tmp/home_for_tests MPLCONFIGDIR=$(pwd)/tmp/home_for_tests/.mpl PYTHONPATH=src /Users/barak/miniconda3/envs/py312_bayesmm_sbi/bin/python -m bayesian_metamodeling.cli.main surrogate fit tutorials/specs/surrogate.toy.sbi_npe.json`
+    - `HOME=$(pwd)/tmp/home_for_tests MPLCONFIGDIR=$(pwd)/tmp/home_for_tests/.mpl PYTHONPATH=src /Users/barak/miniconda3/envs/py312_bayesmm_sbi/bin/python -m bayesian_metamodeling.cli.main surrogate eval tutorials/specs/surrogate.toy.sbi_npe.json --inputs '{\"a\":[0.25,0.75,1.25,1.75],\"b\":[0.2,0.6,1.0,1.4]}' --n 200`
+    - `HOME=$(pwd)/tmp/home_for_tests MPLCONFIGDIR=$(pwd)/tmp/home_for_tests/.mpl PYTHONPATH=src /Users/barak/miniconda3/envs/py312_bayesmm_sbi/bin/python -m pytest -q tests/test_surrogate_backends.py -k sbi_npe_backend_fit_sample_and_logprob`
   - Outputs:
     - Sweep run id: `318336745d994b8abd053abfe8427b83` (`9/9` successful points)
     - Surrogate artifact id: `e43a8159607e44eca97700c76fd90c4b`
@@ -533,10 +542,10 @@
 - 2026-02-12: Introduced `runner.execution_env` (default empty) and explicit `conda_env` support so runtime environment is user-configurable via JSON, not hardcoded.
 - 2026-02-12: Added `MM_SKIP_OPTIONAL_BACKEND_TESTS` to make optional backend tests warning/skip-friendly when `pymc`/`sbi` are intentionally unavailable.
 - 2026-02-12: Created dedicated backend conda envs and installed `pymc`/`sbi` stacks there; kept the main project env skip-safe.
-- 2026-02-12: Renamed `py314_metamodeling_pymc` to `py312_metamodeling_pymc` and re-verified surrogate-PyMC plus metamodel-PyMC test tracks in the renamed env.
-- 2026-02-12: Updated `tutorials/Tutorial_0.ipynb` to run no install commands at all; replaced with a manual "Loading environment" guidance box and commented conda examples (`py314_metamodeling` kept as recommendation/example only).
+- 2026-02-12: Renamed `py314_bayesmm_pymc` to `py312_bayesmm_pymc` and re-verified surrogate-PyMC plus metamodel-PyMC test tracks in the renamed env.
+- 2026-02-12: Updated `tutorials/Tutorial_0.ipynb` to run no install commands at all; replaced with a manual "Loading environment" guidance box and commented conda examples (`py314_bayesmm` kept as recommendation/example only).
 - 2026-02-15: Removed redundant root tutorial files (`TUTORIAL.md`, `TUTORIAL.ipynb`); tutorials now live only under `tutorials/` with `tutorials/Tutorial_0.ipynb` as the entry point.
-- 2026-02-15: Hardened `tutorials/Tutorial_0.ipynb` preflight cell to auto-detect repo root from either repo-root or `tutorials/` execution context; verified by executing notebook end-to-end in `py314_metamodeling` (`tmp/Tutorial_0.executed.ipynb`).
+- 2026-02-15: Hardened `tutorials/Tutorial_0.ipynb` preflight cell to auto-detect repo root from either repo-root or `tutorials/` execution context; verified by executing notebook end-to-end in `py314_bayesmm` (`tmp/Tutorial_0.executed.ipynb`).
 - 2026-02-15: Commit pass: finalized runner `execution_env` plumbing (spec validation, adapter materialization, local runner conda prefixing, and dedicated runner/spec tests).
 - 2026-02-15: Commit pass: finalized optional-backend test controls (`optional_backend` marker + `MM_SKIP_OPTIONAL_BACKEND_TESTS`) and generalized backend install guidance to use `<env_name>`.
 - 2026-02-15: Refined `tutorials/Tutorial_0.ipynb` for safer onboarding (manual install guidance only, no hardcoded path/env assumptions) and re-validated notebook execution (`tmp/Tutorial_0.executed.ipynb`).
@@ -555,14 +564,14 @@
 - 2026-02-20: Updated root docs (`README.md`, `PRD.md`, `TechSpec.md`, `CodeDesign.md`, `TEST_PLAN.md`, `PROMPT_TO_CODEX.md`) to reflect optional-backend runtime behavior and SBI log-path policy.
 - 2026-02-20: Removed stale root `sbi-logs/` directory left by earlier SBI runs; canonical location is `tmp/sbi-logs/`.
 - 2026-02-20: Added a dedicated 20-test SBI backend coverage suite (`tests/test_sbi_backend_extended.py`) and re-validated both baseline and SBI-enabled fast suites.
-- 2026-02-20: Hardened optional backend imports for sandboxed environments by routing ArviZ/matplotlib cache writes to `tmp/` (`HOME`, `MPLCONFIGDIR`, `XDG_CACHE_HOME`) and suppressing ArviZ startup warning during import; validated with `conda run -n py312_metamodeling_sbi ruff format .`, `ruff check .`, and `pytest -q -m "not slow"`.
+- 2026-02-20: Hardened optional backend imports for sandboxed environments by routing ArviZ/matplotlib cache writes to `tmp/` (`HOME`, `MPLCONFIGDIR`, `XDG_CACHE_HOME`) and suppressing ArviZ startup warning during import; validated with `conda run -n py312_bayesmm_sbi ruff format .`, `ruff check .`, and `pytest -q -m "not slow"`.
 
 ## Open issues
 - Tutorial 2 full run depends on external BioModels download; in restricted/offline sandboxes this step will fail while validate/plan still pass.
 - PyMC backend tests skip automatically when `pymc` is not installed in the active environment.
-- PyMC is currently not installed in `/Users/barak/miniconda3/envs/py314_metamodeling`; fast suite there remains skip-safe for PyMC-specific tests.
+- PyMC is currently not installed in `/Users/barak/miniconda3/envs/py314_bayesmm`; fast suite there remains skip-safe for PyMC-specific tests.
 - SBI backend tests skip automatically when `sbi`/`torch` are not installed in the active environment.
-- `sbi`/`torch` are currently not installed in `/Users/barak/miniconda3/envs/py314_metamodeling`; fast suite there remains skip-safe for SBI-specific tests.
+- `sbi`/`torch` are currently not installed in `/Users/barak/miniconda3/envs/py314_bayesmm`; fast suite there remains skip-safe for SBI-specific tests.
 - `py312` environment currently has dependency conflicts due direct `pip` install of `libroadrunner`; this was used for design verification only and should be isolated before production workflows.
 - `libroadrunner` may not be available in the py314 environment; slow BioModels test is expected to skip when dependency is absent.
 - Optional MPI integration test requires launching pytest under `mpirun`; standard local fast test runs skip MPI coverage.

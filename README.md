@@ -20,14 +20,14 @@ This repository is currently in planning/scaffold phase. The code implementation
 - Agent operating constraints: `/Users/barak/Downloads/metamodeler_codex_scaffold_docs/AGENTS.md`
 
 ## Planned CLI flow (v1)
-1) `mm validate spec.json`
-2) `mm plan spec.json`
-3) `mm run spec.json`
-4) `mm runs list`
-5) `mm runs show RUN_ID`
+1) `bayesmm validate spec.json`
+2) `bayesmm plan spec.json`
+3) `bayesmm run spec.json`
+4) `bayesmm runs list`
+5) `bayesmm runs show RUN_ID`
 
 ## Centralized DOE Output
-`mm run` persists DOE numeric results in one centralized sweep artifact per run:
+`bayesmm run` persists DOE numeric results in one centralized sweep artifact per run:
 - `sweep_rows.csv`: one row per DOE point (`point_index`, inputs, flattened outputs, status/error/timing)
 - `sweep_manifest.json`: sweep metadata, digests, and schema
 - `sweep_logs.jsonl`: per-point stdout/stderr payloads
@@ -37,7 +37,7 @@ This is the canonical path for DOE sweep numeric results across:
 - `runner.sweep_mode: "parallel_local"`
 - `runner.sweep_mode: "mpi"` (single-writer on rank 0)
 
-`mm run` now writes centralized DOE sweep artifacts (one table per sweep):
+`bayesmm run` now writes centralized DOE sweep artifacts (one table per sweep):
 - `sweep_rows.csv` (all grid/sobol points in one file),
 - `sweep_manifest.json`,
 - `sweep_logs.jsonl`.
@@ -58,8 +58,8 @@ The surrogate interface is backend-neutral, but some backends require optional d
   - `conda install -n <env_name> -c conda-forge pytorch sbi`
   - or `pip install -e '.[sbi]'`
 - `pymc` is the modern package (PyMC v5), and is the supported successor to legacy `pymc3`.
-- If `pymc_gp` is selected without PyMC installed, `mm surrogate fit` raises an actionable install error.
-- If `sbi_npe` is selected without `sbi`/`torch` installed, `mm surrogate fit` raises an actionable install error.
+- If `pymc_gp` is selected without PyMC installed, `bayesmm surrogate fit` raises an actionable install error.
+- If `sbi_npe` is selected without `sbi`/`torch` installed, `bayesmm surrogate fit` raises an actionable install error.
 - Real PyMC verification test:
   - `PYTHONPATH=src python -m pytest -q tests/test_surrogate_backends.py -k pymc_gp_backend_fit_sample_and_logprob`
   - In toolchain-limited environments, use:
@@ -89,7 +89,7 @@ The surrogate interface is backend-neutral, but some backends require optional d
   "runner": {
     "mode": "local_process",
     "resources": {"cpus": 1, "mem_gb": 1, "walltime_min": 5},
-    "execution_env": {"conda_env": "py312_metamodeling_pymc"},
+    "execution_env": {"conda_env": "py312_bayesmm_pymc"},
     "sweep_mode": "parallel_local",
     "workers": 4
   }
@@ -117,7 +117,7 @@ Example:
 
 MPI example (launch):
 ```bash
-mpirun -n 4 PYTHONPATH=src python -m metamodeler.cli.main run tutorials/specs/model.toy.grid.json
+mpirun -n 4 PYTHONPATH=src python -m bayesian_metamodeling.cli.main run tutorials/specs/model.toy.grid.json
 ```
 
 ## Surrogate Troubleshooting
@@ -125,7 +125,7 @@ mpirun -n 4 PYTHONPATH=src python -m metamodeler.cli.main run tutorials/specs/mo
   - Your backend config includes unsupported keys for the selected backend.
   - See allowed keys in `SurrogateSpec` validation errors and `PROMPT_TO_CODEX.md`.
 - `Surrogate eval failed: No surrogate artifact found...`
-  - Run `mm surrogate fit <spec>` first, or ensure `spec.name` matches a fitted artifact.
+  - Run `bayesmm surrogate fit <spec>` first, or ensure `spec.name` matches a fitted artifact.
 - `Surrogate eval failed: Surrogate backend mismatch...`
   - The latest artifact for that `spec.name` was trained with another backend.
   - Use a unique `spec.name` per backend, or refit with the intended backend.
@@ -148,14 +148,14 @@ Metamodeler now builds a backend-neutral metamodel IR before inference/runtime e
 - Compiler boundary:
   - `compile_metamodel(ir, backend=\"pymc\")` is available.
   - `compile_metamodel(ir, backend=\"numpyro\")` is available.
-- `mm meta build <metamodel.json>` validates spec input and writes an IR artifact to `tmp/metamodel_ir/`.
+- `bayesmm meta build <metamodel.json>` validates spec input and writes an IR artifact to `tmp/metamodel_ir/`.
 
 ## Backend Selection (`ppl_backend`)
 `MetaModelSpec` accepts:
 - `ppl_backend: "pymc"`
 - `ppl_backend: "numpyro"`
 
-The same JSON interface is used for both backends (`mm meta sample ...`).
+The same JSON interface is used for both backends (`bayesmm meta sample ...`).
 
 Known numerical differences:
 - The current baseline samplers may produce slightly different coupling-noise realizations between backends.
@@ -163,14 +163,14 @@ Known numerical differences:
 
 ## End-to-End Quickstart
 ```bash
-PYTHONPATH=src python -m metamodeler.cli.main validate examples/toy_program/spec.toy_program.json
-PYTHONPATH=src python -m metamodeler.cli.main run examples/toy_program/spec.toy_program.json
-PYTHONPATH=src python -m metamodeler.cli.main surrogate fit examples/surrogates/surrogate.toy.pymc_gp.json
-PYTHONPATH=src python -m metamodeler.cli.main meta build examples/metamodels/metamodel.simple.json
-PYTHONPATH=src python -m metamodeler.cli.main meta sample examples/metamodels/metamodel.simple.json --draws 100 --tune 50 --chains 2 --seed 1
+PYTHONPATH=src python -m bayesian_metamodeling.cli.main validate examples/toy_program/spec.toy_program.json
+PYTHONPATH=src python -m bayesian_metamodeling.cli.main run examples/toy_program/spec.toy_program.json
+PYTHONPATH=src python -m bayesian_metamodeling.cli.main surrogate fit examples/surrogates/surrogate.toy.pymc_gp.json
+PYTHONPATH=src python -m bayesian_metamodeling.cli.main meta build examples/metamodels/metamodel.simple.json
+PYTHONPATH=src python -m bayesian_metamodeling.cli.main meta sample examples/metamodels/metamodel.simple.json --draws 100 --tune 50 --chains 2 --seed 1
 ```
 
 Utility commands:
-- `mm tutorial`
-- `mm surrogate list`
-- `mm meta list`
+- `bayesmm tutorial`
+- `bayesmm surrogate list`
+- `bayesmm meta list`

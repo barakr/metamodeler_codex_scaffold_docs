@@ -1,8 +1,8 @@
 import json
 from pathlib import Path
 
-from metamodeler.cli.main import main
-from metamodeler.meta.ir import (
+from bayesian_metamodeling.cli.main import main
+from bayesian_metamodeling.meta.ir import (
     CouplingFactorIR,
     MetamodelIR,
     VariableIR,

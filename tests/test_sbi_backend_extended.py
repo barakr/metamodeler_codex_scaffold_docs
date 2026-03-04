@@ -10,7 +10,7 @@ from typing import Any
 import numpy as np
 import pytest
 
-import metamodeler.surrogates.backends as backends
+import bayesian_metamodeling.surrogates.backends as backends
 
 
 class FakeTensor:

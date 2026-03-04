@@ -1,10 +1,10 @@
 import json
 from pathlib import Path
 
-import metamodeler.storage.surrogate_store as surrogate_store
-from metamodeler.cli.main import main
-from metamodeler.spec import SurrogateSpec
-from metamodeler.surrogates import fit_surrogate
+import bayesian_metamodeling.storage.surrogate_store as surrogate_store
+from bayesian_metamodeling.cli.main import main
+from bayesian_metamodeling.spec import SurrogateSpec
+from bayesian_metamodeling.surrogates import fit_surrogate
 from tests.backend_support import available_fit_backend
 
 
@@ -41,8 +41,8 @@ def test_mm_tutorial_prints_guided_flow(monkeypatch, capsys):
     out = capsys.readouterr().out
 
     assert code == 0
-    assert "Metamodeler tutorial flow:" in out
-    assert "mm validate" in out
+    assert "Bayesian Metamodeling tutorial flow:" in out
+    assert "bayesmm validate" in out
 
 
 def test_mm_surrogate_list_and_meta_list(monkeypatch, capsys, tmp_path):

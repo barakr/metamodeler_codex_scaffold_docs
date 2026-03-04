@@ -4,11 +4,11 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-import metamodeler.storage.surrogate_store as surrogate_store
-from metamodeler.cli.main import main
-from metamodeler.spec import SurrogateSpec
-from metamodeler.surrogates import eval_surrogate, fit_surrogate
-from metamodeler.surrogates.backends import get_backend_dependency_versions
+import bayesian_metamodeling.storage.surrogate_store as surrogate_store
+from bayesian_metamodeling.cli.main import main
+from bayesian_metamodeling.spec import SurrogateSpec
+from bayesian_metamodeling.surrogates import eval_surrogate, fit_surrogate
+from bayesian_metamodeling.surrogates.backends import get_backend_dependency_versions
 
 
 def _manual_surrogate_artifact(

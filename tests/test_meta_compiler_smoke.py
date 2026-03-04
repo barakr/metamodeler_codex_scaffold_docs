@@ -1,7 +1,7 @@
 import numpy as np
 
-from metamodeler.meta import compile_metamodel
-from metamodeler.meta.ir import (
+from bayesian_metamodeling.meta import compile_metamodel
+from bayesian_metamodeling.meta.ir import (
     CouplingFactorIR,
     MetamodelIR,
     PriorFactorIR,

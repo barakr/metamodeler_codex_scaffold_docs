@@ -4,7 +4,7 @@ import os
 
 import pytest
 
-from metamodeler.surrogates.backends import get_backend_dependency_versions
+from bayesian_metamodeling.surrogates.backends import get_backend_dependency_versions
 
 
 def _has_pymc() -> bool:
