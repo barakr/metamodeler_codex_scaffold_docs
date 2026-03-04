@@ -21,6 +21,9 @@ class RunResult:
 class LocalProcessRunner:
     mode = "local_process"
 
+    def __init__(self, *, timeout_sec: int | None = None) -> None:
+        self.timeout_sec = timeout_sec
+
     def _build_command(self, materialization: AdapterMaterialization) -> list[str]:
         command = list(materialization.command)
         conda_env = materialization.execution_env.get("conda_env", "").strip()
@@ -35,13 +38,23 @@ class LocalProcessRunner:
         stderr_path = run_dir / "stderr.log"
         command = self._build_command(materialization)
 
-        completed = subprocess.run(
-            command,
-            cwd=materialization.cwd,
-            text=True,
-            capture_output=True,
-            check=False,
-        )
+        try:
+            completed = subprocess.run(
+                command,
+                cwd=materialization.cwd,
+                text=True,
+                capture_output=True,
+                check=False,
+                timeout=self.timeout_sec,
+            )
+        except subprocess.TimeoutExpired:
+            stdout_path.write_text("")
+            stderr_path.write_text(f"Process timed out after {self.timeout_sec} seconds")
+            return RunResult(
+                returncode=-1,
+                stdout_path=stdout_path,
+                stderr_path=stderr_path,
+            )
         stdout_path.write_text(completed.stdout)
         stderr_path.write_text(completed.stderr)
         return RunResult(

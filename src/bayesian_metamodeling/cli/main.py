@@ -6,6 +6,7 @@ import argparse
 import concurrent.futures
 import json
 import shutil
+import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -35,6 +36,8 @@ from bayesian_metamodeling.storage import (
 from bayesian_metamodeling.surrogates import eval_surrogate, fit_surrogate
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+
+_MAX_INPUTS_JSON_BYTES = 10 * 1024 * 1024  # 10 MB
 
 
 def _load_json(path: Path) -> dict[str, Any] | None:
@@ -170,7 +173,7 @@ def _execute_design_point(
 ) -> dict[str, Any]:
     """Execute one DOE point and return normalized result/log payload."""
     adapter = resolve_adapter(spec)
-    runner = LocalProcessRunner()
+    runner = LocalProcessRunner(timeout_sec=spec.runner.resources.walltime_min * 60)
 
     run_label = f"{spec.model.name}_{point_index + 1}"
     temp_run_dir = Path(spec.storage.root) / "_active" / run_token / run_label
@@ -203,14 +206,21 @@ def _execute_design_point(
             try:
                 outputs = adapter.parse_outputs(spec=spec, run_dir=temp_run_dir)
                 status = "success"
-            except Exception as exc:  # pragma: no cover - defensive path
+            except (ValueError, FileNotFoundError, json.JSONDecodeError, KeyError, OSError) as exc:
                 error = f"Output parsing failed: {exc}"
                 stderr_text = f"{stderr_text}\n{error}".strip()
                 status = "failed"
                 returncode = 1
         else:
             status = "failed"
-    except Exception as exc:  # pragma: no cover - execution failures are data
+    except (
+        ValueError,
+        FileNotFoundError,
+        subprocess.SubprocessError,
+        json.JSONDecodeError,
+        OSError,
+        KeyError,
+    ) as exc:
         error = str(exc)
         stderr_text = f"{stderr_text}\n{error}".strip()
         status = "failed"
@@ -423,6 +433,13 @@ def _surrogate_eval_command(spec_path: Path, inputs_json: str, n: int) -> int:
     _, spec, code = _load_and_validate_surrogate(spec_path)
     if code != 0:
         return code
+
+    if len(inputs_json.encode("utf-8")) > _MAX_INPUTS_JSON_BYTES:
+        print(
+            f"--inputs JSON too large ({len(inputs_json.encode('utf-8'))} bytes, "
+            f"limit {_MAX_INPUTS_JSON_BYTES} bytes)"
+        )
+        return 1
 
     try:
         inputs_payload = json.loads(inputs_json)
