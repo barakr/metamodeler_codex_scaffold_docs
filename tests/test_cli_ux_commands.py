@@ -1,8 +1,11 @@
 import json
 from pathlib import Path
+from unittest.mock import patch
+
+import pytest
 
 import bayesian_metamodeling.storage.surrogate_store as surrogate_store
-from bayesian_metamodeling.cli.main import main
+from bayesian_metamodeling.cli.main import _execute_design_point, main
 from bayesian_metamodeling.spec import SurrogateSpec
 from bayesian_metamodeling.surrogates import fit_surrogate
 from tests.backend_support import available_fit_backend
@@ -80,3 +83,75 @@ def test_artifact_metadata_contains_repro_fields(monkeypatch, tmp_path):
     assert "dataset_digest" in payload
     assert "dependency_versions" in payload
     assert "seed" in payload
+
+
+def _make_test_spec():
+    from bayesian_metamodeling.spec import load_and_validate_modelspec
+
+    return load_and_validate_modelspec(
+        {
+            "schema_version": "1.0",
+            "model": {
+                "name": "test",
+                "version": "1.0",
+                "artifact": {"type": "local", "entrypoint": ["python", "nope.py"]},
+            },
+            "runner": {
+                "mode": "local_process",
+                "resources": {"cpus": 1, "mem_gb": 1, "walltime_min": 1},
+            },
+            "io_schema": {
+                "inputs": [{"name": "a", "type": "float", "units": "m"}],
+                "outputs": [{"name": "y", "type": "float", "units": "m"}],
+            },
+            "design": {"strategy": "grid", "grid": {"a": [1.0]}},
+            "adapter": {"id": "python_cli_adapter_v1"},
+            "reproducibility": {"seed": 0},
+            "storage": {"root": "tmp/test_store"},
+        }
+    )
+
+
+def test_specific_exceptions_caught_in_execute_design_point():
+    """Specific exception types (ValueError, FileNotFoundError, etc.) are caught
+    and recorded as failed runs rather than crashing."""
+    spec = _make_test_spec()
+
+    class _FailAdapter:
+        def materialize_inputs(self, **kw):
+            raise ValueError("bad input")
+
+    with patch(
+        "bayesian_metamodeling.cli.main.resolve_adapter",
+        return_value=_FailAdapter(),
+    ):
+        result = _execute_design_point(
+            spec=spec,
+            point_index=0,
+            point={"a": 1.0},
+            run_token="test",
+        )
+    assert result["status"] == "failed"
+    assert "bad input" in result["error"]
+
+
+def test_unexpected_exceptions_propagate_from_execute_design_point():
+    """Unexpected exception types (e.g. RuntimeError) propagate rather than
+    being silently caught."""
+    spec = _make_test_spec()
+
+    class _FailAdapter:
+        def materialize_inputs(self, **kw):
+            raise RuntimeError("unexpected")
+
+    with patch(
+        "bayesian_metamodeling.cli.main.resolve_adapter",
+        return_value=_FailAdapter(),
+    ):
+        with pytest.raises(RuntimeError, match="unexpected"):
+            _execute_design_point(
+                spec=spec,
+                point_index=0,
+                point={"a": 1.0},
+                run_token="test",
+            )

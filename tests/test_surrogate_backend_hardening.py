@@ -1,14 +1,18 @@
 import json
+import threading
 from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
 
 import bayesian_metamodeling.storage.surrogate_store as surrogate_store
-from bayesian_metamodeling.cli.main import main
+from bayesian_metamodeling.cli.main import _MAX_INPUTS_JSON_BYTES, main
 from bayesian_metamodeling.spec import SurrogateSpec
 from bayesian_metamodeling.surrogates import eval_surrogate, fit_surrogate
-from bayesian_metamodeling.surrogates.backends import get_backend_dependency_versions
+from bayesian_metamodeling.surrogates.backends import (
+    _ENV_LOCK,
+    get_backend_dependency_versions,
+)
 
 
 def _manual_surrogate_artifact(
@@ -199,6 +203,36 @@ def test_cli_surrogate_eval_reports_non_object_inputs(monkeypatch, capsys, tmp_p
     assert code == 1
     assert "Surrogate eval failed:" in out
     assert "must be a JSON object" in out
+
+
+def test_env_lock_exists_and_is_threading_lock():
+    """Verify _ENV_LOCK is a threading.Lock used to protect env var mutations."""
+    assert isinstance(_ENV_LOCK, type(threading.Lock()))
+
+
+def test_cli_rejects_oversized_inputs_json(monkeypatch, capsys, tmp_path):
+    """Verify that --inputs larger than _MAX_INPUTS_JSON_BYTES is rejected."""
+    _manual_surrogate_artifact(
+        root=tmp_path,
+        monkeypatch=monkeypatch,
+        spec_name="oversize_inputs",
+        backend="sbi_npe",
+        inputs=["a", "b"],
+        outputs=["y"],
+    )
+
+    spec_path = tmp_path / "surrogate.json"
+    spec_path.write_text(json.dumps(_surrogate_payload("sbi_npe", name="oversize_inputs")))
+
+    oversized = "x" * (_MAX_INPUTS_JSON_BYTES + 1)
+    monkeypatch.setattr(
+        "sys.argv",
+        ["mm", "surrogate", "eval", str(spec_path), "--inputs", oversized, "--n", "8"],
+    )
+    code = main()
+    out = capsys.readouterr().out
+    assert code == 1
+    assert "too large" in out
 
 
 @pytest.mark.slow

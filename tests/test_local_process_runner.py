@@ -56,3 +56,43 @@ def test_local_process_runner_can_prefix_conda_environment(monkeypatch, tmp_path
 
     assert seen["command"][:4] == ["conda", "run", "-n", "py312_metamodeling_pymc"]
     assert seen["command"][4:] == ["python", "-c", "print('x')"]
+
+
+def test_local_process_runner_passes_timeout_to_subprocess(monkeypatch, tmp_path):
+    captured_kwargs: dict = {}
+
+    def _fake_run(command, **kwargs):
+        captured_kwargs.update(kwargs)
+        return subprocess.CompletedProcess(command, 0, stdout="ok", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", _fake_run)
+
+    runner = LocalProcessRunner(timeout_sec=120)
+    run_dir = tmp_path / "run"
+    run_dir.mkdir(parents=True)
+    materialization = AdapterMaterialization(
+        command=["python", "-c", "print('x')"],
+        cwd=Path("."),
+        execution_env={},
+    )
+    runner.run(materialization=materialization, run_dir=run_dir)
+    assert captured_kwargs["timeout"] == 120
+
+
+def test_local_process_runner_handles_timeout_expired(monkeypatch, tmp_path):
+    def _fake_run(command, **kwargs):
+        raise subprocess.TimeoutExpired(command, kwargs.get("timeout", 1))
+
+    monkeypatch.setattr(subprocess, "run", _fake_run)
+
+    runner = LocalProcessRunner(timeout_sec=1)
+    run_dir = tmp_path / "run"
+    run_dir.mkdir(parents=True)
+    materialization = AdapterMaterialization(
+        command=["python", "-c", "import time; time.sleep(999)"],
+        cwd=Path("."),
+        execution_env={},
+    )
+    result = runner.run(materialization=materialization, run_dir=run_dir)
+    assert result.returncode == -1
+    assert "timed out" in result.stderr_path.read_text()
