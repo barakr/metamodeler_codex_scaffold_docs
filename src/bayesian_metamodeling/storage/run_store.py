@@ -11,6 +11,7 @@ from typing import Any
 from uuid import uuid4
 
 from bayesian_metamodeling.spec import ModelSpec
+from bayesian_metamodeling.storage._filelock import locked_registry
 from bayesian_metamodeling.storage.sweep_store import (
     flatten_outputs_for_row,
     write_sweep_logs_jsonl,
@@ -52,7 +53,11 @@ def show_registered_run(run_id: str) -> dict:
     registry = _load_registry()
     if run_id not in registry:
         raise ValueError(f"Run not found in registry: {run_id}")
-    record_path = Path(registry[run_id])
+    record_path = Path(registry[run_id]).resolve()
+    cwd = Path.cwd().resolve()
+    tmp_root = (cwd / "tmp").resolve()
+    if not (record_path.is_relative_to(cwd) or record_path.is_relative_to(tmp_root)):
+        raise ValueError(f"Registry entry points outside project: {record_path}")
     return json.loads(record_path.read_text())
 
 
@@ -100,9 +105,10 @@ def persist_run(
     }
     run_record_path.write_text(json.dumps(run_record, indent=2, sort_keys=True))
 
-    registry = _load_registry()
-    registry[run_id] = str(run_record_path)
-    _save_registry(registry)
+    with locked_registry(REGISTRY_PATH):
+        registry = _load_registry()
+        registry[run_id] = str(run_record_path)
+        _save_registry(registry)
 
     return StoredRun(run_id=run_id, run_dir=run_dir, run_record_path=run_record_path)
 
@@ -208,8 +214,9 @@ def persist_sweep(
     }
     run_record_path.write_text(json.dumps(run_record, indent=2, sort_keys=True))
 
-    registry = _load_registry()
-    registry[run_id] = str(run_record_path)
-    _save_registry(registry)
+    with locked_registry(REGISTRY_PATH):
+        registry = _load_registry()
+        registry[run_id] = str(run_record_path)
+        _save_registry(registry)
 
     return StoredRun(run_id=run_id, run_dir=sweep_root, run_record_path=run_record_path)

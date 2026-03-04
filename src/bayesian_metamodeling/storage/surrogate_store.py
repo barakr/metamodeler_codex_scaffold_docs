@@ -10,6 +10,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from bayesian_metamodeling.spec import SurrogateSpec
+from bayesian_metamodeling.storage._filelock import locked_registry
 
 SURROGATE_REGISTRY_PATH = Path("tmp/surrogate_registry.json")
 
@@ -76,9 +77,10 @@ def persist_surrogate_artifact(
     artifact_path = artifact_dir / "artifact.json"
     artifact_path.write_text(json.dumps(artifact_json, indent=2, sort_keys=True))
 
-    registry = _load_registry()
-    registry[artifact_id] = str(artifact_path)
-    _save_registry(registry)
+    with locked_registry(SURROGATE_REGISTRY_PATH):
+        registry = _load_registry()
+        registry[artifact_id] = str(artifact_path)
+        _save_registry(registry)
 
     return {
         "artifact_id": artifact_id,

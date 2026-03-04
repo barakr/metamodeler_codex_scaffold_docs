@@ -10,6 +10,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from bayesian_metamodeling.meta.ir import MetamodelIR, ir_to_json_dict
+from bayesian_metamodeling.storage._filelock import locked_registry
 
 META_REGISTRY_PATH = Path("tmp/meta_registry.json")
 
@@ -70,8 +71,9 @@ def persist_ir_artifact(
         )
     )
 
-    registry = _load_registry()
-    registry[artifact_id] = str(meta_path)
-    _save_registry(registry)
+    with locked_registry(META_REGISTRY_PATH):
+        registry = _load_registry()
+        registry[artifact_id] = str(meta_path)
+        _save_registry(registry)
 
     return {"artifact_id": artifact_id, "artifact_path": str(meta_path), "ir_path": str(ir_path)}
