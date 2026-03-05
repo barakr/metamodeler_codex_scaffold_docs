@@ -6,6 +6,14 @@
 
 ## Decision Log
 
+### 2026-03-05: Co-locate model tests within each model subdirectory
+- Moved `tests/test_kinetic_segregation.py` into `projects/tcr_signaling/models/kinetic_segregation/tests/`
+  split into `test_potentials.py`, `test_model.py`, `test_cli.py`
+- Added new test suites for `membrane_topography`, `lck_activity`, `tcr_phosphorylation`
+- Added `projects/tcr_signaling/pytest.ini` and `conftest.py` for standalone test discovery
+- Root `pytest.ini` updated to discover submodule tests via `testpaths`
+- Total: 54 submodule tests, 272 fast tests from root (all passing)
+
 ### 2026-03-05: Add TCR signaling case study (Neve-Oz, Sherman & Raveh 2024)
 - Created `projects/` top-level directory for real-world scientific reproductions
 - First project: `projects/tcr_signaling/` — reproduces Bayesian metamodeling of
