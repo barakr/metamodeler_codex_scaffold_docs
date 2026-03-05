@@ -39,7 +39,35 @@ tests/              # Fast + slow + optional_backend test suites
 examples/           # Runnable specs and toy models
 tutorials/          # Jupyter notebook curriculum (Tutorial_0 through Tutorial_9)
 githooks/           # pre-commit, pre-push, commit-msg hooks
+projects/           # Independent research projects (Git submodules)
 ```
+
+## Submodule Boundary
+
+The `projects/` directory contains **independent research projects** as Git
+submodules. Each is a separate repository with its own lifecycle.
+
+| Submodule | Repo | Purpose |
+|-----------|------|---------|
+| `projects/tcr_signaling` | `github.com/barakr/tcr_signaling` | TCR signaling metamodel (Neve-Oz, Sherman & Raveh 2024) |
+
+### Rules for submodule separation
+
+1. **Each submodule owns its own docs**: `CLAUDE.md`, `Status.md`, `README.md`
+   live inside the submodule and govern work done there.
+2. **Root docs govern framework only**: This `CLAUDE.md`, `Status.md`, and all
+   root-level design docs describe the `bayesian-metamodeling` package — not
+   the research projects that use it.
+3. **Do not mix status entries**: TCR-specific decisions go in
+   `projects/tcr_signaling/Status.md`, framework decisions go in root `Status.md`.
+4. **Submodules are consumers**: They depend on `bayesian-metamodeling` as a
+   package. If framework changes are needed, switch context to root and make
+   the change there — then update both Status files.
+5. **Separate test runs**: Submodule tests run via their own `pytest.ini`.
+   Root `make fast` covers framework tests only.
+6. **Commits are separate**: Changes inside `projects/tcr_signaling/` must be
+   committed to the submodule repo first, then the submodule pointer updated
+   in the parent.
 
 ## Key Documents
 
