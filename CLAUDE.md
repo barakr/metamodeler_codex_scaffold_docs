@@ -114,6 +114,7 @@ submodules. Each is a separate repository with its own lifecycle.
 8. **Typed contracts first** — Pydantic v2 with `extra="forbid"`, explicit return types, `from __future__ import annotations`
 9. **No destructive shell commands** — never run recursive deletes, force pushes, or history rewrites without explicit user approval; record in Status.md
 10. **Tests with every change** — any non-trivial change must add or update tests
+11. **Commit regularly** — make git commits at logical milestones (feature complete, bug fix verified, refactor done). Do not accumulate large uncommitted changesets
 
 ## Coding Conventions
 
