@@ -6,6 +6,25 @@
 
 ## Decision Log
 
+### 2026-03-05: Fix KS model MC loop + self-contained example specs
+- **MC loop fix**: Changed from single-particle stepping to full sweeps — each
+  `n_steps` iteration now updates every molecule and every grid cell once,
+  matching standard MC convention. Previous behavior updated ~3 molecules per
+  step (150 molecules / 500 steps), far too few for equilibration.
+- **n_steps auto-scaling**: Changed from `max(500, time*100)` to `max(50, time*5)`
+  since each step now does ~1000x more work (full sweep vs single particle).
+- **Default grid_size**: Increased from 32 to 64 for better spatial resolution.
+- **Per-point seed derivation**: `__main__.py` now derives a unique reproducible
+  seed per DOE point via `seed + hash(inputs)`, eliminating correlated MC noise
+  across the parameter sweep.
+- **Self-contained example specs**: Created `examples/specs/` with model, pymc_gp,
+  and sbi_npe specs. Example script now references local specs instead of
+  global `specs/` directory. Moved `specs/surrogate.kinetic_segregation.sbi_npe.json`
+  to `examples/specs/`.
+- **Tests updated**: All n_steps values reduced (full sweeps need far fewer
+  iterations); grid_size and molecule counts reduced for speed. All 54
+  submodule tests and 272+ root fast tests pass.
+
 ### 2026-03-05: Co-locate model tests within each model subdirectory
 - Moved `tests/test_kinetic_segregation.py` into `projects/tcr_signaling/models/kinetic_segregation/tests/`
   split into `test_potentials.py`, `test_model.py`, `test_cli.py`
