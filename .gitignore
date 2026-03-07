@@ -9,6 +9,7 @@ tmp/
 .codex/history.jsonl
 .codex/sessions/
 .DS_Store
+.vscode/
 .ipynb_checkpoints/
 projects/*/store/*
 !projects/*/store/.gitkeep
