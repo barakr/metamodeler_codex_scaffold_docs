@@ -68,6 +68,13 @@ submodules. Each is a separate repository with its own lifecycle.
 6. **Commits are separate**: Changes inside `projects/tcr_signaling/` must be
    committed to the submodule repo first, then the submodule pointer updated
    in the parent.
+7. **Submodule CLAUDE.md takes precedence**: When working within a submodule
+   directory, defer to that submodule's `CLAUDE.md` for development rules,
+   conventions, and project-specific instructions. Claude Code's `CLAUDE.md`
+   files load hierarchically by directory, so the submodule's instructions
+   automatically apply when reading or editing files there. Note:
+   `.claude/settings.json` does NOT support per-submodule overrides — only
+   `CLAUDE.md` files provide directory-scoped instructions.
 
 ## Key Documents
 
