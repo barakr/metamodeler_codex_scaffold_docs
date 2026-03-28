@@ -182,7 +182,7 @@ bayesmm tutorial                       # Print workflow guide
 bayesmm --version
 ```
 
-## Conda Environments
+## Conda Environments during development
 
 | Environment | Purpose |
 |-------------|---------|
