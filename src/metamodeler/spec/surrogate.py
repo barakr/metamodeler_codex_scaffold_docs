@@ -26,9 +26,11 @@ class SurrogateSpec(BaseModel):
     @model_validator(mode="after")
     def _validate_backend_contract(self) -> SurrogateSpec:
         validate_backend_config(self.backend, self.backend_config)
-        if len(self.outputs) != 1:
-            raise ValueError(
-                "Surrogate learning currently supports exactly one output variable. "
-                f"Got outputs={self.outputs}."
-            )
+        seen: set[str] = set()
+        for name in self.outputs:
+            if name in seen:
+                raise ValueError(
+                    f"Duplicate output variable in surrogate spec: '{name}'. outputs={self.outputs}"
+                )
+            seen.add(name)
         return self

@@ -95,7 +95,7 @@ def fit_surrogate(spec: SurrogateSpec) -> dict[str, str]:
         x=x,
         y=y,
         input_names=spec.inputs,
-        output_name=spec.outputs[0],
+        output_names=spec.outputs,
         backend_config=spec.backend_config,
         seed=spec.seed,
     )
@@ -122,11 +122,20 @@ def eval_surrogate(spec: SurrogateSpec, inputs_payload: dict[str, list[float]], 
         spec.backend,
         Path(artifact["backend_payload"]),
         expected_inputs=spec.inputs,
-        expected_output=spec.outputs[0],
+        expected_outputs=spec.outputs,
     )
     inputs = _validate_eval_inputs(spec, inputs_payload)
     samples = model.sample(inputs=inputs, n=n, seed=spec.seed)
     summary = model.summary(inputs=inputs)
+
+    # samples is always (N, n, D); preview the leading slice along all 3 axes.
+    preview_n = min(3, samples.shape[0])
+    preview_k = min(5, samples.shape[1])
+    preview_d = min(3, samples.shape[2]) if samples.ndim == 3 else 1
+    if samples.ndim == 3:
+        samples_preview = samples[:preview_n, :preview_k, :preview_d].tolist()
+    else:
+        samples_preview = samples[:preview_n, :preview_k].tolist()
 
     return {
         "artifact_id": artifact["artifact_id"],
@@ -134,5 +143,5 @@ def eval_surrogate(spec: SurrogateSpec, inputs_payload: dict[str, list[float]], 
         "n": n,
         "sample_shape": list(samples.shape),
         "summary": summary,
-        "samples_preview": samples[: min(3, len(samples)), : min(5, n)].tolist(),
+        "samples_preview": samples_preview,
     }
