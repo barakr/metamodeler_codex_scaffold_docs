@@ -56,34 +56,14 @@ def _normalize_output_value(raw_value: Any, out_name: str) -> Any:
     return raw_value
 
 
-def _extract_output_row(
-    outputs: dict[str, Any],
-    output_names: list[str],
-    summary_config: dict[str, Any] | None,
-    outputs_path: Path,
-) -> list[float]:
-    row: list[float] = []
-    for name in output_names:
-        if name not in outputs:
-            raise ValueError(f"Output '{name}' missing in {outputs_path}")
-        normalized_value = _normalize_output_value(outputs[name], name)
-        row.append(_extract_scalar_output(normalized_value, summary_config))
-    return row
-
-
 def load_tabular_dataset(spec: SurrogateSpec) -> tuple[np.ndarray, np.ndarray, str]:
-    """Load (x, y, digest) from a run store.
-
-    `x` has shape `(N, n_features)`. `y` has shape `(N, D)` where `D = len(spec.outputs)`
-    so D=1 (single output) is just the special case of a generic D-dimensional reader.
-    """
     dataset_root = _resolve_dataset_root(spec.dataset_ref)
     runs_root = dataset_root / "runs"
     if not runs_root.exists():
         raise ValueError(f"Run store does not exist: {runs_root}")
 
     x_rows: list[list[float]] = []
-    y_rows: list[list[float]] = []
+    y_rows: list[float] = []
 
     for run_dir in sorted(path for path in runs_root.iterdir() if path.is_dir()):
         inputs_path = run_dir / "inputs.json"
@@ -95,7 +75,12 @@ def load_tabular_dataset(spec: SurrogateSpec) -> tuple[np.ndarray, np.ndarray, s
         outputs = json.loads(outputs_path.read_text())
 
         x_rows.append([float(inputs[name]) for name in spec.inputs])
-        y_rows.append(_extract_output_row(outputs, spec.outputs, spec.summary_config, outputs_path))
+
+        out_name = spec.outputs[0]
+        if out_name not in outputs:
+            raise ValueError(f"Output '{out_name}' missing in {outputs_path}")
+        normalized_value = _normalize_output_value(outputs[out_name], out_name)
+        y_rows.append(_extract_scalar_output(normalized_value, spec.summary_config))
 
     if not x_rows:
         raise ValueError(f"No usable runs found in {runs_root}")

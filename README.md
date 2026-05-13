@@ -33,55 +33,23 @@ This repository is currently in planning/scaffold phase. The code implementation
 - `examples/surrogates/surrogate.toy.pymc_gp.json`: toy surrogate training spec.
 - `examples/metamodels/metamodel.simple.json`: coupled metamodel spec for sampling flow.
 
-## Install (cross-platform)
-
-`metamodeler` runs on Python 3.11+ on Windows, macOS, and Linux.
-
-**Recommended**: clone the repo, then either install with conda from `environment.yml`:
-```
-conda env create -f environment.yml
-conda activate metamodeler
-```
-or with pip into a venv:
-```
-python -m venv .venv
-# bash/zsh:
-source .venv/bin/activate
-# Windows PowerShell:
-.venv\Scripts\Activate.ps1
-# Windows cmd:
-.venv\Scripts\activate.bat
-pip install -e ".[pymc,sbi]"
-```
-
-After install, run:
-```
-mm doctor          # diagnose your env, list installed backends
-mm setup           # interactive: suggest install commands & write defaults
-```
-
 ## Optional Surrogate Backends
 The surrogate interface is backend-neutral, but some backends require optional dependencies.
 
-- PyMC: `pip install -e '.[pymc]'` or `conda install -c conda-forge pymc arviz`
-- SBI: `pip install -e '.[sbi]'` or `conda install -c conda-forge pytorch sbi`
+- Install PyMC backend support in the project conda environment:
+  - `conda install -n py314_metamodeling -c conda-forge pymc arviz`
+  - or `pip install -e '.[pymc]'`
+- Install SBI backend support in the project conda environment:
+  - `conda install -n py314_metamodeling -c conda-forge pytorch sbi`
+  - or `pip install -e '.[sbi]'`
 - `pymc` is the modern package (PyMC v5), and is the supported successor to legacy `pymc3`.
 - If `pymc_gp` is selected without PyMC installed, `mm surrogate fit` raises an actionable install error.
 - If `sbi_npe` is selected without `sbi`/`torch` installed, `mm surrogate fit` raises an actionable install error.
-- Run `mm doctor` to see exactly which backends are present in your env.
 - Real PyMC verification test:
   - `pytest -q tests/test_surrogate_backends.py -k pymc_gp_backend_fit_sample_and_logprob`
   - In toolchain-limited environments, use: `PYTENSOR_FLAGS='cxx=' pytest -q tests/test_surrogate_backends.py -k pymc_gp_backend_fit_sample_and_logprob`
 - Real SBI verification test:
   - `pytest -q tests/test_surrogate_backends.py -k sbi_npe_backend_fit_sample_and_logprob`
-
-## Multi-output (joint) surrogates
-Surrogate specs may declare multiple outputs (`outputs: ["y1", "y2", ...]`). Use
-`backend_config.output_correlation`:
-- `"diagonal"` (default): independent per-output models. Fast; assumes outputs are uncorrelated given inputs.
-- `"full"`: joint covariance (PyMC: LKJ prior on Cholesky; SBI: D-dim density estimator). Captures cross-output correlation.
-
-See `examples/surrogates/surrogate.toy.multi_output.json` for a 2-output example.
 
 ## Surrogate Troubleshooting
 - `Surrogate fit failed: Invalid backend_config key...`
@@ -125,27 +93,15 @@ Known numerical differences:
 - Small posterior summary differences are expected due backend-specific sampling jitter and initialization.
 
 ## End-to-End Quickstart
-After `pip install -e .` (or the conda env), the `mm` command works in any shell on any OS:
+```bash
+PYTHONPATH=src python -m metamodeler.cli.main validate examples/toy_program/spec.toy_program.json
+PYTHONPATH=src python -m metamodeler.cli.main run examples/toy_program/spec.toy_program.json
+PYTHONPATH=src python -m metamodeler.cli.main surrogate fit examples/surrogates/surrogate.toy.pymc_gp.json
+PYTHONPATH=src python -m metamodeler.cli.main meta build examples/metamodels/metamodel.simple.json
+PYTHONPATH=src python -m metamodeler.cli.main meta sample examples/metamodels/metamodel.simple.json --draws 100 --tune 50 --chains 2 --seed 1
 ```
-mm doctor                                                          # check env
-mm validate examples/toy_program/spec.toy_program.json
-mm run examples/toy_program/spec.toy_program.json
-mm surrogate fit examples/surrogates/surrogate.toy.pymc_gp.json
-mm meta build examples/metamodels/metamodel.simple.json
-mm meta sample examples/metamodels/metamodel.simple.json --draws 100 --tune 50 --chains 2 --seed 1
-```
-
-If you have not installed the package and want to run from source:
-- bash/zsh (macOS, Linux):
-  `PYTHONPATH=src python -m metamodeler.cli.main validate examples/toy_program/spec.toy_program.json`
-- Windows PowerShell:
-  `$env:PYTHONPATH = "src"; python -m metamodeler.cli.main validate examples/toy_program/spec.toy_program.json`
-- Windows cmd:
-  `set PYTHONPATH=src && python -m metamodeler.cli.main validate examples/toy_program/spec.toy_program.json`
 
 Utility commands:
-- `mm doctor` (`--json` for machine-readable)
-- `mm setup` (interactive) or `mm setup --non-interactive --backend pymc,sbi`
 - `mm tutorial`
 - `mm surrogate list`
 - `mm meta list`

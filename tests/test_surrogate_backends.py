@@ -71,7 +71,7 @@ def test_pymc_gp_backend_fit_sample_and_logprob(monkeypatch, tmp_path):
 
     payload_path = Path(artifact["backend_payload"])
     payload = json.loads(payload_path.read_text())
-    assert payload["model_type"] == "pymc_bayesian_linear_v2"
+    assert payload["model_type"] == "pymc_bayesian_linear"
     assert len(payload["posterior_sigma"]) > 0
 
     model = load_backend_model("pymc_gp", payload_path)
@@ -82,10 +82,9 @@ def test_pymc_gp_backend_fit_sample_and_logprob(monkeypatch, tmp_path):
     logp = model.log_prob(inputs, outputs)
     summary = model.summary(inputs)
     target = 1.7 * np.asarray([0.1, 0.5]) - 0.8 * np.asarray([0.0, -0.2]) + 0.2
-    mean_y = np.asarray(summary["mean"]["y"], dtype=float)
-    mse = float(np.mean((mean_y - target) ** 2))
+    mse = float(np.mean((np.asarray(summary["mean"], dtype=float) - target) ** 2))
 
-    assert draws.shape == (2, 32, 1)
+    assert draws.shape == (2, 32)
     assert np.isfinite(logp).all()
     assert mse < 0.2
     assert summary["posterior_draws"] >= 20
@@ -134,8 +133,8 @@ def test_sbi_npe_backend_fit_sample_and_logprob(monkeypatch, tmp_path):
 
     payload_path = Path(artifact["backend_payload"])
     payload = json.loads(payload_path.read_text())
-    assert payload["model_type"] == "sbi_npe_posterior_v2"
-    assert "posterior_blobs_b64" in payload
+    assert payload["model_type"] == "sbi_npe_posterior"
+    assert "posterior_blob_b64" in payload
 
     model = load_backend_model("sbi_npe", payload_path)
     inputs = {"a": np.array([0.2, -0.1]), "b": np.array([0.3, 0.4])}
@@ -145,10 +144,9 @@ def test_sbi_npe_backend_fit_sample_and_logprob(monkeypatch, tmp_path):
     logp = model.log_prob(inputs, outputs)
     summary = model.summary(inputs)
     target = 1.7 * np.asarray([0.2, -0.1]) - 0.8 * np.asarray([0.3, 0.4]) + 0.2
-    mean_y = np.asarray(summary["mean"]["y"], dtype=float)
-    mse = float(np.mean((mean_y - target) ** 2))
+    mse = float(np.mean((np.asarray(summary["mean"], dtype=float) - target) ** 2))
 
-    assert draws.shape == (2, 16, 1)
+    assert draws.shape == (2, 16)
     assert np.isfinite(logp).all()
     assert mse < 0.35
     assert summary["posterior_draws"] >= 64
@@ -228,7 +226,7 @@ def test_backend_specific_fit_quality_increasing_difficulty(monkeypatch, tmp_pat
             inputs_payload={"a": [0.1, 0.5, 1.0], "b": [0.2, -0.3, 0.7]},
             n=64,
         )
-        means = np.asarray(eval_result["summary"]["mean"]["y"], dtype=float)
+        means = np.asarray(eval_result["summary"]["mean"], dtype=float)
         target = 1.7 * np.asarray([0.1, 0.5, 1.0]) - 0.8 * np.asarray([0.2, -0.3, 0.7]) + 0.2
         mse_values.append(float(np.mean((means - target) ** 2)))
 
