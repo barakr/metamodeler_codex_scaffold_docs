@@ -45,7 +45,7 @@ def test_load_tabular_dataset_handles_nested_output_envelope(tmp_path):
     x, y, digest = load_tabular_dataset(spec)
 
     assert x.shape == (4, 2)
-    assert y.shape == (4,)
-    assert np.allclose(y, np.array([1.0, 3.0, 5.0, 7.0]))
+    assert y.shape == (4, 1)
+    assert np.allclose(y[:, 0], np.array([1.0, 3.0, 5.0, 7.0]))
     assert isinstance(digest, str)
     assert len(digest) > 10

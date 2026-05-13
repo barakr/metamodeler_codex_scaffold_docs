@@ -260,4 +260,4 @@ def test_optional_dual_backend_fit_eval_path(monkeypatch, tmp_path):
             result = eval_surrogate(spec=spec, inputs_payload={"x": [0.1, 0.3]}, n=10)
         except Exception as exc:  # pragma: no cover - optional runtime stack
             pytest.skip(f"Optional dual-backend integration skipped due runtime constraint: {exc}")
-        assert result["sample_shape"] == [2, 10]
+        assert result["sample_shape"] == [2, 10, 1]

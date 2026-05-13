@@ -1,8 +1,8 @@
 # Status: Metamodeling Automation Framework
 
 ## High level state
-- Stage: Prompt 15 implementation complete (notebook-only tutorial onboarding)
-- Current focus: tutorial hardening and onboarding reliability validation
+- Stage: Joint multi-output surrogates + cross-platform tutorials + configurer landed (2026-05-13).
+- Current focus: surface multi-output workflows in metamodel coupling and broaden CI to a Python/OS matrix.
 
 ## Folder structure
 - src/metamodeler/: library code
@@ -373,6 +373,17 @@
 - 2026-02-12: Consolidated tutorial requests into Prompt 14 and implemented a modular 9-part tutorial curriculum with BioModels moved early and per-tutorial scientific side-aims.
 - 2026-02-12: Prompt 15 converted tutorials to notebook-only delivery and upgraded onboarding structure (time estimates, prerequisites, success criteria, checkpoints, troubleshooting).
 - 2026-02-12: Hardened tutorial execution by fixing surrogate dataset envelope parsing and regenerating all notebooks with guided explanations and graphics.
+- 2026-05-13: Joint multi-output surrogates, cross-platform tutorials, and configurer landed in one change set.
+  - Multi-output surrogate learning: `SurrogateSpec` now allows `outputs: [...]` of any length; `backend_config.output_correlation` selects `"diagonal"` (independent per-output, default) or `"full"` (joint covariance).
+    - PyMC: `_fit_pymc_bayesian_linear` builds `(n_features, D)` weights and either D independent `pm.Normal` likelihoods (diagonal) or one `pm.MvNormal` with an `LKJCholeskyCov` prior (full). `pm.Deterministic("chol_factor", chol)` registers the cholesky factor for stable extraction across PyMC versions.
+    - SBI: `_fit_sbi_npe` trains either D independent 1-D NPE estimators (diagonal) or one D-dim density estimator over the full joint (full). `SbiNPEPosteriorModel` stores a `posteriors: list[Any]` of length D or 1.
+  - Payload schema bumped to `pymc_bayesian_linear_v2` and `sbi_npe_posterior_v2`. v1 `linear_gaussian`, `pymc_bayesian_linear`, and `sbi_npe_posterior` payloads remain readable as D=1 v2 models.
+  - Sample shape contract: surrogate `.sample()` now returns `(N, n, D)` consistently for all backends (D=1 included). `eval_surrogate.summary` returns per-output `mean`/`std` dicts keyed by output name. Existing single-output tests updated accordingly.
+  - Cross-platform tutorials: lowered `requires-python` from `>=3.14` to `>=3.11` for wheel reach (`torch`, `sbi`, `pymc`). All 10 tutorial notebooks rewritten — no hardcoded paths, no `%%bash`, no POSIX-only env-prefix. Each notebook starts with a self-contained bootstrap cell that walks up to find the repo root and configures `sys.path`. Subsequent cells use `run_cli(...)` (Python `subprocess.run` with `sys.executable`) so they work identically on Windows cmd, Windows PowerShell, macOS, and Linux.
+  - Configurer added: new `metamodeler.config` package with `bootstrap`, `diagnose`, `setup` plus a `metamodeler.tutorial` notebook helper. New CLI subcommands `mm doctor` (human + `--json`) and `mm setup` (interactive, or `--non-interactive --backend pymc,sbi`).
+  - New environment files: `environment.yml` (conda, all extras). `README.md` and `tutorials/README.md` rewritten with per-OS install snippets.
+  - Reused existing `_normalize_output_value` / `_extract_scalar_output` from `dataset.py`; refactored `_require_pymc` / `_require_torch` / `_require_sbi` from `backends.py` into a single shared module `metamodeler.config._import_helpers` (used by both backends and the diagnostic), per AGENTS.md "If logic is used more than once: extract it".
+  - Tests: 66 fast tests pass with both backends (`py312_bayesmm_sbi` env), 53 pass + 13 skip without optional backends (`py314_bayesmm` env). New tests: `test_surrogate_multi_output.py` (7), `test_surrogate_payload_v1_compat.py` (3), `test_config_diagnose.py` (7), `test_cli_doctor_setup.py` (6), `test_tutorial_bootstrap.py` (4). End-to-end verified: Tutorial_0/1/3/4 execute on `py314_bayesmm`; Tutorial_5 (PyMC, single + multi-output joint) executes on `py312_bayesmm_sbi`. `ruff format` and `ruff check` clean.
 
 ## Open issues
 - Tutorial 2 full run depends on external BioModels download; in restricted/offline sandboxes this step will fail while validate/plan still pass.

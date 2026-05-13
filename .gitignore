@@ -10,3 +10,4 @@ tmp/
 .codex/sessions/
 .DS_Store
 .ipynb_checkpoints/
+sbi-logs/

@@ -10,6 +10,8 @@ from typing import Any
 from pydantic import ValidationError
 
 from metamodeler.adapters import resolve_adapter
+from metamodeler.config import diagnose, format_diagnose_report, setup
+from metamodeler.config.diagnose import diagnose_to_json
 from metamodeler.designs import DOEPlanError, plan_points, render_plan_preview
 from metamodeler.meta import build_ir_from_metamodel_spec, sample_metamodel
 from metamodeler.runners import LocalProcessRunner
@@ -126,6 +128,35 @@ def build_parser() -> argparse.ArgumentParser:
     meta_subparsers.add_parser("list", help="List stored metamodel artifacts and samples")
 
     subparsers.add_parser("tutorial", help="Print guided end-to-end workflow")
+
+    doctor_parser = subparsers.add_parser(
+        "doctor", help="Diagnose environment, Python, and optional backends"
+    )
+    doctor_parser.add_argument(
+        "--json", dest="as_json", action="store_true", help="Emit JSON instead of a report"
+    )
+
+    setup_parser = subparsers.add_parser(
+        "setup", help="Suggest install commands and write a default config"
+    )
+    setup_parser.add_argument(
+        "--non-interactive",
+        dest="non_interactive",
+        action="store_true",
+        help="Do not prompt; use --backend and flags directly",
+    )
+    setup_parser.add_argument(
+        "--backend",
+        default=None,
+        help="Comma-separated backends to install: pymc, sbi, 'pymc,sbi', or 'none'",
+    )
+    setup_parser.add_argument(
+        "--no-write-config",
+        dest="write_config",
+        action="store_false",
+        default=True,
+        help="Do not write metamodeler.config.json",
+    )
 
     return parser
 
@@ -340,6 +371,7 @@ def _meta_list_command() -> int:
 
 def _tutorial_command() -> int:
     print("Metamodeler tutorial flow:")
+    print("0) Diagnose env: mm doctor   (then `mm setup` if backends are missing)")
     print("1) Validate: mm validate examples/toy_program/spec.toy_program.json")
     print("2) Plan: mm plan examples/toy_program/spec.toy_program.json")
     print("3) Run: mm run examples/toy_program/spec.toy_program.json")
@@ -347,7 +379,29 @@ def _tutorial_command() -> int:
     print('5) Eval surrogate: mm surrogate eval <spec> --inputs \'{"a":[0.5],"b":[1.0]}\' --n 100')
     print("6) Build metamodel: mm meta build examples/metamodels/metamodel.simple.json")
     print("7) Sample metamodel: mm meta sample <spec> --draws 100 --tune 50 --chains 2 --seed 1")
-    print("See also: TUTORIAL.md")
+    print("See also: TUTORIAL.md and tutorials/Tutorial_0.ipynb")
+    return 0
+
+
+def _doctor_command(*, as_json: bool) -> int:
+    report = diagnose()
+    if as_json:
+        print(diagnose_to_json(report))
+    else:
+        print(format_diagnose_report(report), end="")
+    return 0
+
+
+def _setup_command(*, interactive: bool, install_backends: str | None, write_config: bool) -> int:
+    try:
+        setup(
+            interactive=interactive,
+            install_backends=install_backends,
+            write_config=write_config,
+        )
+    except ValueError as exc:
+        print(f"Setup failed: {exc}")
+        return 1
     return 0
 
 
@@ -389,6 +443,14 @@ def main() -> int:
         return _meta_list_command()
     if args.command == "tutorial":
         return _tutorial_command()
+    if args.command == "doctor":
+        return _doctor_command(as_json=bool(args.as_json))
+    if args.command == "setup":
+        return _setup_command(
+            interactive=not bool(args.non_interactive),
+            install_backends=args.backend,
+            write_config=bool(args.write_config),
+        )
 
     parser.print_help()
     return 0
