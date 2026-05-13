@@ -7,7 +7,7 @@ name = "metamodeler"
 version = "0.1.0"
 description = "CLI-first metamodeling scaffold"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.11"
 dependencies = ["pydantic>=2,<3", "requests>=2,<3", "scipy>=1.11,<2"]
 
 [project.optional-dependencies]
@@ -25,7 +25,7 @@ where = ["src"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py314"
+target-version = "py311"
 extend-exclude = ["*.ipynb"]
 
 [tool.ruff.lint]
