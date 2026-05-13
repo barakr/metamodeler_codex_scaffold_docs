@@ -15,6 +15,8 @@ from uuid import uuid4
 from pydantic import ValidationError
 
 from bayesian_metamodeling.adapters import resolve_adapter
+from bayesian_metamodeling.config import diagnose, format_diagnose_report, setup
+from bayesian_metamodeling.config.diagnose import diagnose_to_json
 from bayesian_metamodeling.designs import DOEPlanError, plan_points, render_plan_preview
 from bayesian_metamodeling.meta import build_ir_from_metamodel_spec, sample_metamodel
 from bayesian_metamodeling.runners import LocalProcessRunner
@@ -133,6 +135,35 @@ def build_parser() -> argparse.ArgumentParser:
     meta_subparsers.add_parser("list", help="List stored metamodel artifacts and samples")
 
     subparsers.add_parser("tutorial", help="Print guided end-to-end workflow")
+
+    doctor_parser = subparsers.add_parser(
+        "doctor", help="Diagnose environment, Python, and optional backends"
+    )
+    doctor_parser.add_argument(
+        "--json", dest="as_json", action="store_true", help="Emit JSON instead of a report"
+    )
+
+    setup_parser = subparsers.add_parser(
+        "setup", help="Suggest install commands and write a default config"
+    )
+    setup_parser.add_argument(
+        "--non-interactive",
+        dest="non_interactive",
+        action="store_true",
+        help="Do not prompt; use --backend and flags directly",
+    )
+    setup_parser.add_argument(
+        "--backend",
+        default=None,
+        help="Comma-separated backends to install: pymc, sbi, 'pymc,sbi', or 'none'",
+    )
+    setup_parser.add_argument(
+        "--no-write-config",
+        dest="write_config",
+        action="store_false",
+        default=True,
+        help="Do not write bayesian-metamodeling.config.json",
+    )
 
     return parser
 
@@ -519,8 +550,31 @@ def _meta_list_command() -> int:
     return 0
 
 
+def _doctor_command(*, as_json: bool) -> int:
+    report = diagnose()
+    if as_json:
+        print(diagnose_to_json(report))
+    else:
+        print(format_diagnose_report(report), end="")
+    return 0
+
+
+def _setup_command(*, interactive: bool, install_backends: str | None, write_config: bool) -> int:
+    try:
+        setup(
+            interactive=interactive,
+            install_backends=install_backends,
+            write_config=write_config,
+        )
+    except ValueError as exc:
+        print(f"Setup failed: {exc}")
+        return 1
+    return 0
+
+
 def _tutorial_command() -> int:
     print("Bayesian Metamodeling tutorial flow:")
+    print("0) Diagnose env: bayesmm doctor   (then `bayesmm setup` if backends are missing)")
     print("1) Validate: bayesmm validate examples/toy_program/spec.toy_program.json")
     print("2) Plan: bayesmm plan examples/toy_program/spec.toy_program.json")
     print("3) Run: bayesmm run examples/toy_program/spec.toy_program.json")
@@ -575,6 +629,14 @@ def main() -> int:
         return _meta_list_command()
     if args.command == "tutorial":
         return _tutorial_command()
+    if args.command == "doctor":
+        return _doctor_command(as_json=bool(args.as_json))
+    if args.command == "setup":
+        return _setup_command(
+            interactive=not bool(args.non_interactive),
+            install_backends=args.backend,
+            write_config=bool(args.write_config),
+        )
 
     parser.print_help()
     return 0
