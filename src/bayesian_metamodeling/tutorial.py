@@ -81,15 +81,19 @@ def run_mm_cli(*args: str, check: bool = True) -> int:
 
 
 def run_tool(*args: str, check: bool = True) -> int:
-    """Run an auxiliary tool (``pytest``, ``ruff``) from the repo root.
+    """Run an auxiliary tool (``pytest``, ``ruff``, ``python``) from the repo root.
 
-    Invokes ``python -m <tool>`` via the active interpreter so it works without
-    a shell on every platform. Raises ``RuntimeError`` on a non-zero exit unless
-    ``check=False``.
+    Routes the tool through ``sys.executable -m <tool>`` so it always uses the
+    active interpreter and works without a shell on every platform — never
+    relying on a bare ``python``/``pytest``/``ruff`` being on ``PATH`` (which is
+    unreliable in conda envs on Windows). Raises ``RuntimeError`` on a non-zero
+    exit unless ``check=False``.
     """
     cmd = list(args)
     if cmd and cmd[0] in {"pytest", "ruff"}:
         cmd = [sys.executable, "-m", *cmd]
+    elif cmd and cmd[0] == "python":
+        cmd = [sys.executable, *cmd[1:]]
     print("$", " ".join(args))
     with _in_repo_root():
         result = subprocess.run(cmd, capture_output=True, text=True)

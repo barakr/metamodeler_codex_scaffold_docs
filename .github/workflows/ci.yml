@@ -1,0 +1,52 @@
+name: CI
+
+# Cross-platform verification for the `bayesian_metamodeling` package.
+# The projects/tcr_signaling submodule is intentionally NOT built or tested here:
+# it has a native (CMake/Metal) build with its own pytest config and is verified
+# separately on macOS. This workflow proves the pure-Python package works on
+# Windows, Linux, and macOS on every push.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / py${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ["3.12"]
+
+    steps:
+      - name: Checkout (no submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install package with optional backends
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[pymc,sbi]" ruff
+
+      - name: Ruff lint
+        run: python -m ruff check src tests
+
+      - name: Ruff format check
+        run: python -m ruff format --check src tests
+
+      - name: Run fast test suite
+        run: python -m pytest -q -m "not slow" tests
+
+      - name: bayesmm doctor smoke
+        run: |
+          python -m bayesian_metamodeling.cli.main doctor
+          python -m bayesian_metamodeling.cli.main doctor --json
+          python -m bayesian_metamodeling.cli.main setup --non-interactive --backend pymc,sbi

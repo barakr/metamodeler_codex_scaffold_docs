@@ -682,6 +682,38 @@ package + `bayesmm` CLI. Backup ref `claude/develop-pre-port` retained.
   `py312_bayesmm_sbi` env; `ruff check src tests` clean; fast suite
   (`pytest -q -m "not slow" tests`) green.
 
+## Independent review + cross-platform verification (2026-05-14)
+- Code-reviewed both packages and ran every test.
+- `bayesian_metamodeling` (macOS): fast suite green on `py312_bayesmm_sbi` (256 passed)
+  and `py314_bayesmm` (244 passed; optional-backend tests skip-safe); slow suite green
+  on `py312_bayesmm_sbi`; `ruff check` / `ruff format --check` clean.
+- `tcr_signaling` submodule (macOS, run from inside the submodule): clean CMake build of
+  `ks_gpu` + `libks_potentials.dylib`; full `pytest` suite — 169 tests — all passed. The
+  32 GPU tests ran on Metal with no silent CPU fallback (stderr clean). Treated
+  read-only; its Windows gaps (Makefile-only build, `ks_gpu` not `.exe`, Metal-only GPU)
+  are documented, not fixed.
+- All 10 tutorial notebooks execute end-to-end via `jupyter execute` on `py312_bayesmm_sbi`.
+- Cross-platform fixes applied (`bayesian_metamodeling` + tutorials only):
+  - `tutorials/Tutorial_0.ipynb`: hardcoded `:` PYTHONPATH separator → `os.pathsep` (broke
+    PYTHONPATH on Windows). The preflight cell now also runs `bayesmm doctor` for fast
+    onboarding; stale `py*_metamodeling_*` env references replaced with pointers to
+    `bayesmm doctor` / `bayesmm setup`.
+  - `pytest.ini`: dropped `projects/tcr_signaling` from `testpaths` — collecting the
+    submodule under the parent's `filterwarnings = error` turned its unregistered
+    `deterministic` marker into a collection error. The submodule is tested from inside
+    itself (its own pytest.ini).
+  - `config/diagnose.py`: Python-floor advisory aligned to the real floor (`>=3.12` per
+    pyproject.toml; was warning at `< 3.11`).
+  - `tutorial.py::run_tool`: a bare `python` now also routes through `sys.executable`
+    (conda-on-Windows PATH robustness).
+- Added `.github/workflows/ci.yml`: matrix CI on ubuntu/windows/macos × py3.12 — install
+  with `[pymc,sbi]`, ruff lint + format, fast test suite, and a `bayesmm doctor` / `setup`
+  smoke. This is the authoritative Windows + Linux verification (cannot be run from a
+  macOS dev box). The `tcr_signaling` submodule is intentionally out of CI scope (native
+  CMake/Metal build).
+- Note: a local Linux-via-Docker run was planned, but this machine has the `docker` CLI
+  with no daemon / Docker Desktop — Linux is instead covered by the CI `ubuntu-latest` leg.
+
 ## Open issues
 - Tutorial 2 full run depends on external BioModels download; in restricted/offline sandboxes this step will fail while validate/plan still pass.
 - PyMC backend tests skip automatically when `pymc` is not installed in the active environment.

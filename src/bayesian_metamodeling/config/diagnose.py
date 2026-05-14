@@ -28,13 +28,13 @@ def _wheel_advisory(snap, backends: dict[str, dict[str, Any]]) -> list[str]:
             if not backends[pkg]["installed"]:
                 notes.append(
                     f"Python {snap.python.version} on Windows: prebuilt wheels for "
-                    f"'{pkg}' may not yet be available. Consider Python 3.11 or 3.12, "
+                    f"'{pkg}' may not yet be available. Consider Python 3.12, "
                     "or a conda install (`conda install -c conda-forge pytorch sbi`)."
                 )
-    if py < (3, 11):
+    if py < (3, 12):
         notes.append(
-            f"Python {snap.python.version} is below the supported floor (3.11). "
-            "Upgrade your interpreter."
+            f"Python {snap.python.version} is below the supported floor (3.12, per "
+            "pyproject.toml). Upgrade your interpreter."
         )
     return notes
 
