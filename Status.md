@@ -650,6 +650,38 @@
   - `Status.md`: recorded all 8 fixes
 - Validation: `ruff format .`, `ruff check .`, `pytest -q -m "not slow"` all pass
 
+## 2026-05-14: joint multi-output surrogates, configurer, cross-platform tutorials
+Ported from `main` (PR #2 had merged the same features there against the old
+`metamodeler` package name) and adapted for develop's `bayesian_metamodeling`
+package + `bayesmm` CLI. Backup ref `claude/develop-pre-port` retained.
+- **Commit `feat(cli): add bayesmm doctor / bayesmm setup configurer`** — new
+  `bayesian_metamodeling.config` package (`bootstrap`, `diagnose`, `setup`,
+  `platform`, `_import_helpers.probe_package`) + `bayesian_metamodeling.tutorial`
+  helper. CLI gains `bayesmm doctor [--json]` and
+  `bayesmm setup [--non-interactive --backend ...]`. The hardened `_require_*`
+  helpers stay in `surrogates/backends.py`.
+- **Commit `feat(surrogates): joint multi-output learning`** — `SurrogateSpec`
+  accepts any number of outputs; `backend_config.output_correlation` selects
+  `"diagonal"` (independent per-output, default) or `"full"` (joint covariance:
+  PyMC `LKJCholeskyCov`, SBI D-dim density estimator). Dataset loader reads all
+  output columns (`y` is now `(N, D)`). Multi-output posterior models return
+  `(N, n)` for D=1 and `(N, n, D)` for D>=2; `LinearGaussianModel` keeps its
+  original 2-D contract. Payload schema bumped to `..._v2` with v1 read-back.
+  `SbiNPEPosteriorModel` keeps a back-compatible constructor for the old
+  `posterior=` / `output_name=` / scalar-`y_mean` call sites.
+- **Commit `chore(tutorials): cross-platform notebooks`** — converted the
+  remaining `%%bash` cells in Tutorials 3/4/5/6/7/8/9 to in-notebook
+  `run_mm_cli` / `run_tool` helpers (no `%%bash`, no `PYTHONPATH=src`); each
+  notebook bootstraps and chdir's to the repo root. Added `environment.yml`.
+  README + tutorials/README rewritten with cross-platform install + configurer
+  notes; README doc-map paths de-absolutized. Tutorial_9's quality gate scoped
+  to `src tests` (was `.`, which dragged in the unrelated tcr_signaling submodule).
+- Worked around a ruff 0.15.12 formatter bug that unwraps bare `except (A, B):`
+  tuples into invalid `except A, B:` (`config/platform.py`).
+- Validation: all 10 tutorials execute end-to-end via `jupyter execute` on the
+  `py312_bayesmm_sbi` env; `ruff check src tests` clean; fast suite
+  (`pytest -q -m "not slow" tests`) green.
+
 ## Open issues
 - Tutorial 2 full run depends on external BioModels download; in restricted/offline sandboxes this step will fail while validate/plan still pass.
 - PyMC backend tests skip automatically when `pymc` is not installed in the active environment.

@@ -17,4 +17,8 @@ def test_tutorial_6_uses_portable_paths_and_pytest_invocation():
 
     assert "/Users/barak/Downloads/metamodeler_codex_scaffold_docs" not in text
     assert "repo_root = cwd" in text
-    assert "PYTHONPATH=src python -m pytest -q tests/test_surrogate_backends.py" in text
+    # Tutorials are cross-platform: no %%bash, no POSIX-only PYTHONPATH prefix.
+    # The pytest verification step runs through the in-notebook run_tool helper.
+    assert "%%bash" not in text
+    assert "PYTHONPATH=src" not in text
+    assert "run_tool('pytest', '-q', 'tests/test_surrogate_backends.py'" in text

@@ -9,15 +9,16 @@ Metamodeler is a CLI-first framework for automated metamodeling:
 This repository is currently in planning/scaffold phase. The code implementation is intentionally staged.
 
 ## Documentation map
-- Product requirements: `/Users/barak/Downloads/metamodeler_codex_scaffold_docs/PRD.md`
-- Technical design: `/Users/barak/Downloads/metamodeler_codex_scaffold_docs/TechSpec.md`
-- Code design validation: `/Users/barak/Downloads/metamodeler_codex_scaffold_docs/CodeDesign.md`
-- Tutorial hub (notebook): `/Users/barak/Downloads/metamodeler_codex_scaffold_docs/tutorials/Tutorial_0.ipynb`
-- Tutorial sequence (notebooks): `/Users/barak/Downloads/metamodeler_codex_scaffold_docs/tutorials/Tutorial_1.ipynb` ... `/Users/barak/Downloads/metamodeler_codex_scaffold_docs/tutorials/Tutorial_9.ipynb`
-- Tutorial folder index: `/Users/barak/Downloads/metamodeler_codex_scaffold_docs/tutorials/README.md`
-- Project execution status and decisions: `/Users/barak/Downloads/metamodeler_codex_scaffold_docs/Status.md`
-- Prompt workflow for Codex: `/Users/barak/Downloads/metamodeler_codex_scaffold_docs/PROMPT_TO_CODEX.md`
-- Agent operating constraints: `/Users/barak/Downloads/metamodeler_codex_scaffold_docs/AGENTS.md`
+All paths are relative to the repo root.
+- Product requirements: `PRD.md`
+- Technical design: `TechSpec.md`
+- Code design validation: `CodeDesign.md`
+- Tutorial hub (notebook): `tutorials/Tutorial_0.ipynb`
+- Tutorial sequence (notebooks): `tutorials/Tutorial_1.ipynb` ... `tutorials/Tutorial_9.ipynb`
+- Tutorial folder index: `tutorials/README.md`
+- Project execution status and decisions: `Status.md`
+- Prompt workflow for Codex: `PROMPT_TO_CODEX.md`
+- Agent operating constraints: `AGENTS.md`
 
 ## Planned CLI flow (v1)
 1) `bayesmm validate spec.json`
@@ -48,6 +49,35 @@ This is the canonical path for DOE sweep numeric results across:
 - `examples/surrogates/surrogate.toy.pymc_gp.json`: toy surrogate training spec.
 - `examples/metamodels/metamodel.simple.json`: coupled metamodel spec for sampling flow.
 
+## Install (cross-platform)
+
+Runs on Python 3.12+ on Windows, macOS, and Linux. Clone the repo, then either:
+
+**conda (recommended)** — `conda env create -f environment.yml && conda activate bayesian-metamodeling`
+
+**pip + venv**:
+```
+python -m venv .venv
+# bash/zsh:            source .venv/bin/activate
+# Windows PowerShell:  .venv\Scripts\Activate.ps1
+# Windows cmd:         .venv\Scripts\activate.bat
+pip install -e ".[pymc,sbi]"
+```
+
+After install, verify your environment and get install hints with the configurer:
+```
+bayesmm doctor        # diagnose OS, Python, env, installed backends (--json for machine output)
+bayesmm setup         # interactive; or: bayesmm setup --non-interactive --backend pymc,sbi
+```
+
+## Multi-output (joint) surrogates
+`SurrogateSpec` accepts multiple outputs (`outputs: ["y1", "y2", ...]`). Set
+`backend_config.output_correlation`:
+- `"diagonal"` (default): independent per-output models — fast.
+- `"full"`: joint covariance (PyMC: `LKJCholeskyCov` prior; SBI: a D-dim density estimator).
+
+See `examples/surrogates/surrogate.toy.multi_output.json`.
+
 ## Optional Surrogate Backends
 The surrogate interface is backend-neutral, but some backends require optional dependencies.
 
@@ -57,6 +87,7 @@ The surrogate interface is backend-neutral, but some backends require optional d
 - Install SBI backend support in the project conda environment:
   - `conda install -n <env_name> -c conda-forge pytorch sbi`
   - or `pip install -e '.[sbi]'`
+- Run `bayesmm doctor` any time to see exactly which backends are present.
 - `pymc` is the modern package (PyMC v5), and is the supported successor to legacy `pymc3`.
 - If `pymc_gp` is selected without PyMC installed, `bayesmm surrogate fit` raises an actionable install error.
 - If `sbi_npe` is selected without `sbi`/`torch` installed, `bayesmm surrogate fit` raises an actionable install error.

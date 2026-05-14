@@ -1,0 +1,19 @@
+name: bayesian-metamodeling
+channels:
+  - conda-forge
+dependencies:
+  - python>=3.12,<3.15
+  - pip
+  - pydantic>=2,<3
+  - requests>=2,<3
+  - scipy>=1.11,<2
+  - numpy
+  - jupyter
+  - matplotlib
+  # Optional surrogate backends — comment out if not needed
+  - pymc>=5,<6
+  - arviz>=0.17,<1
+  - pytorch>=2,<3
+  - sbi>=0.22,<1
+  - pip:
+      - -e .
