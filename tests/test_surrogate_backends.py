@@ -100,7 +100,7 @@ def test_pymc_gp_backend_fit_sample_and_logprob(monkeypatch, tmp_path):
     logp = model.log_prob(inputs, outputs)
     summary = model.summary(inputs)
     target = 1.7 * np.asarray([0.1, 0.5]) - 0.8 * np.asarray([0.0, -0.2]) + 0.2
-    mse = float(np.mean((np.asarray(summary["mean"]["y"], dtype=float) - target) ** 2))
+    mse = float(np.mean((np.asarray(summary["mean"], dtype=float) - target) ** 2))
 
     assert draws.shape == (2, 32)
     assert np.isfinite(logp).all()
@@ -163,7 +163,7 @@ def test_sbi_npe_backend_fit_sample_and_logprob(monkeypatch, tmp_path):
     logp = model.log_prob(inputs, outputs)
     summary = model.summary(inputs)
     target = 1.7 * np.asarray([0.2, -0.1]) - 0.8 * np.asarray([0.3, 0.4]) + 0.2
-    mse = float(np.mean((np.asarray(summary["mean"]["y"], dtype=float) - target) ** 2))
+    mse = float(np.mean((np.asarray(summary["mean"], dtype=float) - target) ** 2))
 
     assert draws.shape == (2, 16)
     assert np.isfinite(logp).all()
@@ -263,7 +263,7 @@ def test_backend_specific_fit_quality_increasing_difficulty(monkeypatch, tmp_pat
             inputs_payload={"a": [0.1, 0.5, 1.0], "b": [0.2, -0.3, 0.7]},
             n=64,
         )
-        means = np.asarray(eval_result["summary"]["mean"]["y"], dtype=float)
+        means = np.asarray(eval_result["summary"]["mean"], dtype=float)
         target = 1.7 * np.asarray([0.1, 0.5, 1.0]) - 0.8 * np.asarray([0.2, -0.3, 0.7]) + 0.2
         mse_values.append(float(np.mean((means - target) ** 2)))
 

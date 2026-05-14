@@ -30,10 +30,12 @@ def test_pymc_v1_payload_loads_as_d1_v2(tmp_path):
     logp = model.log_prob(inputs, outputs)
     summary = model.summary(inputs)
 
-    # Single-output models use the squeeze form (N, n).
+    # Single-output models use the squeeze form: samples (N, n), summary["mean"]
+    # a flat list of length N (not a dict keyed by output name).
     assert samples.shape == (2, 8)
     assert np.isfinite(logp).all()
-    assert "y" in summary["mean"]
+    assert isinstance(summary["mean"], list)
+    assert len(summary["mean"]) == 2
 
 
 def test_pymc_v1_linear_gaussian_payload_loads(tmp_path):

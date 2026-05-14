@@ -200,10 +200,8 @@ class PymcPosteriorLinearModel:
             predictive_std = np.sqrt(np.var(mu, axis=1) + mean_var[None, :])
 
         return {
-            "mean": {name: point_mean[:, i].tolist() for i, name in enumerate(self.output_names)},
-            "std": {
-                name: predictive_std[:, i].tolist() for i, name in enumerate(self.output_names)
-            },
+            "mean": _named_or_squeezed(point_mean, self.output_names),
+            "std": _named_or_squeezed(predictive_std, self.output_names),
             "posterior_draws": int(mu.shape[1]),
             "n": int(point_mean.shape[0]),
             "output_correlation": self.output_correlation,
@@ -344,15 +342,11 @@ class SbiNPEPosteriorModel:
         draws = self.sample(inputs=inputs, n=self.summary_samples, seed=0)
         if draws.ndim == 2:  # single-output squeeze form
             draws = draws[:, :, None]
+        mean_2d = draws.mean(axis=1)  # (N, D)
+        std_2d = draws.std(axis=1)  # (N, D)
         return {
-            "mean": {
-                name: draws[:, :, i].mean(axis=1).tolist()
-                for i, name in enumerate(self.output_names)
-            },
-            "std": {
-                name: draws[:, :, i].std(axis=1).tolist()
-                for i, name in enumerate(self.output_names)
-            },
+            "mean": _named_or_squeezed(mean_2d, self.output_names),
+            "std": _named_or_squeezed(std_2d, self.output_names),
             "posterior_draws": int(self.summary_samples),
             "n": int(draws.shape[0]),
             "output_correlation": self.output_correlation,
@@ -555,6 +549,19 @@ def _ensure_2d(y: np.ndarray) -> np.ndarray:
     if y.ndim == 1:
         return y.reshape(-1, 1)
     return y
+
+
+def _named_or_squeezed(values_2d: np.ndarray, names: list[str]):
+    """Format per-output columns for a summary dict.
+
+    Single-output (D=1) collapses to a flat list — the historical contract that
+    downstream consumers (`np.array(summary["mean"])`) depend on. Multi-output
+    (D>=2) returns a dict keyed by output name. Mirrors the squeeze convention
+    used by ``sample()``.
+    """
+    if len(names) == 1:
+        return values_2d[:, 0].tolist()
+    return {name: values_2d[:, i].tolist() for i, name in enumerate(names)}
 
 
 def _resolve_output_names(output_names: list[str] | None, output_name: str | None) -> list[str]:
