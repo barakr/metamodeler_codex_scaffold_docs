@@ -119,28 +119,28 @@ class PymcPosteriorLinearModel:
         """Posterior-predictive samples.
 
         Shape ``(N, n)`` for single-output (D=1), ``(N, n, D)`` for multi-output.
+        Fully vectorized — no per-row/per-sample Python loop.
         """
         mu = self._predictive_mu(inputs)  # (N, S, D)
         n_rows, n_draws, d = mu.shape
         rng = np.random.default_rng(seed)
-        out = np.empty((n_rows, n, d), dtype=float)
 
-        draw_idx = rng.integers(0, n_draws, size=(n_rows, n))
+        draw_idx = rng.integers(0, n_draws, size=(n_rows, n))  # (N, n)
+        selected_mu = np.take_along_axis(mu, draw_idx[:, :, None], axis=1)  # (N, n, D)
+
         if self.output_correlation == "full":
-            chol = self.posterior_chol  # (S, D, D)
-            assert chol is not None
-            z = rng.normal(size=(n_rows, n, d))
-            for r in range(n_rows):
-                for k in range(n):
-                    s = draw_idx[r, k]
-                    out[r, k] = mu[r, s] + chol[s] @ z[r, k]
+            if self.posterior_chol is None:
+                raise ValueError("output_correlation='full' requires posterior_chol")
+            selected_chol = self.posterior_chol[draw_idx]  # (N, n, D, D)
+            z = rng.normal(size=(n_rows, n, d))  # (N, n, D)
+            # out = mu + chol @ z, batched over (N, n).
+            out = selected_mu + np.einsum("nkij,nkj->nki", selected_chol, z)
         else:
-            sigma = self.posterior_sigma  # (S, D)
-            assert sigma is not None
-            for r in range(n_rows):
-                for k in range(n):
-                    s = draw_idx[r, k]
-                    out[r, k] = rng.normal(loc=mu[r, s], scale=sigma[s])
+            if self.posterior_sigma is None:
+                raise ValueError("output_correlation='diagonal' requires posterior_sigma")
+            selected_sigma = self.posterior_sigma[draw_idx]  # (N, n, D)
+            out = rng.normal(loc=selected_mu, scale=selected_sigma)
+
         return out[:, :, 0] if d == 1 else out
 
     def log_prob(self, inputs: dict[str, np.ndarray], outputs: dict[str, np.ndarray]) -> np.ndarray:
@@ -162,7 +162,8 @@ class PymcPosteriorLinearModel:
 
         if self.output_correlation == "full":
             chol = self.posterior_chol  # (S, D, D)
-            assert chol is not None
+            if chol is None:
+                raise ValueError("output_correlation='full' requires posterior_chol")
             covs = np.einsum("sij,skj->sik", chol, chol)  # (S, D, D)
             logp_per_draw = np.empty((n_rows, n_draws), dtype=float)
             for s in range(n_draws):
@@ -170,7 +171,8 @@ class PymcPosteriorLinearModel:
                 logp_per_draw[:, s] = rv.logpdf(y - mu[:, s, :])
         else:
             sigma = self.posterior_sigma  # (S, D)
-            assert sigma is not None
+            if sigma is None:
+                raise ValueError("output_correlation='diagonal' requires posterior_sigma")
             sigma_clip = np.clip(sigma, a_min=1e-8, a_max=None)
             var = sigma_clip[None, :, :] ** 2  # (1, S, D)
             diff = y[:, None, :] - mu  # (N, S, D)
@@ -185,13 +187,15 @@ class PymcPosteriorLinearModel:
 
         if self.output_correlation == "full":
             chol = self.posterior_chol
-            assert chol is not None
+            if chol is None:
+                raise ValueError("output_correlation='full' requires posterior_chol")
             covs = np.einsum("sij,skj->sik", chol, chol)  # (S, D, D)
             mean_diag_var = np.mean(np.diagonal(covs, axis1=1, axis2=2), axis=0)  # (D,)
             predictive_std = np.sqrt(np.var(mu, axis=1) + mean_diag_var[None, :])
         else:
             sigma = self.posterior_sigma
-            assert sigma is not None
+            if sigma is None:
+                raise ValueError("output_correlation='diagonal' requires posterior_sigma")
             mean_var = np.mean(sigma**2, axis=0)  # (D,)
             predictive_std = np.sqrt(np.var(mu, axis=1) + mean_var[None, :])
 

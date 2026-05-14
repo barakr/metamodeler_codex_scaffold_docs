@@ -1,42 +1,21 @@
 """Configurer for `bayesmm setup`.
 
-Generates platform-correct install commands for the user's chosen backends and
-optionally writes a project-local config file (`bayesian_metamodeling.config.json`) with
-default backend settings (e.g. `output_correlation`, `density_estimator`).
+Detects the user's platform and prints the OS-correct install commands for the
+backends they want. Advisory only: it never installs anything and never writes
+state — fits stay fully determined by the SurrogateSpec.
 
-In `interactive=True` mode, prompts via `input()`. In `interactive=False`
-mode, all choices come from arguments — suitable for scripting and tests.
+In `interactive=True` mode it prompts via `input()` for the backend list. In
+`interactive=False` mode the backend list comes from arguments — suitable for
+scripting and tests.
 """
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
 from typing import Any
 
-from bayesian_metamodeling.config.bootstrap import find_repo_root
 from bayesian_metamodeling.config.platform import PlatformSnapshot, snapshot
 
 _VALID_BACKENDS: frozenset[str] = frozenset({"pymc", "sbi"})
-
-_DEFAULT_CONFIG: dict[str, Any] = {
-    "schema_version": "1.0",
-    "defaults": {
-        "pymc_gp": {
-            "output_correlation": "diagonal",
-            "draws": 300,
-            "tune": 300,
-            "chains": 1,
-            "target_accept": 0.9,
-        },
-        "sbi_npe": {
-            "output_correlation": "diagonal",
-            "density_estimator": "maf",
-            "max_num_epochs": 120,
-            "training_batch_size": 32,
-        },
-    },
-}
 
 
 def _normalize_backends(backends: list[str] | str | None) -> list[str]:
@@ -95,60 +74,36 @@ def format_install_commands(snap: PlatformSnapshot, backends: list[str]) -> list
     return commands
 
 
-def _prompt_yes_no(question: str, default: bool = True) -> bool:
-    suffix = "[Y/n]" if default else "[y/N]"
-    raw = input(f"{question} {suffix} ").strip().lower()
-    if not raw:
-        return default
-    return raw in {"y", "yes"}
-
-
 def _prompt_backends() -> list[str]:
-    raw = input(
-        "Which optional backends do you want?\n"
-        "  Choices: pymc, sbi, pymc,sbi, none [default: pymc,sbi]: "
-    ).strip()
+    try:
+        raw = input(
+            "Which optional backends do you want?\n"
+            "  Choices: pymc, sbi, pymc,sbi, none [default: pymc,sbi]: "
+        ).strip()
+    except EOFError:
+        # Non-interactive stdin (piped / CI): fall back to the default set.
+        return ["pymc", "sbi"]
     if not raw:
         return ["pymc", "sbi"]
     return _normalize_backends(raw)
-
-
-def _write_config(repo_root: Path, backends: list[str]) -> Path:
-    config_path = repo_root / "bayesian_metamodeling.config.json"
-    payload = json.loads(json.dumps(_DEFAULT_CONFIG))
-    payload["selected_backends"] = backends
-    config_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
-    return config_path
 
 
 def setup(
     *,
     interactive: bool = True,
     install_backends: list[str] | str | None = None,
-    write_config: bool = True,
-    repo_root: Path | None = None,
 ) -> dict[str, Any]:
     """Run the configurer.
 
-    Returns a dict with the chosen backends, the install commands generated,
-    and the path to the written config (if any). Never executes installs;
-    prints them so the user can review and run themselves.
+    Detects the platform and prints OS-correct install commands for the chosen
+    backends. Returns a dict with the chosen backends and the generated
+    commands. Never executes installs and never writes files.
     """
     snap = snapshot()
-    if repo_root is None:
-        try:
-            repo_root = find_repo_root()
-        except FileNotFoundError:
-            repo_root = None
 
     backends = _normalize_backends(install_backends)
-    if interactive:
-        if not backends:
-            backends = _prompt_backends()
-        if write_config and not _prompt_yes_no(
-            "Write bayesian_metamodeling.config.json with default backend settings?", default=True
-        ):
-            write_config = False
+    if interactive and not backends:
+        backends = _prompt_backends()
 
     commands = format_install_commands(snap, backends)
 
@@ -156,21 +111,12 @@ def setup(
     for cmd in commands:
         print(f"  {cmd}")
 
-    config_path: Path | None = None
-    if write_config and repo_root is not None:
-        config_path = _write_config(repo_root, backends)
-        print(f"\nWrote default config: {config_path}")
-    elif write_config and repo_root is None:
-        print("\nSkipped config write: no repo root detected.")
-
     print("\nNext steps:")
-    print("  1) Run the install command above (or `bayesmm doctor` to confirm what's missing).")
-    print("  2) Re-run `bayesmm doctor` to verify backends are present.")
+    print("  1) Run the install command above.")
+    print("  2) Run `bayesmm doctor` to verify the backends are present.")
     print("  3) Try a tutorial: `jupyter execute tutorials/Tutorial_1.ipynb`.")
 
     return {
         "backends": backends,
         "install_commands": commands,
-        "config_path": str(config_path) if config_path else None,
-        "repo_root": str(repo_root) if repo_root else None,
     }

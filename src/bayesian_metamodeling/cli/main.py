@@ -144,25 +144,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     setup_parser = subparsers.add_parser(
-        "setup", help="Suggest install commands and write a default config"
+        "setup", help="Detect the platform and suggest OS-correct install commands"
     )
     setup_parser.add_argument(
         "--non-interactive",
         dest="non_interactive",
         action="store_true",
-        help="Do not prompt; use --backend and flags directly",
+        help="Do not prompt; use --backend directly",
     )
     setup_parser.add_argument(
         "--backend",
         default=None,
         help="Comma-separated backends to install: pymc, sbi, 'pymc,sbi', or 'none'",
-    )
-    setup_parser.add_argument(
-        "--no-write-config",
-        dest="write_config",
-        action="store_false",
-        default=True,
-        help="Do not write bayesian-metamodeling.config.json",
     )
 
     return parser
@@ -559,13 +552,9 @@ def _doctor_command(*, as_json: bool) -> int:
     return 0
 
 
-def _setup_command(*, interactive: bool, install_backends: str | None, write_config: bool) -> int:
+def _setup_command(*, interactive: bool, install_backends: str | None) -> int:
     try:
-        setup(
-            interactive=interactive,
-            install_backends=install_backends,
-            write_config=write_config,
-        )
+        setup(interactive=interactive, install_backends=install_backends)
     except ValueError as exc:
         print(f"Setup failed: {exc}")
         return 1
@@ -635,7 +624,6 @@ def main() -> int:
         return _setup_command(
             interactive=not bool(args.non_interactive),
             install_backends=args.backend,
-            write_config=bool(args.write_config),
         )
 
     parser.print_help()

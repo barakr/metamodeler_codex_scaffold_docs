@@ -1,11 +1,11 @@
-"""Tests for the cross-platform tutorial bootstrap helper."""
+"""Tests for the cross-platform tutorial bootstrap + runner helpers."""
 
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 
-from bayesian_metamodeling.tutorial import bootstrap, find_repo_root, run_cli
+from bayesian_metamodeling.tutorial import bootstrap, find_repo_root, run_mm_cli, run_tool
 
 
 def test_bootstrap_returns_repo_root_with_marker():
@@ -14,11 +14,23 @@ def test_bootstrap_returns_repo_root_with_marker():
     assert (root / "src" / "bayesian_metamodeling").is_dir()
 
 
-def test_run_cli_executes_help_without_shell(tmp_path):
-    # Calling `bayesmm --version` via the helper should succeed and print usage text.
-    result = run_cli("--version", capture=True)
-    assert result.returncode == 0
-    assert "bayesian-metamodeling" in result.stdout.lower()
+def test_run_mm_cli_executes_version_in_process():
+    # Calling `bayesmm --version` in-process should succeed and print the name.
+    exit_code = run_mm_cli("--version")
+    assert exit_code == 0
+
+
+def test_run_mm_cli_check_false_swallows_nonzero_exit():
+    # A bad subcommand returns non-zero; check=False must not raise.
+    exit_code = run_mm_cli("validate", "does/not/exist.json", check=False)
+    assert exit_code != 0
+
+
+def test_run_tool_runs_pytest_collect_only():
+    # run_tool routes pytest/ruff through `python -m`; a trivial collect-only
+    # invocation must succeed cross-platform.
+    exit_code = run_tool("pytest", "--collect-only", "-q", "tests/test_tutorial_bootstrap.py")
+    assert exit_code == 0
 
 
 def test_bootstrap_chdir_changes_cwd(tmp_path, monkeypatch):
