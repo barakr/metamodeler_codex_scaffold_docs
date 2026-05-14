@@ -102,6 +102,32 @@ def _extract_scalar_from_sweep_row(
     raise ValueError(f"Output '{out_name}' not found in centralized sweep row")
 
 
+def _extract_output_row_from_json(
+    outputs: dict[str, Any],
+    output_names: list[str],
+    summary_config: dict[str, Any] | None,
+    outputs_path: Path,
+) -> list[float]:
+    row: list[float] = []
+    for name in output_names:
+        if name not in outputs:
+            raise ValueError(f"Output '{name}' missing in {outputs_path}")
+        normalized_value = _normalize_output_value(outputs[name], name)
+        row.append(_extract_scalar_output(normalized_value, summary_config))
+    return row
+
+
+def _extract_output_row_from_sweep(
+    row: dict[str, str],
+    output_names: list[str],
+    summary_config: dict[str, Any] | None,
+) -> list[float]:
+    return [
+        _extract_scalar_from_sweep_row(row, out_name=name, summary_config=summary_config)
+        for name in output_names
+    ]
+
+
 def _load_from_centralized_sweeps(
     spec: SurrogateSpec, dataset_root: Path
 ) -> tuple[np.ndarray, np.ndarray]:
@@ -114,8 +140,7 @@ def _load_from_centralized_sweeps(
         raise ValueError(f"No centralized sweep CSV files found under: {sweeps_root}")
 
     x_rows: list[list[float]] = []
-    y_rows: list[float] = []
-    out_name = spec.outputs[0]
+    y_rows: list[list[float]] = []
 
     for csv_path in sweep_csv_paths:
         with csv_path.open(newline="", encoding="utf-8") as handle:
@@ -127,9 +152,9 @@ def _load_from_centralized_sweeps(
                     continue
                 x_rows.append([float(row[name]) for name in spec.inputs])
                 y_rows.append(
-                    _extract_scalar_from_sweep_row(
+                    _extract_output_row_from_sweep(
                         row,
-                        out_name=out_name,
+                        output_names=spec.outputs,
                         summary_config=spec.summary_config,
                     )
                 )
@@ -140,6 +165,12 @@ def _load_from_centralized_sweeps(
 
 
 def load_tabular_dataset(spec: SurrogateSpec) -> tuple[np.ndarray, np.ndarray, str]:
+    """Load (x, y, digest) from a run store.
+
+    `x` has shape `(N, n_features)`. `y` has shape `(N, D)` where
+    `D = len(spec.outputs)`; D=1 (single output) is the special case of the
+    generic D-dimensional reader.
+    """
     dataset_root = _resolve_dataset_root(spec.dataset_ref)
     runs_root = dataset_root / "runs"
 
@@ -150,7 +181,7 @@ def load_tabular_dataset(spec: SurrogateSpec) -> tuple[np.ndarray, np.ndarray, s
             raise ValueError(f"Run store does not exist: {runs_root}")
 
         x_rows: list[list[float]] = []
-        y_rows: list[float] = []
+        y_rows: list[list[float]] = []
 
         for run_dir in sorted(path for path in runs_root.iterdir() if path.is_dir()):
             inputs_path = run_dir / "inputs.json"
@@ -162,12 +193,11 @@ def load_tabular_dataset(spec: SurrogateSpec) -> tuple[np.ndarray, np.ndarray, s
             outputs = json.loads(outputs_path.read_text())
 
             x_rows.append([float(inputs[name]) for name in spec.inputs])
-
-            out_name = spec.outputs[0]
-            if out_name not in outputs:
-                raise ValueError(f"Output '{out_name}' missing in {outputs_path}")
-            normalized_value = _normalize_output_value(outputs[out_name], out_name)
-            y_rows.append(_extract_scalar_output(normalized_value, spec.summary_config))
+            y_rows.append(
+                _extract_output_row_from_json(
+                    outputs, spec.outputs, spec.summary_config, outputs_path
+                )
+            )
 
         if not x_rows:
             raise ValueError(f"No usable runs found in {runs_root}")

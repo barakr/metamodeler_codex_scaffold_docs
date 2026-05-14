@@ -126,7 +126,8 @@ def _tool_version(executable: str, args: list[str]) -> str | None:
             check=False,
             timeout=5,
         )
-    except OSError, subprocess.TimeoutExpired:
+    except Exception:
+        # Best-effort version probe: never raise. Covers OSError, TimeoutExpired, etc.
         return None
     output = (result.stdout or result.stderr or "").strip().splitlines()
     return output[0] if output else None

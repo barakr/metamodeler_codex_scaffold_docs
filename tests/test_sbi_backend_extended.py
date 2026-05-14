@@ -193,7 +193,7 @@ def test_sbi_model_summary_uses_configured_draws(monkeypatch):
     assert called == {"n": 7, "seed": 0}
     assert summary["posterior_draws"] == 7
     assert summary["n"] == 2
-    assert np.allclose(summary["mean"], np.array([7.0, 8.0], dtype=float))
+    assert np.allclose(summary["mean"]["y"], np.array([7.0, 8.0], dtype=float))
 
 
 def test_make_sbi_summary_writer_falls_back_without_tensorboard(monkeypatch, tmp_path):
@@ -472,12 +472,12 @@ def test_save_backend_payload_sbi_contains_required_fields(monkeypatch, tmp_path
     backends.save_backend_payload(model, payload_path)
     payload = json.loads(payload_path.read_text())
 
-    assert payload["model_type"] == "sbi_npe_posterior"
+    assert payload["model_type"] == "sbi_npe_posterior_v2"
     assert payload["serialization"] == "torch_save_base64"
-    assert payload["posterior_blob_b64"] == "blob123"
+    assert payload["posterior_blobs_b64"] == ["blob123"]
     assert payload["summary_samples"] == 19
     assert payload["input_names"] == ["a"]
-    assert payload["output_name"] == "y"
+    assert payload["output_names"] == ["y"]
 
 
 def test_load_backend_model_sbi_defaults_summary_samples(monkeypatch, tmp_path):

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 _ALLOWED_CONFIG_KEYS: dict[str, tuple[str, ...]] = {
-    "pymc_gp": ("draws", "tune", "chains", "target_accept"),
+    "pymc_gp": ("draws", "tune", "chains", "target_accept", "output_correlation"),
     "sbi_npe": (
         "density_estimator",
         "max_num_epochs",
@@ -15,9 +15,20 @@ _ALLOWED_CONFIG_KEYS: dict[str, tuple[str, ...]] = {
         "stop_after_epochs",
         "show_train_summary",
         "summary_samples",
+        "output_correlation",
     ),
     "numpyro_gp": (),
 }
+
+_OUTPUT_CORRELATION_CHOICES: frozenset[str] = frozenset({"diagonal", "full"})
+
+
+def _must_be_choice(backend: str, key: str, value: object, choices: frozenset[str]) -> None:
+    if not isinstance(value, str) or value not in choices:
+        raise ValueError(
+            f"backend_config['{key}'] for backend '{backend}' must be one of "
+            f"{sorted(choices)}; got {value!r}."
+        )
 
 
 def _must_be_positive_int(backend: str, key: str, value: Any) -> None:
@@ -80,6 +91,13 @@ def validate_backend_config(backend: str, backend_config: dict[str, Any]) -> dic
                 _must_be_positive_int(backend, key, config[key])
         if "target_accept" in config:
             _must_be_probability(backend, "target_accept", config["target_accept"])
+        if "output_correlation" in config:
+            _must_be_choice(
+                backend,
+                "output_correlation",
+                config["output_correlation"],
+                _OUTPUT_CORRELATION_CHOICES,
+            )
 
     if backend == "sbi_npe":
         for key in (
@@ -104,6 +122,13 @@ def validate_backend_config(backend: str, backend_config: dict[str, Any]) -> dic
                     "backend_config['density_estimator'] for backend 'sbi_npe' "
                     "must be one of ['maf', 'nsf', 'mdn']."
                 )
+        if "output_correlation" in config:
+            _must_be_choice(
+                backend,
+                "output_correlation",
+                config["output_correlation"],
+                _OUTPUT_CORRELATION_CHOICES,
+            )
 
     if backend == "numpyro_gp" and config:
         raise ValueError(
