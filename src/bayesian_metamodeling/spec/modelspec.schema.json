@@ -59,6 +59,18 @@
           "default": null,
           "title": "Entrypoint"
         },
+        "local_sbml_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Local Sbml Path"
+        },
         "source_url": {
           "anyOf": [
             {

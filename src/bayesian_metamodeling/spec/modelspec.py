@@ -16,6 +16,12 @@ class ArtifactSpec(BaseModel):
     entrypoint: list[str] | None = None
     biomodels_id: str | None = None
     source_url: str | None = None
+    # Optional path (relative to the spec / repo) to a local SBML file used as
+    # the source-of-truth instead of the BioModels HTTP download. When set, the
+    # adapter copies this file into the per-spec cache the first time it's
+    # materialized, so a tutorial can ship a reproducible sample SBML in-tree
+    # and run with no network. Compatible with `MM_BIOMODELS_OFFLINE=1`.
+    local_sbml_path: str | None = None
 
     @model_validator(mode="after")
     def check_required_fields(self) -> "ArtifactSpec":

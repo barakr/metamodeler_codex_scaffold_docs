@@ -845,14 +845,41 @@ package + `bayesmm` CLI. Backup ref `claude/develop-pre-port` retained.
   - SHA256 `sweep_manifest.json`: `90aed85cb7059bd86859bf7a7ec370d57237b6fde6a08968095f9c3c902e43ee`
   - Logs: `tmp/mpi_verify_2026-05-15/pytest.log`
 
+## Tutorial 2 offline path landed (2026-05-15)
+- New env var `MM_BIOMODELS_OFFLINE`: when set truthy and the SBML cache is
+  empty, the adapter (`adapters/biomodels_sbml.py`) raises a clear
+  `RuntimeError` mentioning the missing cache path and a `curl` recipe
+  instead of attempting an HTTP fetch. Used by tutorial / CI / sandboxed
+  workflows where the network is unavailable.
+- New optional field `model.artifact.local_sbml_path` on `ArtifactSpec`: a
+  spec-relative path to a local SBML file. When set, the adapter copies the
+  local file into the per-spec cache (resolved against `repo_root` so the
+  spec stays portable) — no network either way. Letting a tutorial ship its
+  own sample SBML in-tree is now a one-field change.
+- `tutorials/Tutorial_2.ipynb` updated: the bootstrap cell detects
+  `MM_BIOMODELS_OFFLINE` + cache presence and prints an actionable banner
+  with the exact cache path + `curl` recipe; Step 2 (the `bayesmm run`
+  cell) now short-circuits cleanly in offline mode instead of failing. The
+  heatmap analysis cells were already skip-safe ("no sweeps yet").
+- 5 regression tests in `tests/test_biomodels_adapter_offline.py`:
+  offline-env blocks download, offline-env uses existing cache,
+  local_sbml_path seeds the cache (no network), local_sbml_path with
+  missing file errors clearly, and a sanity check that existing example
+  specs (without `local_sbml_path`) still validate.
+- Local verify:
+  - `pytest -q tests/test_biomodels_adapter_offline.py`: 5/5 pass.
+  - `pytest -q -m "not slow" tests`: full fast suite green.
+  - `MM_BIOMODELS_OFFLINE=1 jupyter execute tutorials/Tutorial_2.ipynb`:
+    notebook completes end-to-end with the offline banner + Step 2 skip,
+    no crashes (`tmp/tutorial2_offline_verify/Tutorial_2.executed.ipynb`).
+- Schema artifact regenerated: `src/bayesian_metamodeling/spec/modelspec.schema.json`.
+
 ## Open issues
 (Real, actionable items only. Items here become commits or are intentionally deferred.)
-- **Tutorial 2 offline path**: `tutorials/Tutorial_2.ipynb` Step 2 depends on
-  the BioModels HTTP download. The cache-search loop is partial and there is
-  no `MM_BIOMODELS_OFFLINE`-style escape hatch. Plan: env-var honor in the
-  adapter + optional `local_sbml_path` field on `ArtifactSpec` so a tutorial
-  can ship a sample SBML; tutorial cell prints an actionable banner in
-  offline mode instead of failing.
+
+_All previously-tracked open issues from the cross-platform verification pass
+are now resolved. Subsequent work (mac-specific unified `py312_bayesmm` env
+attempt) is tracked separately under "Local environment notes" below._
 
 ## Designed behavior (skip-safe contract)
 (Documenting intentional behavior so future readers don't reopen these as bugs.)
