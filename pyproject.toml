@@ -11,7 +11,9 @@ requires-python = ">=3.12"
 dependencies = ["pydantic>=2,<3", "requests>=2,<3", "scipy>=1.11,<2"]
 
 [project.optional-dependencies]
+# Framework feature: PyMC GP surrogate backend (T5, T7, T8, T9 use this).
 pymc = ["arviz>=0.17,<1", "pymc>=5,<6"]
+# Framework feature: SBI NPE surrogate backend (T6 uses this).
 # sbi 0.22..0.26+ supported via two compat layers in the backend:
 # (1) `_build_sbi_inference` tries the new `tracker=` kwarg, then the legacy
 #     `summary_writer=`, then no-logger — handles the kwarg rename in 0.26;
@@ -19,6 +21,29 @@ pymc = ["arviz>=0.17,<1", "pymc>=5,<6"]
 #     the `log_metric()` method the new sbi training loop calls.
 # Together these let one wheel work across the full supported sbi range.
 sbi = ["sbi>=0.22,<1", "torch>=2,<3"]
+# Tutorial-only extras (NOT framework runtime). Required to *execute* the
+# Jupyter notebooks in `tutorials/`; not needed if you're using the package
+# from your own scripts. `numpy` is here defensively (transitive via scipy
+# but pinned for tutorial-cell stability).
+tutorials = ["jupyter>=1", "matplotlib>=3.7", "numpy>=1.25"]
+# Tutorial-2-only extras: BioModels SBML simulator (libRoadRunner + tellurium).
+# Required only if you want `bayesmm run` to actually execute SBML models
+# (Tutorial 2). The `bayesmm` CLI itself does not require it; you can
+# validate/plan a BioModels spec without these installed.
+biomodels = ["libroadrunner>=2.5", "tellurium>=2.2"]
+# Convenience union — install everything (framework + both backends + tutorial
+# infrastructure + BioModels). Use this if you want every tutorial to run.
+all = [
+    "arviz>=0.17,<1",
+    "pymc>=5,<6",
+    "sbi>=0.22,<1",
+    "torch>=2,<3",
+    "jupyter>=1",
+    "matplotlib>=3.7",
+    "numpy>=1.25",
+    "libroadrunner>=2.5",
+    "tellurium>=2.2",
+]
 
 [project.scripts]
 bayesmm = "bayesian_metamodeling.cli.main:main"
