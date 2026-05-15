@@ -12,7 +12,10 @@ dependencies = ["pydantic>=2,<3", "requests>=2,<3", "scipy>=1.11,<2"]
 
 [project.optional-dependencies]
 pymc = ["arviz>=0.17,<1", "pymc>=5,<6"]
-sbi = ["sbi>=0.22,<1", "torch>=2,<3"]
+# sbi is pinned <0.26: 0.26 renamed the training-logger kwarg AND changed the
+# tracker object interface (expects `.log_metric()`). The backend is verified
+# against sbi 0.25.x; supporting 0.26+ is a tracked follow-up (see Status.md).
+sbi = ["sbi>=0.22,<0.26", "torch>=2,<3"]
 
 [project.scripts]
 bayesmm = "bayesian_metamodeling.cli.main:main"

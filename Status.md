@@ -711,8 +711,57 @@ package + `bayesmm` CLI. Backup ref `claude/develop-pre-port` retained.
   smoke. This is the authoritative Windows + Linux verification (cannot be run from a
   macOS dev box). The `tcr_signaling` submodule is intentionally out of CI scope (native
   CMake/Metal build).
-- Note: a local Linux-via-Docker run was planned, but this machine has the `docker` CLI
-  with no daemon / Docker Desktop — Linux is instead covered by the CI `ubuntu-latest` leg.
+- Note: Linux verification was subsequently completed locally via Docker — see the
+  2026-05-15 entry below for the run, the two issues it surfaced (`sbi` 0.26 +
+  PyMC/PyTensor BLAS), and the resulting fixes. The CI `ubuntu-latest` leg now
+  has the same fixes baked in.
+
+## Cross-platform compat fixes from Linux Docker re-verify (2026-05-15)
+- Re-verified the `bayesian_metamodeling` fast suite in a fresh `python:3.12`
+  Docker container with the repo mounted (`docker run --rm -v <repo>:/work -w /work
+  -e PYTENSOR_FLAGS=cxx= python:3.12 …`). The first run surfaced two real issues
+  that were silently hidden by the local conda envs:
+  - **sbi 0.26 incompatibility**: pip pulled `sbi 0.26.1` in the container.
+    0.26 renamed the training-logger kwarg `summary_writer` → `tracker` (a
+    `FutureWarning`, fatal under the suite's `filterwarnings = error`) **and**
+    changed the tracker object interface so it now calls `.log_metric()` —
+    `SummaryWriter` doesn't have that method, so even after passing the new
+    kwarg the training loop crashes with `AttributeError`. Scoped fix: pinned
+    `sbi = ["sbi>=0.22,<0.26", "torch>=2,<3"]` in `pyproject.toml`. Verified
+    against sbi 0.25.x. Supporting sbi 0.26+ requires a tracker-protocol shim
+    and is tracked as a follow-up (see Open issues).
+  - **PyMC/PyTensor BLAS**: the bare `python:3.12` image lacks the system BLAS
+    PyTensor needs to compile its C ops, so PyMC tests crashed in compile.
+    Fix: added `PYTENSOR_FLAGS: cxx=` to the CI workflow's job-level `env:`
+    (PyTensor's C-less fallback — already documented for constrained envs in
+    `README`). The same env var is what the local `py312_bayesmm_pymc`
+    verification has used since 2026-02-11.
+- Hardened `_build_sbi_inference` (in `surrogates/backends.py`) to be
+  sbi-version-robust anyway: it now tries the new (`tracker`), legacy
+  (`summary_writer`), then no-logger constructor signatures and uses whichever
+  the installed sbi accepts. This keeps the code forward-compatible for the
+  sbi-0.26 follow-up without requiring it now.
+- Added `pytest` to the CI workflow's install step — `pytest` is a dev tool, not
+  a runtime dependency, so it has to be installed explicitly alongside
+  `[pymc,sbi]` and `ruff`. The original CI workflow was missing it.
+- Test updates in `tests/test_sbi_backend_extended.py`:
+  - Rewrote `test_build_sbi_inference_falls_back_to_snpe` to use the realistic
+    "old sbi" signal — `from sbi.inference import NPE` raises `ImportError`
+    (NPE attribute absent), which is what actually triggers the SNPE path now.
+  - Added `test_build_sbi_inference_uses_tracker_kwarg`: a fake NPE that only
+    accepts the sbi-0.26-style `tracker` kwarg must still be constructed
+    correctly. Locks the new kwarg-trying loop.
+- Re-verification (after the fixes):
+  - **Linux Docker** (`python:3.12` + `PYTENSOR_FLAGS=cxx=`, sbi 0.25.0): full
+    `pytest -m "not slow" tests` green (only the 3 expected backend-deselected
+    skips), `ruff check` clean, `bayesmm doctor` OK, `bayesmm setup
+    --non-interactive --backend pymc,sbi` OK.
+  - **Local `py312_bayesmm_sbi`** (sbi 0.25.0, torch 2.5.1, pymc 5.28.1, arviz
+    0.23.4): full fast suite green (3 expected skips).
+  - **Local `py314_bayesmm`** (python 3.14.3, no optional backends): full fast
+    suite green (backend tests cleanly skip-deselected).
+  - `ruff check src tests` + `ruff format --check src tests` clean on the main
+    repo.
 
 ## Open issues
 - Tutorial 2 full run depends on external BioModels download; in restricted/offline sandboxes this step will fail while validate/plan still pass.
@@ -723,3 +772,8 @@ package + `bayesmm` CLI. Backup ref `claude/develop-pre-port` retained.
 - `py312` environment currently has dependency conflicts due direct `pip` install of `libroadrunner`; this was used for design verification only and should be isolated before production workflows.
 - `libroadrunner` may not be available in the py314 environment; slow BioModels test is expected to skip when dependency is absent.
 - Optional MPI integration test requires launching pytest under `mpirun`; standard local fast test runs skip MPI coverage.
+- `sbi` is pinned `<0.26` because 0.26 not only renamed `summary_writer` -> `tracker`
+  but also changed the tracker object interface (now expects `.log_metric()`).
+  Supporting sbi 0.26+ requires a small tracker-protocol shim (a writer object
+  that exposes both `add_scalar` and `log_metric`) so the two sbi major lines
+  can share `_build_sbi_inference`. Tracked as a follow-up.

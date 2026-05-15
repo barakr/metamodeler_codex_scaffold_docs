@@ -252,15 +252,12 @@ def test_build_sbi_inference_prefers_npe(monkeypatch):
 
 
 def test_build_sbi_inference_falls_back_to_snpe(monkeypatch):
+    """When sbi exposes only the legacy SNPE (no NPE), fall back to SNPE."""
     marker = object()
     monkeypatch.setattr(backends, "_require_sbi", lambda: object())
     monkeypatch.setattr(backends, "_make_sbi_summary_writer", lambda: marker)
 
     fake_inference = types.ModuleType("sbi.inference")
-
-    class BrokenNPE:
-        def __init__(self, density_estimator: str, summary_writer: Any) -> None:  # noqa: ARG002
-            raise RuntimeError("NPE unavailable")
 
     class FakeSNPE:
         def __init__(self, prior: Any, density_estimator: str, summary_writer: Any) -> None:
@@ -268,7 +265,8 @@ def test_build_sbi_inference_falls_back_to_snpe(monkeypatch):
             self.density_estimator = density_estimator
             self.summary_writer = summary_writer
 
-    fake_inference.NPE = BrokenNPE
+    # No `NPE` attribute -> `from sbi.inference import NPE` raises ImportError,
+    # which is the genuine "old sbi" signal that should trigger the SNPE path.
     fake_inference.SNPE = FakeSNPE
     fake_sbi = types.ModuleType("sbi")
     fake_sbi.inference = fake_inference
@@ -280,6 +278,36 @@ def test_build_sbi_inference_falls_back_to_snpe(monkeypatch):
     assert inference.prior is None
     assert inference.density_estimator == "nsf"
     assert inference.summary_writer is marker
+
+
+def test_build_sbi_inference_uses_tracker_kwarg(monkeypatch):
+    """sbi >= 0.26 renamed `summary_writer` -> `tracker`; the new name must be used.
+
+    Regression test: an sbi-0.26-style NPE that only accepts `tracker` (passing
+    `summary_writer` would warn/raise) must still be constructed correctly.
+    """
+    marker = object()
+    monkeypatch.setattr(backends, "_require_sbi", lambda: object())
+    monkeypatch.setattr(backends, "_make_sbi_summary_writer", lambda: marker)
+
+    fake_inference = types.ModuleType("sbi.inference")
+
+    class FakeNPE:
+        # sbi 0.26-style signature: `tracker`, no `summary_writer`.
+        def __init__(self, density_estimator: str, tracker: Any) -> None:
+            self.density_estimator = density_estimator
+            self.tracker = tracker
+
+    fake_inference.NPE = FakeNPE
+    fake_sbi = types.ModuleType("sbi")
+    fake_sbi.inference = fake_inference
+    monkeypatch.setitem(sys.modules, "sbi", fake_sbi)
+    monkeypatch.setitem(sys.modules, "sbi.inference", fake_inference)
+
+    inference = backends._build_sbi_inference("maf")
+    assert isinstance(inference, FakeNPE)
+    assert inference.density_estimator == "maf"
+    assert inference.tracker is marker
 
 
 def test_train_sbi_density_estimator_uses_full_kwargs():

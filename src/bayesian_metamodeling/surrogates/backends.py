@@ -497,20 +497,29 @@ def _make_sbi_summary_writer() -> Any:
 
 def _build_sbi_inference(density_estimator: str):
     _require_sbi()
-    summary_writer = _make_sbi_summary_writer()
+    writer = _make_sbi_summary_writer()
     with _optional_backend_import_context():
         try:
-            from sbi.inference import NPE  # type: ignore[import-not-found]
+            from sbi.inference import NPE as _Inference  # type: ignore[import-not-found]
 
-            return NPE(density_estimator=density_estimator, summary_writer=summary_writer)
-        except Exception:
-            from sbi.inference import SNPE  # type: ignore[import-not-found]
+            base_kwargs: dict[str, Any] = {"density_estimator": density_estimator}
+        except ImportError:
+            from sbi.inference import SNPE as _Inference  # type: ignore[import-not-found]
 
-            return SNPE(
-                prior=None,
-                density_estimator=density_estimator,
-                summary_writer=summary_writer,
-            )
+            base_kwargs = {"prior": None, "density_estimator": density_estimator}
+
+        # sbi renamed the training-logger kwarg `summary_writer` -> `tracker` in
+        # 0.26. Try the new name first, then the legacy name, then construct
+        # without a logger at all — so the code works across sbi 0.22..0.26+.
+        for log_kwarg in ("tracker", "summary_writer", None):
+            kwargs = dict(base_kwargs)
+            if log_kwarg is not None:
+                kwargs[log_kwarg] = writer
+            try:
+                return _Inference(**kwargs)
+            except TypeError:
+                continue
+        return _Inference(**base_kwargs)
 
 
 def _train_sbi_density_estimator(
