@@ -782,6 +782,26 @@ package + `bayesmm` CLI. Backup ref `claude/develop-pre-port` retained.
   only blocker.
 - Re-verified `tests/test_storage_unit.py` (8/8 pass) on macOS POSIX.
 
+## Windows CI fix #2: cross-platform storage.root absolute-path detection (2026-05-15)
+- After the `_filelock` fix landed (66c7a6e) the windows-latest leg got past
+  pytest collection but two tests failed: the `storage.root` validator's
+  "rejects absolute path" check used `pathlib.Path(value).is_absolute()`,
+  which on Windows treats `/tmp/absolute` as drive-relative (not absolute),
+  so the test `payload["storage"]["root"] = "/tmp/absolute"` slipped through:
+  - `tests/test_security_hardening.py::TestStorageRootTraversal::test_rejects_absolute_storage_root`
+  - `tests/test_spec_edge_cases.py::test_modelspec_storage_root_rejects_absolute_path`
+- Fix: `StorageSpec.check_not_absolute` now rejects absoluteness under EITHER
+  convention by checking both `PurePosixPath(value).is_absolute()` and
+  `PureWindowsPath(value).is_absolute()`, plus an explicit
+  `value.startswith(("/", "\\"))` guard for drive-less rooted Windows paths
+  (which pathlib doesn't classify as absolute). The `..` traversal check now
+  splits on either separator. Truth-tabled against 9 inputs (POSIX-abs,
+  Windows-abs, UNC, drive-rooted, traversal with either separator,
+  plain relative).
+- This is the platform-symmetric form of the same security intent: any
+  attempt to escape the project root via an absolute path is rejected on
+  every platform, regardless of which convention the path string uses.
+
 ## Open issues
 - Tutorial 2 full run depends on external BioModels download; in restricted/offline sandboxes this step will fail while validate/plan still pass.
 - PyMC backend tests skip automatically when `pymc` is not installed in the active environment.

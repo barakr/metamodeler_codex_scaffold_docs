@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from pathlib import Path
+from pathlib import PurePosixPath, PureWindowsPath
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
@@ -196,10 +196,23 @@ class StorageSpec(BaseModel):
     @field_validator("root")
     @classmethod
     def check_not_absolute(cls, value: str) -> str:
-        p = Path(value)
-        if p.is_absolute():
+        # Reject absoluteness under EITHER POSIX or Windows conventions so the
+        # rule is platform-independent. Without this, `/tmp/x` would slip
+        # through on Windows (pathlib treats it as drive-relative, not
+        # absolute) and `C:\x` / UNC paths would slip through on POSIX. Also
+        # catch a leading `/` or `\` explicitly, since Windows pathlib does
+        # not flag drive-less rooted paths like `\foo` as absolute even
+        # though they unambiguously try to escape relativeness.
+        if (
+            PurePosixPath(value).is_absolute()
+            or PureWindowsPath(value).is_absolute()
+            or value.startswith(("/", "\\"))
+        ):
             raise ValueError("storage.root must be a project-relative path")
-        if ".." in p.parts:
+        # Same idea for parent-directory traversal: split on either separator
+        # so `..\foo` is caught on POSIX and `../foo` is caught on Windows.
+        parts = value.replace("\\", "/").split("/")
+        if ".." in parts:
             raise ValueError("storage.root must not contain directory traversal (..) sequences")
         return value
 
