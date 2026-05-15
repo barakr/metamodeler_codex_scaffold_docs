@@ -897,5 +897,36 @@ attempt) is tracked separately under "Local environment notes" below._
 (Per-developer machine state, not bugs.)
 - Optional backends are intentionally not installed in the lean
   `py314_bayesmm` env; install them in `py312_bayesmm_pymc` /
-  `py312_bayesmm_sbi` per `bayesmm setup` guidance, or attempt a single
-  unified `py312_bayesmm` env (a tracked mac-specific experiment).
+  `py312_bayesmm_sbi` per `bayesmm setup` guidance, OR use a single
+  unified `py312_bayesmm` env (mac, verified 2026-05-15, see below).
+
+### Unified `py312_bayesmm` env on macOS arm64 (2026-05-15, mac-specific)
+- Goal: one conda env with **both** `pymc` and `sbi` working in the same
+  Python interpreter so the full fast suite passes without backend-tag
+  swapping. Useful for local iteration; project CI keeps the existing
+  matrix and per-backend pins.
+- Recipe (the entire repo's `environment.yml` already has the right pins;
+  just install it under a different name):
+  ```bash
+  conda env create -f environment.yml -n py312_bayesmm
+  conda run -n py312_bayesmm pip install -e . --no-deps
+  # Optional: MPI integration test support (cf. tests/test_mpi_sweep_integration.py)
+  conda install -n py312_bayesmm -c conda-forge -y mpi4py mpich
+  ```
+- Verified versions in this env (macOS arm64): Python 3.12.13,
+  `pymc 5.28.0`, `arviz 0.23.4`, `pytorch 2.10.0`, `sbi 0.26.1`,
+  `pydantic 2.13.4`, `mpi4py 4.1.1` + MPICH (Hydra 5.0.0).
+- Verification: `pytest -q -m "not slow" tests` -> full suite GREEN
+  (3 expected backend-deselected skips). Optional backends both used.
+- **Critical pin discovered during this experiment**: `arviz>=0.17,<1`.
+  Letting conda pull the latest arviz (1.x) breaks PyMC 5.x with
+  `cannot import name 'concat' from 'arviz'` because arviz 1.0 removed
+  `InferenceData` and `concat` from the top-level module. The
+  `environment.yml` already pins this correctly; an ad-hoc
+  `conda create ... pymc arviz` does NOT, since the conda solver picks
+  the newest of each individual package.
+- This experiment also surfaced the sbi 0.26 prior-support `UserWarning`
+  that broke green CI on `eb894ab`; fixed in `c0fec53` by extending the
+  `_sbi_warnings_filtered()` context to all five sbi entry points
+  (training prep, training, build_posterior, posterior.sample,
+  posterior.log_prob).
