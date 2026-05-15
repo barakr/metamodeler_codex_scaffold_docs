@@ -24,7 +24,10 @@ def notebook_path(request):
 
 def test_no_hardcoded_user_paths_in_notebook(notebook_path):
     """No /Users/ or /home/ absolute paths should appear in any notebook source."""
-    content = notebook_path.read_text()
+    # Notebooks are UTF-8 JSON. On Windows, `read_text()` defaults to cp1252
+    # which can't decode typographic chars (em-dash, →, etc.) common in
+    # tutorial prose, breaking CI's windows-latest leg with a UnicodeDecodeError.
+    content = notebook_path.read_text(encoding="utf-8")
     nb = json.loads(content)
     for cell in nb.get("cells", []):
         source = "".join(cell.get("source", []))
@@ -35,7 +38,10 @@ def test_no_hardcoded_user_paths_in_notebook(notebook_path):
 
 def test_no_tmp_old_paths_in_notebook(notebook_path):
     """No tmp/Old/ legacy cache paths should remain in notebooks."""
-    content = notebook_path.read_text()
+    # Notebooks are UTF-8 JSON. On Windows, `read_text()` defaults to cp1252
+    # which can't decode typographic chars (em-dash, →, etc.) common in
+    # tutorial prose, breaking CI's windows-latest leg with a UnicodeDecodeError.
+    content = notebook_path.read_text(encoding="utf-8")
     nb = json.loads(content)
     for cell in nb.get("cells", []):
         source = "".join(cell.get("source", []))
