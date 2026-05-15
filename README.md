@@ -151,6 +151,18 @@ MPI example (launch):
 mpirun -n 4 PYTHONPATH=src python -m bayesian_metamodeling.cli.main run tutorials/specs/model.toy.grid.json
 ```
 
+Optional: verify the MPI single-writer contract end-to-end:
+```bash
+mpirun -n 2 PYTHONPATH=src python -m pytest -q -m mpi tests/test_mpi_sweep_integration.py
+```
+Requires `mpi4py` and an MPI implementation (e.g. `mpich` or `openmpi`) — install
+both via conda for self-contained dependencies:
+`conda install -n <env_name> -c conda-forge mpi4py mpich`. The test runs a
+2x2 grid sweep across two ranks and asserts that exactly one centralized
+`sweep_rows.csv` is produced (rank 0 writer; rank 1 synchronizes via barrier).
+The standard fast suite skips this test automatically when `mpi4py` is
+unavailable or when launched without `mpirun`.
+
 ## Surrogate Troubleshooting
 - `Surrogate fit failed: Invalid backend_config key...`
   - Your backend config includes unsupported keys for the selected backend.
@@ -166,6 +178,31 @@ mpirun -n 4 PYTHONPATH=src python -m bayesian_metamodeling.cli.main run tutorial
 - `Surrogate eval failed: --inputs must be a JSON object ...`
   - `--inputs` must be a dict keyed by input variable names, each value a numeric array.
   - Example: `--inputs '{"a":[0.1,0.2],"b":[1.0,1.5]}'`
+
+## Optional case study: `projects/tcr_signaling`
+The repo includes a real-world scientific reproduction (Neve-Oz, Sherman & Raveh
+2024, *Frontiers in Immunology*) as a git submodule under `projects/tcr_signaling`.
+It is **not** part of the cross-platform CI matrix because of a few constraints
+that don't apply to the rest of the package:
+
+- Native build: requires CMake + a C++ toolchain. The build script is a Makefile;
+  no Windows build script is provided.
+- GPU kernel: the kinetic-segregation GPU path uses Apple Metal and is therefore
+  macOS-only. CPU paths work everywhere.
+- Verified separately on macOS via the submodule's own pytest config; the parent
+  `pytest.ini` does NOT pick up the submodule (its custom `deterministic` marker
+  is only registered inside the submodule).
+- Treated as read-only by the parent repo's tooling — changes go through the
+  submodule's own workflow.
+
+If you cloned without `--recurse-submodules`, the submodule is empty and the
+`bayesian_metamodeling` package is fully usable on its own. Only initialize the
+submodule if you actually need the case study:
+```bash
+git submodule update --init projects/tcr_signaling
+cd projects/tcr_signaling/models/kinetic_segregation && make
+cd projects/tcr_signaling && pytest -q
+```
 
 ## Reliability policy
 - No silent downsampling/subsampling.

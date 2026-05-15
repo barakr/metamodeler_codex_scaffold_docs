@@ -13,8 +13,11 @@ from bayesian_metamodeling.cli.main import main
 @pytest.mark.integration
 @pytest.mark.mpi
 def test_mpi_mode_writes_single_centralized_sweep(monkeypatch, capsys):
-    mpi4py = pytest.importorskip("mpi4py")
-    comm = mpi4py.MPI.COMM_WORLD
+    # `pytest.importorskip("mpi4py")` returns the package but does NOT pull
+    # in the `MPI` submodule (mpi4py never auto-imports it on package import).
+    # Skip on `mpi4py.MPI` directly so we get the real MPI module back.
+    MPI = pytest.importorskip("mpi4py.MPI")
+    comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
     size = comm.Get_size()
     if size < 2:

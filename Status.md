@@ -820,6 +820,31 @@ package + `bayesmm` CLI. Backup ref `claude/develop-pre-port` retained.
 - Local re-verify on `py312_bayesmm_sbi`: full extended suite green
   (24 passed). CI matrix is the authoritative cross-version verification.
 
+## MPI verification + tcr_signaling parent-README note (2026-05-15)
+- Executed `tests/test_mpi_sweep_integration.py` end-to-end under
+  `mpirun -n 2` for the first time. Found and fixed a latent test bug:
+  `pytest.importorskip("mpi4py")` returns the package without auto-importing
+  the `MPI` submodule, so `mpi4py.MPI.COMM_WORLD` raised `AttributeError`.
+  Switched to `MPI = pytest.importorskip("mpi4py.MPI")`. After the fix,
+  both ranks pass — 4/4 DOE points executed, exactly one centralized
+  `sweep_rows.csv` produced (rank 0 writer; rank 1 synchronizes via barrier).
+- Parent `README.md` extended with two new subsections:
+  - "Optional: verify the MPI single-writer contract end-to-end" — gives
+    the exact `mpirun -n 2 python -m pytest -q -m mpi …` command and the
+    `conda install … mpi4py mpich` self-contained install path.
+  - "Optional case study: `projects/tcr_signaling`" — surfaces the
+    submodule's CMake / toolchain / Metal-only / Makefile-only / read-only
+    constraints so a Windows user who clones with `--recurse-submodules`
+    knows what to expect (the submodule is intentionally outside the parent
+    CI matrix).
+- MPI provenance:
+  - mpi4py 4.1.1 / MPICH (Hydra 5.0.0), env `py312_bayesmm_sbi`.
+  - Test session token: `4642208cf3934d1e97077da606240761`.
+  - Sweep id: `262588341e8942399f217ebfa4a28228`; 4/4 successful points.
+  - SHA256 `sweep_rows.csv`: `d491b0bde8e04187dc3f85c0ee8f5c952dcd31d765d05ffd078036b8f792a5ff`
+  - SHA256 `sweep_manifest.json`: `90aed85cb7059bd86859bf7a7ec370d57237b6fde6a08968095f9c3c902e43ee`
+  - Logs: `tmp/mpi_verify_2026-05-15/pytest.log`
+
 ## Open issues
 (Real, actionable items only. Items here become commits or are intentionally deferred.)
 - **Tutorial 2 offline path**: `tutorials/Tutorial_2.ipynb` Step 2 depends on
@@ -828,15 +853,6 @@ package + `bayesmm` CLI. Backup ref `claude/develop-pre-port` retained.
   adapter + optional `local_sbml_path` field on `ArtifactSpec` so a tutorial
   can ship a sample SBML; tutorial cell prints an actionable banner in
   offline mode instead of failing.
-- **MPI integration test verification**: `tests/test_mpi_sweep_integration.py`
-  exists, skip-safes correctly via `pytest.importorskip("mpi4py")` and
-  `world_size < 2`, but no `mpirun -n 2` execution is recorded in the
-  provenance log. Plan: run once, capture the run id + sweep CSV digest,
-  add a 3-line "Optional: MPI execution" subsection to the README.
-- **`tcr_signaling` Windows / cross-platform gaps**: the submodule needs CMake
-  + a C++ toolchain; GPU kernel is Metal-only (macOS); build script is a
-  Makefile. The submodule is read-only here, but the parent `README.md`
-  doesn't mention any of this — surfacing it is a small parent-side doc fix.
 
 ## Designed behavior (skip-safe contract)
 (Documenting intentional behavior so future readers don't reopen these as bugs.)
