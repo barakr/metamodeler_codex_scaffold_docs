@@ -44,7 +44,7 @@ _MAX_INPUTS_JSON_BYTES = 10 * 1024 * 1024  # 10 MB
 
 def _load_json(path: Path) -> dict[str, Any] | None:
     try:
-        return json.loads(path.read_text())
+        return json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
         print(f"Spec file not found: {path}")
         return None

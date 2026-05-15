@@ -969,7 +969,7 @@ def load_backend_model(
     expected_output: str | None = None,
     expected_outputs: list[str] | None = None,
 ) -> SurrogateModel:
-    payload = json.loads(payload_path.read_text())
+    payload = json.loads(payload_path.read_text(encoding="utf-8"))
     model_type = payload.get("model_type", "linear_gaussian")
     payload_inputs = list(payload.get("input_names", []))
     payload_outputs = (

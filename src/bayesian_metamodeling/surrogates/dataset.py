@@ -189,8 +189,8 @@ def load_tabular_dataset(spec: SurrogateSpec) -> tuple[np.ndarray, np.ndarray, s
             if not inputs_path.exists() or not outputs_path.exists():
                 continue
 
-            inputs = json.loads(inputs_path.read_text())
-            outputs = json.loads(outputs_path.read_text())
+            inputs = json.loads(inputs_path.read_text(encoding="utf-8"))
+            outputs = json.loads(outputs_path.read_text(encoding="utf-8"))
 
             x_rows.append([float(inputs[name]) for name in spec.inputs])
             y_rows.append(

@@ -18,7 +18,7 @@ META_REGISTRY_PATH = Path("tmp/meta_registry.json")
 def _load_registry() -> dict[str, str]:
     if not META_REGISTRY_PATH.exists():
         return {}
-    return json.loads(META_REGISTRY_PATH.read_text())
+    return json.loads(META_REGISTRY_PATH.read_text(encoding="utf-8"))
 
 
 def _save_registry(registry: dict[str, str]) -> None:

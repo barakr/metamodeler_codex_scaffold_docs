@@ -57,7 +57,7 @@ def _validate_eval_inputs(
 
 def _load_and_validate_artifact(spec: SurrogateSpec) -> dict[str, Any]:
     _, artifact_path = find_latest_artifact_for_spec(spec.name)
-    artifact = json.loads(artifact_path.read_text())
+    artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
 
     artifact_backend = artifact.get("backend")
     if artifact_backend != spec.backend:

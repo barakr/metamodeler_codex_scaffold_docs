@@ -36,7 +36,7 @@ def sha256_json(payload: dict) -> str:
 def _load_registry() -> dict[str, str]:
     if not REGISTRY_PATH.exists():
         return {}
-    return json.loads(REGISTRY_PATH.read_text())
+    return json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
 
 
 def _save_registry(registry: dict[str, str]) -> None:
@@ -58,7 +58,7 @@ def show_registered_run(run_id: str) -> dict:
     tmp_root = (cwd / "tmp").resolve()
     if not (record_path.is_relative_to(cwd) or record_path.is_relative_to(tmp_root)):
         raise ValueError(f"Registry entry points outside project: {record_path}")
-    return json.loads(record_path.read_text())
+    return json.loads(record_path.read_text(encoding="utf-8"))
 
 
 def persist_run(

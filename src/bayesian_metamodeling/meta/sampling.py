@@ -27,7 +27,7 @@ META_SAMPLE_REGISTRY_PATH = Path("tmp/metamodel_samples_registry.json")
 def list_meta_samples() -> list[dict[str, str]]:
     if not META_SAMPLE_REGISTRY_PATH.exists():
         return []
-    registry = json.loads(META_SAMPLE_REGISTRY_PATH.read_text())
+    registry = json.loads(META_SAMPLE_REGISTRY_PATH.read_text(encoding="utf-8"))
     return [
         {"sample_id": sid, "backend": payload.get("backend", "")}
         for sid, payload in sorted(registry.items())
@@ -146,7 +146,7 @@ def _sample_core(
     with locked_registry(META_SAMPLE_REGISTRY_PATH):
         registry = {}
         if META_SAMPLE_REGISTRY_PATH.exists():
-            registry = json.loads(META_SAMPLE_REGISTRY_PATH.read_text())
+            registry = json.loads(META_SAMPLE_REGISTRY_PATH.read_text(encoding="utf-8"))
         registry[sample_id] = registry_entry
         META_SAMPLE_REGISTRY_PATH.parent.mkdir(parents=True, exist_ok=True)
         META_SAMPLE_REGISTRY_PATH.write_text(json.dumps(registry, indent=2, sort_keys=True))

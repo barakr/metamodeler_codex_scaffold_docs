@@ -52,5 +52,5 @@ class PythonCLIAdapter:
             output_path = (run_dir / endpoint.path).resolve()
             if not output_path.is_relative_to(run_dir.resolve()):
                 raise ValueError(f"Path traversal detected in output mapping: {endpoint.path}")
-            outputs[mapping.var] = json.loads(output_path.read_text())
+            outputs[mapping.var] = json.loads(output_path.read_text(encoding="utf-8"))
         return outputs

@@ -18,7 +18,7 @@ SURROGATE_REGISTRY_PATH = Path("tmp/surrogate_registry.json")
 def _load_registry() -> dict[str, str]:
     if not SURROGATE_REGISTRY_PATH.exists():
         return {}
-    return json.loads(SURROGATE_REGISTRY_PATH.read_text())
+    return json.loads(SURROGATE_REGISTRY_PATH.read_text(encoding="utf-8"))
 
 
 def _save_registry(registry: dict[str, str]) -> None:
@@ -50,7 +50,7 @@ def persist_surrogate_artifact(
     artifact_dir.mkdir(parents=True, exist_ok=True)
 
     backend_payload_path = artifact_dir / "backend_payload.json"
-    backend_payload_path.write_text(payload_path.read_text())
+    backend_payload_path.write_text(payload_path.read_text(encoding="utf-8"))
 
     spec_payload = spec.model_dump(mode="json")
     versions = {
@@ -94,7 +94,7 @@ def find_latest_artifact_for_spec(spec_name: str) -> tuple[str, Path]:
     candidates: list[tuple[str, dict, Path]] = []
     for artifact_id, path in registry.items():
         artifact_path = Path(path)
-        payload = json.loads(artifact_path.read_text())
+        payload = json.loads(artifact_path.read_text(encoding="utf-8"))
         if payload.get("spec_name") == spec_name:
             candidates.append((artifact_id, payload, artifact_path))
     if not candidates:

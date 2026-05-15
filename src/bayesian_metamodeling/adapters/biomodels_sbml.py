@@ -155,7 +155,7 @@ class BioModelsSBMLAdapter:
                 continue
             if endpoint.kind == "generated" and endpoint.key == "timeseries":
                 out_path = run_dir / "out" / "timeseries.json"
-                outputs[mapping.var] = json.loads(out_path.read_text())
+                outputs[mapping.var] = json.loads(out_path.read_text(encoding="utf-8"))
                 continue
             raise ValueError("biomodels_sbml_adapter_v1 supports only generated/timeseries outputs")
         return outputs

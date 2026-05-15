@@ -19,14 +19,14 @@ from bayesian_metamodeling.storage.surrogate_store import SURROGATE_REGISTRY_PAT
 def _resolve_surrogate_ref(ref: str) -> tuple[str, dict]:
     path = Path(ref)
     if path.exists():
-        payload = json.loads(path.read_text())
+        payload = json.loads(path.read_text(encoding="utf-8"))
         return payload["artifact_id"], payload
 
     if SURROGATE_REGISTRY_PATH.exists():
-        registry = json.loads(SURROGATE_REGISTRY_PATH.read_text())
+        registry = json.loads(SURROGATE_REGISTRY_PATH.read_text(encoding="utf-8"))
         if ref in registry:
             artifact_path = Path(registry[ref])
-            payload = json.loads(artifact_path.read_text())
+            payload = json.loads(artifact_path.read_text(encoding="utf-8"))
             return payload["artifact_id"], payload
 
     raise ValueError(f"Could not resolve surrogate_ref: {ref}")
