@@ -802,17 +802,57 @@ package + `bayesmm` CLI. Backup ref `claude/develop-pre-port` retained.
   attempt to escape the project root via an absolute path is rejected on
   every platform, regardless of which convention the path string uses.
 
+## sbi 0.26+ tracker shim landed (2026-05-15)
+- Added `_TrackerCompatWriter` in `src/bayesian_metamodeling/surrogates/backends.py`
+  that adapts a `tensorboard.SummaryWriter` to expose `log_metric(name, value, step=...)`
+  in terms of the legacy `add_scalar(name, value, step)` so a single writer
+  satisfies both sbi <0.26 (uses `add_scalar`) and sbi >=0.26 (uses
+  `log_metric`). `_make_sbi_summary_writer` now wraps the real writer; the
+  `_NoOpSummaryWriter` fallback is already 0.26-safe via its blanket
+  `__getattr__`. The kwarg-trying loop in `_build_sbi_inference` (added
+  earlier) handles the corresponding `summary_writer` -> `tracker` rename.
+- Relaxed `pyproject.toml` from `sbi<0.26` to `sbi<1` and rewrote the
+  comment block above it.
+- Three regression tests added in `tests/test_sbi_backend_extended.py`:
+  `test_tracker_compat_writer_translates_log_metric_to_add_scalar`,
+  `test_tracker_compat_writer_forwards_other_attrs`,
+  `test_make_sbi_summary_writer_wraps_real_writer_with_tracker_compat`.
+- Local re-verify on `py312_bayesmm_sbi`: full extended suite green
+  (24 passed). CI matrix is the authoritative cross-version verification.
+
 ## Open issues
-- Tutorial 2 full run depends on external BioModels download; in restricted/offline sandboxes this step will fail while validate/plan still pass.
-- PyMC backend tests skip automatically when `pymc` is not installed in the active environment.
-- PyMC is currently not installed in `/Users/barak/miniconda3/envs/py314_bayesmm`; fast suite there remains skip-safe for PyMC-specific tests.
-- SBI backend tests skip automatically when `sbi`/`torch` are not installed in the active environment.
-- `sbi`/`torch` are currently not installed in `/Users/barak/miniconda3/envs/py314_bayesmm`; fast suite there remains skip-safe for SBI-specific tests.
-- `py312` environment currently has dependency conflicts due direct `pip` install of `libroadrunner`; this was used for design verification only and should be isolated before production workflows.
-- `libroadrunner` may not be available in the py314 environment; slow BioModels test is expected to skip when dependency is absent.
-- Optional MPI integration test requires launching pytest under `mpirun`; standard local fast test runs skip MPI coverage.
-- `sbi` is pinned `<0.26` because 0.26 not only renamed `summary_writer` -> `tracker`
-  but also changed the tracker object interface (now expects `.log_metric()`).
-  Supporting sbi 0.26+ requires a small tracker-protocol shim (a writer object
-  that exposes both `add_scalar` and `log_metric`) so the two sbi major lines
-  can share `_build_sbi_inference`. Tracked as a follow-up.
+(Real, actionable items only. Items here become commits or are intentionally deferred.)
+- **Tutorial 2 offline path**: `tutorials/Tutorial_2.ipynb` Step 2 depends on
+  the BioModels HTTP download. The cache-search loop is partial and there is
+  no `MM_BIOMODELS_OFFLINE`-style escape hatch. Plan: env-var honor in the
+  adapter + optional `local_sbml_path` field on `ArtifactSpec` so a tutorial
+  can ship a sample SBML; tutorial cell prints an actionable banner in
+  offline mode instead of failing.
+- **MPI integration test verification**: `tests/test_mpi_sweep_integration.py`
+  exists, skip-safes correctly via `pytest.importorskip("mpi4py")` and
+  `world_size < 2`, but no `mpirun -n 2` execution is recorded in the
+  provenance log. Plan: run once, capture the run id + sweep CSV digest,
+  add a 3-line "Optional: MPI execution" subsection to the README.
+- **`tcr_signaling` Windows / cross-platform gaps**: the submodule needs CMake
+  + a C++ toolchain; GPU kernel is Metal-only (macOS); build script is a
+  Makefile. The submodule is read-only here, but the parent `README.md`
+  doesn't mention any of this — surfacing it is a small parent-side doc fix.
+
+## Designed behavior (skip-safe contract)
+(Documenting intentional behavior so future readers don't reopen these as bugs.)
+- PyMC backend tests skip via the `optional_backend` marker (in
+  `tests/conftest.py` + `tests/backend_support.py`) when `pymc` is not
+  importable.
+- SBI backend tests skip via the same marker when `sbi`/`torch` are not
+  importable.
+- Slow BioModels test (`tests/test_biomodels_slow.py`) skips via
+  `pytest.importorskip("roadrunner")` when `libroadrunner` is unavailable.
+- Optional MPI integration test (`tests/test_mpi_sweep_integration.py`)
+  skips when `mpi4py` is not importable or world size < 2.
+
+## Local environment notes
+(Per-developer machine state, not bugs.)
+- Optional backends are intentionally not installed in the lean
+  `py314_bayesmm` env; install them in `py312_bayesmm_pymc` /
+  `py312_bayesmm_sbi` per `bayesmm setup` guidance, or attempt a single
+  unified `py312_bayesmm` env (a tracked mac-specific experiment).

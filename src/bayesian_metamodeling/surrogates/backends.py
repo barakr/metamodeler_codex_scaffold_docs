@@ -481,6 +481,34 @@ class _NoOpSummaryWriter:
         return _noop
 
 
+class _TrackerCompatWriter:
+    """Adapter so a `tensorboard.SummaryWriter` works as an sbi 0.26+ tracker.
+
+    sbi 0.26 changed the training-logger interface: instead of calling
+    `summary_writer.add_scalar(name, value, step)` it now calls
+    `tracker.log_metric(name, value, step=...)`. The tensorboard
+    `SummaryWriter` does not expose `log_metric`, so the new sbi internals
+    crash with `AttributeError` even when constructed with the new `tracker`
+    kwarg. This wrapper translates `log_metric(...)` -> `add_scalar(...)`
+    and forwards everything else (including `add_scalar` itself, `close`,
+    `flush`, etc.) to the inner writer untouched, so the same writer object
+    works under both sbi <0.26 and sbi >=0.26.
+
+    The pre-existing `_NoOpSummaryWriter` is already 0.26-safe via its
+    blanket `__getattr__` no-op; this wrapper is only needed for the real
+    tensorboard writer.
+    """
+
+    def __init__(self, inner: Any) -> None:
+        self._inner = inner
+
+    def log_metric(self, name: str, value: Any, step: int | None = None) -> None:
+        self._inner.add_scalar(name, value, step or 0)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._inner, name)
+
+
 def _make_sbi_summary_writer() -> Any:
     log_root = Path("tmp") / "sbi-logs"
     log_root.mkdir(parents=True, exist_ok=True)
@@ -489,9 +517,14 @@ def _make_sbi_summary_writer() -> Any:
     try:
         from torch.utils.tensorboard import SummaryWriter  # type: ignore[import-not-found]
 
-        return SummaryWriter(log_dir=str(log_dir))
+        # Wrap so the writer satisfies BOTH the legacy `add_scalar` interface
+        # (sbi <0.26) and the new `log_metric` interface (sbi >=0.26). See
+        # `_TrackerCompatWriter` for the rationale.
+        return _TrackerCompatWriter(SummaryWriter(log_dir=str(log_dir)))
     except Exception:
         # Keep runtime robust even when tensorboard writer extras are unavailable.
+        # `_NoOpSummaryWriter`'s blanket `__getattr__` already covers both
+        # `add_scalar` and `log_metric`, so no wrapping is needed.
         return _NoOpSummaryWriter(log_dir=str(log_dir))
 
 

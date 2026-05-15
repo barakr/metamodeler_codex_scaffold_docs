@@ -222,6 +222,85 @@ def test_make_sbi_summary_writer_falls_back_without_tensorboard(monkeypatch, tmp
     writer.close()
 
 
+# --- _TrackerCompatWriter (sbi 0.26+ tracker shim) ---
+
+
+class _RecordingWriter:
+    """Stand-in for tensorboard SummaryWriter that records add_scalar calls."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, Any, int]] = []
+        self.closed = False
+
+    def add_scalar(self, name: str, value: Any, step: int) -> None:
+        self.calls.append((name, value, step))
+
+    def close(self) -> None:
+        self.closed = True
+
+
+def test_tracker_compat_writer_translates_log_metric_to_add_scalar():
+    """sbi >=0.26 calls `tracker.log_metric(name, value, step=...)`; the wrapper
+    must route that to the underlying writer's `add_scalar(name, value, step)`."""
+    inner = _RecordingWriter()
+    wrapper = backends._TrackerCompatWriter(inner)
+
+    wrapper.log_metric("loss", 0.5, step=3)
+    wrapper.log_metric("loss", 0.25)  # step=None -> 0
+
+    assert inner.calls == [("loss", 0.5, 3), ("loss", 0.25, 0)]
+
+
+def test_tracker_compat_writer_forwards_other_attrs():
+    """Anything other than `log_metric` (incl. `add_scalar`, `close`, custom
+    attrs) must pass straight through to the inner writer untouched."""
+    inner = _RecordingWriter()
+    wrapper = backends._TrackerCompatWriter(inner)
+
+    wrapper.add_scalar("acc", 0.9, 1)
+    assert inner.calls == [("acc", 0.9, 1)]
+
+    wrapper.close()
+    assert inner.closed is True
+
+
+def test_make_sbi_summary_writer_wraps_real_writer_with_tracker_compat(monkeypatch, tmp_path):
+    """When tensorboard IS importable, the returned writer must be a
+    `_TrackerCompatWriter` so the underlying `SummaryWriter` works as both an
+    sbi <0.26 `summary_writer` AND an sbi >=0.26 `tracker`."""
+    monkeypatch.chdir(tmp_path)
+
+    # Inject a fake `torch.utils.tensorboard` module exposing a fake
+    # SummaryWriter that records construction args.
+    fake_tb = types.ModuleType("torch.utils.tensorboard")
+    constructed: list[str] = []
+
+    class FakeSummaryWriter:
+        def __init__(self, log_dir: str) -> None:
+            constructed.append(log_dir)
+            self.log_dir = log_dir
+
+        def add_scalar(self, name: str, value: Any, step: int) -> None:
+            pass
+
+    fake_tb.SummaryWriter = FakeSummaryWriter
+
+    fake_torch = sys.modules.get("torch") or types.ModuleType("torch")
+    fake_torch_utils = types.ModuleType("torch.utils")
+    monkeypatch.setitem(sys.modules, "torch", fake_torch)
+    monkeypatch.setitem(sys.modules, "torch.utils", fake_torch_utils)
+    monkeypatch.setitem(sys.modules, "torch.utils.tensorboard", fake_tb)
+
+    writer = backends._make_sbi_summary_writer()
+
+    assert isinstance(writer, backends._TrackerCompatWriter)
+    assert len(constructed) == 1
+    # Wrapper exposes the new interface...
+    assert callable(writer.log_metric)
+    # ...and forwards the legacy interface unchanged.
+    assert callable(writer.add_scalar)
+
+
 def test_build_sbi_inference_prefers_npe(monkeypatch):
     marker = object()
     monkeypatch.setattr(backends, "_require_sbi", lambda: object())
