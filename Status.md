@@ -874,8 +874,192 @@ package + `bayesmm` CLI. Backup ref `claude/develop-pre-port` retained.
     no crashes (`tmp/tutorial2_offline_verify/Tutorial_2.executed.ipynb`).
 - Schema artifact regenerated: `src/bayesian_metamodeling/spec/modelspec.schema.json`.
 
+## Pedagogical pass on Tutorial_0..9 (2026-05-15, 11 commits)
+
+Mechanically the tutorials were already clean (cross-platform helpers,
+offline-aware T2, no `%%bash`). A pedagogical review (lab-manager voice,
+applied best practices) found that they didn't actually **teach** —
+they were a clean *demonstration sequence* with three structural failures
+(T0 had no biology + a fake complexity plot; T7 + T8 were skeletal
+coupling demos that never explained coupling; T9 was a CI checklist
+masquerading as a capstone) and six cross-cutting issues (boilerplate
+"Why this tutorial matters" cell duplicated verbatim across 7 notebooks;
+no shared glossary; generic biology motivation; no predict-before-you-run
+prompts; no anticipated-misconceptions callouts; stale `$ mm` outputs in
+T1 from before the package rename).
+
+This commit series fixed all of that across 11 commits, one per notebook
+plus this Status.md summary, each independently revertible:
+
+- **`762c1c5` — T0**: Rewrote opening with TCR-signaling running example;
+  added shared glossary cell (referenced from later tutorials, single
+  source of truth); replaced fake `complexity = [1,2,2,3,...]` plot with
+  a real markdown ASCII pipeline diagram
+  (`Spec → DOE plan → Sweep → CSV → Surrogate → Metamodel → Joint posterior`)
+  showing which tutorials cover each segment; rewrote tutorial map as
+  outcome table; expanded tips with time-sink warnings.
+
+- **`e00672b` — T1**: Replaced boilerplate Why; added `validate` vs
+  `plan` callout, "predict before you run" before the dual heatmap, and
+  a "you can skim this" banner above the 50-line auto-selection cell;
+  added a forward-link to T5 in the scientific checkpoint; re-executed
+  to refresh stale `$ mm` outputs to `$ bayesmm` (the actual mechanical
+  fix the agent flagged).
+
+- **`352b14b` — T2**: Named MODEL1907260003 as Lever, Maini, van der
+  Merwe & Dushek 2014 (citation verified via the BioModels API, PubMed
+  25145757); added a `k_on` biological callout (forward association
+  rate constant for `L+R→LR`, units `1/(M·s)`, ±20% sweep around the
+  published parameter); added "you can skim this" above the 70-line
+  CSV+timeseries parser; added a "Common confusion" callout in the
+  scientific checkpoint connecting T2 → T5/T6.
+
+- **`5e10c27` — T3**: Replaced boilerplate Why; added Step 4 second
+  error type — inverted `support: [max, min]` (a per-input contract
+  violation the validator catches with the exact field path
+  `io_schema.inputs.0.support`); reframed the scientific checkpoint
+  around per-input contract reasoning; deleted the fake importance-
+  weights bar chart and replaced with a real markdown table listing
+  spec sections + one sentence each on what they contract for. (Also
+  attempted-and-abandoned: an input-name mismatch test — `design.grid`
+  keys aren't cross-checked against `io_schema.inputs` names today,
+  which is a real validator gap noted but out of scope for this
+  notebook-only pass.)
+
+- **`1d02642` — T4**: Replaced boilerplate Why with budget framing;
+  added a CLI `bayesmm run` for the Sobol spec BEFORE the comparison
+  scatter (the single biggest fix in T4 — previously the scatter showed
+  "No Sobol runs yet" placeholder ~100% of the time because the spec
+  was planned but never run); added "predict before you run" + a real
+  curse-of-dimensionality table (4ⁿ vs Sobol counts at 2D-6D);
+  augmented the scientific checkpoint with a Sobol-determinism note.
+
+- **`3f58fda` — T5**: Replaced boilerplate Why with a surrogate
+  definition + an explicit T1 callback ("at the bottom of T1 you held a
+  question — would you trust a surrogate at `a=0.5, b=0.5`? This is
+  where you answer it"); **moved the prior/posterior/posterior-predictive
+  mini-lesson BEFORE the plot** (the single highest-value move in T5);
+  augmented the errorbar plot with a 9-point training overlay, the
+  analytical truth `y = a + b` as a dotted reference line, and an
+  annotation showing the actual std value (~`1e-6`); added a "Common
+  confusion: errorbars ≠ confidence intervals" callout; demoted the
+  pytest call to an optional appendix.
+
+- **`4651363` — T6**: Replaced boilerplate Why with PyMC-vs-SBI framing;
+  simplified `cell-8` path detection (the bootstrap helper had already
+  established `repo_root`); **added a Step 4: explicit T5-vs-T6
+  comparison cell** that loads both surrogates, evaluates on the same 4
+  query points, plots both errorbar series on shared axes with the
+  analytical truth, and prints a numeric comparison (`PyMC mean vs SBI
+  mean vs truth, PyMC std vs SBI std`) — the central comparison the
+  curriculum was missing; added a "Common confusion: SBI doesn't have
+  priors in the PyMC sense" callout; reframed the closing mini-lesson
+  with three concrete decision rules for "what to do when PyMC and SBI
+  disagree on a real model"; demoted pytest call.
+
+- **`3d4288b` — T7**: 15-minute source dive (in this commit) into
+  `meta/builder.py` + `compiler.py` + `sampling.py` confirmed that
+  `equality_soft` (T7's spec) and `gaussian_link` (T8's spec) compile to
+  the **same Gaussian-noise primitive** — the only special-cased coupling
+  kind is `deterministic` (which gets a sharp `_DETERMINISTIC_PENALTY`).
+  Aligned T7's spec to use `gaussian_link` consistently with T8.
+  Sharpened secondary aim around induced joint posterior shape; replaced
+  boilerplate Why with the concept introduction T7 needed; added a
+  "What surrogates are we coupling?" callout naming the pre-built
+  `surrogate_A` and `surrogate_B` honestly; added a "Coupling kinds"
+  callout naming the `gaussian_link` vs `deterministic` distinction;
+  added "Predict before you sample"; **augmented the scatter into a
+  side-by-side prior-vs-posterior plot** with numeric output showing
+  `corr(y, C)` jump from ~0 (no coupling) to ~0.99 (with coupling) and
+  `std(y - C) ≈ σ`; rewrote scientific checkpoint as an active-learning
+  σ exercise (vary 0.15 → 0.5 → 1.0, observe). Also fixed a latent
+  bug in the registry-lookup logic (`sorted(payload.keys())[-1]` sorts
+  UUID hex alphabetically — random; replaced with sort-by-`created_at`
+  + filter-by-required-vars).
+
+- **`bed47c9` — T8**: Sharpened learning aims around uncertainty
+  propagation; replaced boilerplate Why with noise-budget framing for
+  the chain `y → C → z → w` and the σ values along it; added "Predict
+  before you sample" walking the chain step by step; **replaced the
+  overlapping translucent histograms with a violin plot** of `y, z, w`
+  side-by-side, std annotated above each, plus a numeric noise budget
+  printout that makes the lesson quantitative
+  (`std(z) = std(C) ≈ std(y); std(w) ≈ sqrt(std(z)^2 + 0.25^2)`,
+  agreement within sampling noise IS the lesson — quadrature addition
+  holds); rewrote scientific checkpoint as four active-learning prompts
+  (verify quadrature, predict-then-test what doubling σ does, recognize
+  the deterministic surprise, connect to real models). Same registry-
+  lookup fix as T7.
+
+- **`00b76b1` — T9**: **Capstone fully rewritten** from the CI checklist
+  ("ruff format --check, ruff check, pytest, hardcoded `[1,1,1,0.5,0.5]`
+  bar chart") to four student-driven steps (each with explicit
+  `# === EDIT ME ===` markers): (1) Pick your DOE — student sets a 5x5
+  grid, the cell builds a temporary spec at
+  `tmp/tutorials/specs/capstone.grid.json`, validates / plans / runs;
+  (2) Fit a PyMC surrogate on the student's sweep; (3) Evaluate at
+  NEW points the student picks; (4) Visualize with training overlay +
+  analytical truth + numeric summary. Replaced the deliverable template
+  with a fill-in markdown the student literally edits. Added a closing
+  forward-pointer to `projects/tcr_signaling/` ("the real version of
+  T7-T8-T9 composed at full scale on four real biological models"
+  with the four model names and the Frontiers in Immunology 2024
+  paper). Demoted the original quality gate to an optional appendix
+  (with `check=False` so it doesn't fail the notebook). Pragmatic
+  deviation from the plan: the original Step 3 said "swap a
+  `surrogate_refs` entry in T7's spec to point at the capstone surrogate"
+  — but T7's example surrogates have a 1D-1D shape contract while the
+  capstone surrogate is 2D-1D, so a direct swap would have required
+  spec engineering bigger than a notebook lesson should have. Kept
+  the spec composition lesson as a forward pointer rather than a
+  half-working demonstration.
+
+Verification approach (per-commit + final):
+- Each commit re-executed its notebook with `jupyter execute --inplace`
+  in `py312_bayesmm_sbi`. T2 used `MM_BIOMODELS_OFFLINE=1` so the
+  offline path is exercised. T6 uses both PyMC and SBI artifacts;
+  needs both backends in the env.
+- Final suite-level smoke: all 10 notebooks re-executed end-to-end,
+  including T0's bootstrap + `bayesmm doctor` preflight, T1's CLI
+  loop + dual heatmap, T2's offline-mode banner + skip, T3's break/fix
+  cycles, T4's grid+sobol comparison scatter, T5's surrogate fit + eval
+  + augmented plot, T6's T5-vs-T6 comparison plot, T7's prior-vs-
+  posterior scatter, T8's violin + noise budget, T9's full capstone
+  pipeline.
+- `ruff check src tests` + `ruff format --check src tests` clean
+  throughout (notebooks aren't linted but if a stray Python file got
+  touched it'd surface here).
+
+Explicitly out of scope (locked decisions, recorded so they don't get
+re-litigated):
+- No standalone Bayesian primer notebook — T5's mini-lesson (now moved
+  before the plot) is enough at the moment students need it.
+- No `ipywidgets` — notebook-only delivery + cross-platform.
+- No tutorial renumbering — stable links matter more than aesthetic
+  numbering.
+- No T7/T8 merge — the 2→3-model progression is the lesson; both
+  notebooks now teach distinct concepts (induced joint shape vs
+  uncertainty propagation along a chain).
+- No CLI / spec changes beyond the T7 spec vocabulary alignment
+  (`equality_soft` → `gaussian_link`, same primitive). The
+  input-name-mismatch validator gap surfaced during T3's commit is a
+  real follow-up; tracked here, not fixed.
+- No re-running the cross-platform CI matrix per commit — tutorials
+  aren't part of CI's fast suite.
+
 ## Open issues
 (Real, actionable items only. Items here become commits or are intentionally deferred.)
+
+- **Validator gap surfaced during the T3 pedagogical commit (5e10c27)**:
+  `design.grid` keys are not cross-checked against `io_schema.inputs`
+  names. A spec with `design.grid["alpha"]` but `io_schema.inputs[0].name
+  == "a"` validates green today; the runner downstream then errors with a
+  less-clear message. The T3 tutorial works around this by using inverted
+  `support: [max, min]` as the second-error-type example instead. Adding
+  the cross-check is one Pydantic `model_validator` on `ModelSpec`; out
+  of scope for the notebook-only pedagogical pass but worth fixing
+  before the next pedagogical iteration so T3 can teach the more common
+  bug directly.
 
 _All previously-tracked open issues from the cross-platform verification pass
 are now resolved. Subsequent work (mac-specific unified `py312_bayesmm` env
