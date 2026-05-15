@@ -1,5 +1,38 @@
 # Status: Metamodeling Automation Framework
 
+## Tutorial-stability hardening + post-mortem on missed T2 silent failure (2026-05-15, commits 28835b8..)
+
+A previous verification commit (`61454b5`) reported "30/30 PASS" — 10 tutorials × 3 conda envs (`py312_bayesmm_sbi`, `py312_bayesmm_pymc`, `py312_bayesmm`). The user then opened Tutorial 2 manually in `py312_bayesmm_sbi` and saw `Run complete: 0 successful runs / 11/11 points failed`. The BioModels SBML sweep failed silently for every DOE point even though `libroadrunner 2.9.2` was installed in the kernel. **My verification reported PASS for a tutorial that did no useful work.**
+
+Diagnosis surfaced THREE independent bugs:
+
+1. **`runners/local_process.py:32` had a misguided `shutil.which("python") is None` guard.** The intent was to substitute `sys.executable` for bare `"python"` only when no `python` was on PATH. With base conda's `python` on PATH almost everywhere, the substitution NEVER fired — so worker subprocesses ran in PATH-`python` (typically base conda) instead of the kernel/CLI's env. When the kernel had libroadrunner but base didn't, every DOE point failed silently with `ModuleNotFoundError: No module named 'roadrunner'` recorded only in `sweep_logs.jsonl`. **Fix:** drop the guard; ALWAYS substitute `sys.executable` for bare "python" when no `conda_env` is set.
+
+2. **`adapters/biomodels_sbml.py:101` hardcoded bare `"python"`** at command construction. Even with the runner's substitution as a backstop, the adapter's intent should be explicit at the source. Replaced with `sys.executable`.
+
+3. **The BioModels download URL was broken.** The previous URL returned HTTP 200 with `text/html` (the BioModels web UI) instead of SBML XML. The adapter blindly cached the HTML as `<biomodels_id>.xml`; subsequent libroadrunner loads failed with "XML content is not well-formed". Fixed in three spec files; new URL verified to return `application/xml`. The adapter now also content-type-checks responses and raises a loud `RuntimeError` (with the bad content-type + URL + actionable instruction) instead of caching garbage.
+
+### Post-mortem (constructive)
+
+Three things went wrong, ordered by lesson value:
+
+- **False success metric.** The verification used `jupyter execute` exit code as the criterion. T2's run cell calls `run_mm_cli("run", spec, check=False)` — non-zero CLI exit doesn't propagate to Python; the notebook completes "cleanly". The cell printed `Run complete with failures: 11/11 points failed` literally, but the harness never read cell outputs. The wrong question is "did the notebook crash?"; the right question is "did the notebook achieve what it claims to teach?". A test that asserts nothing meaningful is no test at all.
+- **Verification was ad-hoc, not tracked.** A bash script in `/tmp/verify_tutorials.sh` doesn't get reviewed, doesn't accumulate per-tutorial knowledge of what success looks like, and won't be re-run by anyone else. A test in `tests/` would have forced rigorous success criteria upfront.
+- **Pattern audit missed the second instance.** The same subprocess-env-leakage was already fixed once in `tutorial.py::run_tool` (~commit eb894ab). When fixing pattern X, grep the whole codebase for X — don't trust "I fixed the one that bit me".
+
+### Hardening response (this commit series)
+
+- **`tests/test_runner_subprocess_env.py`** + **`tests/test_adapters_no_bare_python.py`** (new): regression tests pinning the new always-substitute contract at both the runner and adapter layers. Belt + suspenders.
+- **`tests/test_local_process_runner.py`** + **`tests/test_runner_unit.py`**: updated — the previous versions PINNED THE OLD BROKEN BEHAVIOR (`expected = "python" if shutil.which("python") else sys.executable`). Now anchored on the correct contract.
+- **Per-tutorial self-check cells** appended to all 10 `tutorials/Tutorial_*.ipynb`: each notebook ends with a code cell that asserts the canonical scientific artifact (sweep_rows.csv has success rows, surrogate has posterior_draws calibrated to within tolerance, samples_dataset has the right variables and the coupling correlation, capstone composes end-to-end). Failures raise `AssertionError` → propagate through `jupyter execute` exit code → both interactive students AND CI/harness see them loudly. Two-tier for backend-gated tutorials (T2 / T6): if the optional dep is missing and preflight skipped, the assertion is "preflight banner was printed".
+- **T2 preflight extended** with `LIBROADRUNNER_WORKER_OK`: in addition to checking that the kernel can `import roadrunner`, spawn a `[sys.executable, "-c", "import roadrunner"]` subprocess and verify it works too. Catches "half-installed env" cases where the bug recurs in some new way. New banner branch explains what's wrong + how to fix.
+
+### Open follow-ups
+- **Verification harness rewrite (`scripts/verify_tutorials.py`)**: tracked in plan file; defers to per-tutorial self-check cells (which now do the heavy lifting). Worth landing as a tracked test (`tests/test_tutorial_integration.py @pytest.mark.slow`) so CI's slow suite catches notebook regressions automatically.
+- **Audit `subprocess.run()` calls across `src/`** for any other `python` vs `sys.executable` instances. Two were found and fixed (runner + biomodels adapter); a third (`tutorial.py::run_tool`) was already correct.
+
+
+
 ## High level state
 - Stage: Prompt 17 implementation complete
 - Current focus: validating centralized sweep output behavior across tutorial and optional MPI environments
