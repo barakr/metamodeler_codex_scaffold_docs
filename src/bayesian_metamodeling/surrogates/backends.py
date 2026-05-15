@@ -284,23 +284,31 @@ class SbiNPEPosteriorModel:
         d = self.n_outputs
         out = np.empty((n_rows, n, d), dtype=float)
 
-        for idx, row in enumerate(x_norm):
-            torch.manual_seed(seed + idx)
-            obs = torch.as_tensor(row, dtype=torch.float32)
-            if self.output_correlation == "full":
-                posterior = self.posteriors[0]
-                sampled = posterior.sample((n,), x=obs)
-                sample_np = np.asarray(sampled.detach().cpu().numpy(), dtype=float).reshape(n, d)
-                out[idx] = self._denormalize(sample_np)
-            else:
-                cols = []
-                for j, posterior in enumerate(self.posteriors):
-                    torch.manual_seed(seed + idx * d + j)
+        # sbi posterior `.sample()` may surface the same advisory warnings as
+        # training (1D output, prior support inference); suppress them here too
+        # so eval doesn't fail under `filterwarnings = error`.
+        with _sbi_warnings_filtered():
+            for idx, row in enumerate(x_norm):
+                torch.manual_seed(seed + idx)
+                obs = torch.as_tensor(row, dtype=torch.float32)
+                if self.output_correlation == "full":
+                    posterior = self.posteriors[0]
                     sampled = posterior.sample((n,), x=obs)
-                    cols.append(
-                        np.asarray(sampled.detach().cpu().numpy(), dtype=float).reshape(n, -1)[:, 0]
+                    sample_np = np.asarray(sampled.detach().cpu().numpy(), dtype=float).reshape(
+                        n, d
                     )
-                out[idx] = self._denormalize(np.column_stack(cols))
+                    out[idx] = self._denormalize(sample_np)
+                else:
+                    cols = []
+                    for j, posterior in enumerate(self.posteriors):
+                        torch.manual_seed(seed + idx * d + j)
+                        sampled = posterior.sample((n,), x=obs)
+                        cols.append(
+                            np.asarray(sampled.detach().cpu().numpy(), dtype=float).reshape(n, -1)[
+                                :, 0
+                            ]
+                        )
+                    out[idx] = self._denormalize(np.column_stack(cols))
         return out[:, :, 0] if d == 1 else out
 
     def log_prob(self, inputs: dict[str, np.ndarray], outputs: dict[str, np.ndarray]) -> np.ndarray:
@@ -317,25 +325,30 @@ class SbiNPEPosteriorModel:
         affine_correction = -float(np.sum(np.log(self.y_scale)))
 
         logp: list[float] = []
-        for idx, row in enumerate(x_norm):
-            obs = torch.as_tensor(row, dtype=torch.float32)
-            if self.output_correlation == "full":
-                posterior = self.posteriors[0]
-                # Reshape to (1, D) via numpy so torch.as_tensor gets one array,
-                # not a list of arrays (which is slow and warns under -W error).
-                theta = torch.as_tensor(y_norm[idx][None, :], dtype=torch.float32)
-                value = posterior.log_prob(theta, x=obs)
-                scalar = float(np.asarray(value.detach().cpu().numpy(), dtype=float).reshape(-1)[0])
-                logp.append(scalar + affine_correction)
-            else:
-                running = affine_correction
-                for j, posterior in enumerate(self.posteriors):
-                    theta = torch.as_tensor([y_norm[idx, j]], dtype=torch.float32)
+        # Same suppression as `sample`: sbi posterior `.log_prob()` can emit
+        # the prior-support advisory in 0.26+.
+        with _sbi_warnings_filtered():
+            for idx, row in enumerate(x_norm):
+                obs = torch.as_tensor(row, dtype=torch.float32)
+                if self.output_correlation == "full":
+                    posterior = self.posteriors[0]
+                    # Reshape to (1, D) via numpy so torch.as_tensor gets one array,
+                    # not a list of arrays (which is slow and warns under -W error).
+                    theta = torch.as_tensor(y_norm[idx][None, :], dtype=torch.float32)
                     value = posterior.log_prob(theta, x=obs)
-                    running += float(
+                    scalar = float(
                         np.asarray(value.detach().cpu().numpy(), dtype=float).reshape(-1)[0]
                     )
-                logp.append(running)
+                    logp.append(scalar + affine_correction)
+                else:
+                    running = affine_correction
+                    for j, posterior in enumerate(self.posteriors):
+                        theta = torch.as_tensor([y_norm[idx, j]], dtype=torch.float32)
+                        value = posterior.log_prob(theta, x=obs)
+                        running += float(
+                            np.asarray(value.detach().cpu().numpy(), dtype=float).reshape(-1)[0]
+                        )
+                    logp.append(running)
         return np.asarray(logp, dtype=float)
 
     def summary(self, inputs: dict[str, np.ndarray]) -> dict:
@@ -509,6 +522,34 @@ class _TrackerCompatWriter:
         return getattr(self._inner, name)
 
 
+@contextmanager
+def _sbi_warnings_filtered() -> Iterator[None]:
+    """Suppress `UserWarning`s sbi raises for valid-but-noisy usage patterns.
+
+    sbi's training/inference loop emits advisory warnings for several patterns
+    we use deliberately (1D output, posterior-only training without an
+    explicit prior). Under `pytest.ini`'s `filterwarnings = error`, those
+    warnings would otherwise elevate to test failures. These filters cover
+    sbi 0.22..0.26+ — when sbi <0.26 doesn't emit a given message the filter
+    is a no-op.
+    """
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message="In one-dimensional output space, this flow is limited to Gaussians",
+            category=UserWarning,
+        )
+        # sbi 0.26+: when `prior=None` (posterior-only training), sbi
+        # auto-derives the support from the simulated `theta` and warns
+        # about the missing `.support` attribute.
+        warnings.filterwarnings(
+            "ignore",
+            message="The passed prior has no support property",
+            category=UserWarning,
+        )
+        yield
+
+
 def _make_sbi_summary_writer() -> Any:
     log_root = Path("tmp") / "sbi-logs"
     log_root.mkdir(parents=True, exist_ok=True)
@@ -558,7 +599,6 @@ def _build_sbi_inference(density_estimator: str):
 def _train_sbi_density_estimator(
     inference: Any, theta: Any, x: Any, backend_config: dict[str, Any]
 ) -> Any:
-    trainer = inference.append_simulations(theta, x)
     train_kwargs = {
         "max_num_epochs": int(backend_config.get("max_num_epochs", 120)),
         "training_batch_size": int(backend_config.get("training_batch_size", 32)),
@@ -568,13 +608,11 @@ def _train_sbi_density_estimator(
         "show_train_summary": bool(backend_config.get("show_train_summary", False)),
     }
 
-    with warnings.catch_warnings():
-        # sbi emits this for 1D outputs with flow families; this is expected and non-fatal.
-        warnings.filterwarnings(
-            "ignore",
-            message="In one-dimensional output space, this flow is limited to Gaussians",
-            category=UserWarning,
-        )
+    # `_sbi_warnings_filtered()` covers BOTH the legacy 1D-flow advisory AND
+    # the sbi 0.26+ "no prior support" advisory. `append_simulations` is
+    # inside the block because sbi 0.26 does its prior processing there.
+    with _sbi_warnings_filtered():
+        trainer = inference.append_simulations(theta, x)
         try:
             return trainer.train(**train_kwargs)
         except TypeError:
@@ -737,25 +775,30 @@ def _fit_sbi_npe(
     observations = torch.as_tensor(x_norm, dtype=torch.float32)
     density_estimator_name = str(backend_config.get("density_estimator", "maf"))
 
+    # `inference.build_posterior(...)` triggers sbi 0.26's prior-support
+    # advisory (the prior is auto-derived from the trained density estimator
+    # when no explicit prior was passed). Wrap with the same suppressor used
+    # in `_train_sbi_density_estimator` so both call sites are consistent.
     posteriors: list[Any] = []
-    if output_correlation == "full":
-        theta = torch.as_tensor(y_norm, dtype=torch.float32)
-        inference = _build_sbi_inference(density_estimator=density_estimator_name)
-        density_estimator = _train_sbi_density_estimator(
-            inference=inference, theta=theta, x=observations, backend_config=backend_config
-        )
-        posteriors.append(inference.build_posterior(density_estimator))
-    else:
-        for j in range(d):
-            theta_j = torch.as_tensor(y_norm[:, j : j + 1], dtype=torch.float32)
-            inference_j = _build_sbi_inference(density_estimator=density_estimator_name)
-            density_estimator_j = _train_sbi_density_estimator(
-                inference=inference_j,
-                theta=theta_j,
-                x=observations,
-                backend_config=backend_config,
+    with _sbi_warnings_filtered():
+        if output_correlation == "full":
+            theta = torch.as_tensor(y_norm, dtype=torch.float32)
+            inference = _build_sbi_inference(density_estimator=density_estimator_name)
+            density_estimator = _train_sbi_density_estimator(
+                inference=inference, theta=theta, x=observations, backend_config=backend_config
             )
-            posteriors.append(inference_j.build_posterior(density_estimator_j))
+            posteriors.append(inference.build_posterior(density_estimator))
+        else:
+            for j in range(d):
+                theta_j = torch.as_tensor(y_norm[:, j : j + 1], dtype=torch.float32)
+                inference_j = _build_sbi_inference(density_estimator=density_estimator_name)
+                density_estimator_j = _train_sbi_density_estimator(
+                    inference=inference_j,
+                    theta=theta_j,
+                    x=observations,
+                    backend_config=backend_config,
+                )
+                posteriors.append(inference_j.build_posterior(density_estimator_j))
 
     return SbiNPEPosteriorModel(
         posteriors=posteriors,
