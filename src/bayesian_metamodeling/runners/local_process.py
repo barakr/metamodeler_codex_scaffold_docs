@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -28,8 +27,23 @@ class LocalProcessRunner:
         command = list(materialization.command)
         conda_env = materialization.execution_env.get("conda_env", "").strip()
         if conda_env:
+            # Explicit "run worker in this other env" — wrap the whole command
+            # so PATH/python resolve inside that env. The bare-python
+            # substitution below does NOT apply here.
             return ["conda", "run", "-n", conda_env, *command]
-        if command and command[0] == "python" and shutil.which("python") is None:
+        # Implicit "run worker in MY env": when an adapter built the command
+        # with a bare `python` (e.g. `["python", str(worker_path), ...]`),
+        # ALWAYS substitute `sys.executable`. Otherwise the worker subprocess
+        # uses whatever PATH-`python` resolves to — typically base conda's
+        # python, which usually does NOT have the optional packages
+        # (libroadrunner, pymc, sbi, ...) the kernel/CLI env has installed.
+        # That mismatch silently breaks every DOE point with a
+        # `ModuleNotFoundError` recorded in sweep_logs.jsonl. The previous
+        # `shutil.which("python") is None` guard was misguided — base
+        # conda's python is on PATH almost everywhere, so the substitution
+        # never fired. See Status.md "False success metric in tutorial
+        # verification" post-mortem.
+        if command and command[0] == "python":
             command[0] = sys.executable
         return command
 

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -10,6 +9,15 @@ from bayesian_metamodeling.runners.local_process import LocalProcessRunner
 
 
 def test_local_process_runner_uses_current_environment_by_default(monkeypatch, tmp_path):
+    """Bare ``"python"`` => substituted with ``sys.executable``, ALWAYS.
+
+    The previous version of this test allowed `expected = "python"` when
+    `shutil.which("python")` was set — pinning the OLD broken behavior where
+    a worker subprocess would silently run in the wrong env. The fix in
+    `runners/local_process.py` always substitutes `sys.executable` (no
+    `shutil.which` guard) so the worker inherits the kernel/CLI's env.
+    See `tests/test_runner_subprocess_env.py` for the regression detail.
+    """
     seen: dict[str, list[str]] = {}
 
     def _fake_run(command, **kwargs):
@@ -28,8 +36,7 @@ def test_local_process_runner_uses_current_environment_by_default(monkeypatch, t
     )
     result = runner.run(materialization=materialization, run_dir=run_dir)
 
-    expected_prefix = "python" if shutil.which("python") else sys.executable
-    assert seen["command"] == [expected_prefix, "-c", "print('x')"]
+    assert seen["command"] == [sys.executable, "-c", "print('x')"]
     assert result.returncode == 0
     assert result.stdout_path.exists()
     assert result.stderr_path.exists()

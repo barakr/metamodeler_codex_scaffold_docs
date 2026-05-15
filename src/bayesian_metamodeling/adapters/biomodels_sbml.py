@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import sys
 from pathlib import Path
 
 import requests
@@ -74,6 +75,27 @@ class BioModelsSBMLAdapter:
 
         response = requests.get(source_url, timeout=60, verify=True)
         response.raise_for_status()
+
+        # Sanity check: BioModels' download endpoints occasionally return the
+        # web UI's HTML (with HTTP 200) instead of the SBML XML — usually
+        # because the download URL changed and the old endpoint now redirects
+        # to a search/landing page. Without this check, the corrupt HTML would
+        # be cached as `<biomodels_id>.xml`, every DOE point would fail at
+        # `roadrunner.RoadRunner(sbml_path)` with "XML content is not
+        # well-formed", and the failure would only surface in
+        # `sweep_logs.jsonl` — not in the immediate notebook output.
+        ctype = response.headers.get("Content-Type", "").lower()
+        body_head = response.content[:200].lstrip()
+        looks_like_xml = body_head.startswith(b"<?xml") or body_head.startswith(b"<sbml")
+        if "xml" not in ctype and not looks_like_xml:
+            raise RuntimeError(
+                f"BioModels download returned non-SBML content: "
+                f"content-type={ctype!r}, first 80 bytes={body_head[:80]!r}. "
+                f"URL: {source_url}. The BioModels download endpoint may have "
+                f"changed; update `model.artifact.source_url` in your spec to "
+                f"a URL that returns SBML XML."
+            )
+
         out_path.write_bytes(response.content)
         return out_path
 
@@ -97,8 +119,16 @@ class BioModelsSBMLAdapter:
         worker_path = (
             repo_root / "src" / "bayesian_metamodeling" / "adapters" / "biomodels_worker.py"
         )
+        # Use `sys.executable` (the running interpreter), NOT bare "python"
+        # from PATH. PATH-`python` typically resolves to base conda's python
+        # which lacks libroadrunner/tellurium even when the kernel env has
+        # them installed; that mismatch makes every DOE point fail with
+        # `ModuleNotFoundError: No module named 'roadrunner'` recorded only
+        # in `sweep_logs.jsonl`. The runner (`runners/local_process.py`)
+        # also substitutes `sys.executable` for bare "python" defensively;
+        # we set it here too so the intent is clear at the source.
         command = [
-            "python",
+            sys.executable,
             str(worker_path),
             "--sbml-path",
             str(sbml_path),

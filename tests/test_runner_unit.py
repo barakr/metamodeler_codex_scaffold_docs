@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -12,6 +11,12 @@ from bayesian_metamodeling.runners.local_process import LocalProcessRunner
 
 
 def test_build_command_no_conda(monkeypatch):
+    """Bare ``"python"`` is ALWAYS substituted with ``sys.executable`` when
+    no conda env is set. (Fixed: the previous version of this test allowed
+    bare ``"python"`` whenever it was on PATH — the misguided guard that
+    silently broke worker subprocesses. See `tests/test_runner_subprocess_env.py`
+    and Status.md for the post-mortem.)
+    """
     runner = LocalProcessRunner()
     mat = AdapterMaterialization(
         command=["python", "-c", "print(1)"],
@@ -19,8 +24,7 @@ def test_build_command_no_conda(monkeypatch):
         execution_env={},
     )
     cmd = runner._build_command(mat)
-    expected = "python" if shutil.which("python") else sys.executable
-    assert cmd[0] == expected
+    assert cmd[0] == sys.executable
     assert cmd[1:] == ["-c", "print(1)"]
 
 

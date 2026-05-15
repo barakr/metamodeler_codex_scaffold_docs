@@ -6,35 +6,79 @@
     "artifact": {
       "type": "biomodels",
       "biomodels_id": "MODEL1907260003",
-      "source_url": "https://www.ebi.ac.uk/biomodels/services/download/get-files/MODEL1907260003/2/lever2014%20v5.0.xml"
+      "source_url": "https://www.ebi.ac.uk/biomodels/model/download/MODEL1907260003?filename=lever2014%20v5.0.xml"
     }
   },
   "runner": {
     "mode": "local_process",
-    "resources": {"cpus": 1, "mem_gb": 2, "walltime_min": 5}
+    "resources": {
+      "cpus": 1,
+      "mem_gb": 2,
+      "walltime_min": 5
+    }
   },
   "io_schema": {
     "inputs": [
-      {"name": "k_on", "type": "float", "units": "1/(M*s)", "support": [0.00008, 0.00012]}
+      {
+        "name": "k_on",
+        "type": "float",
+        "units": "1/(M*s)",
+        "support": [
+          8e-05,
+          0.00012
+        ]
+      }
     ],
     "outputs": [
-      {"name": "time_series", "type": "array", "dims": ["time", "species"], "units": "model_units"}
+      {
+        "name": "time_series",
+        "type": "array",
+        "dims": [
+          "time",
+          "species"
+        ],
+        "units": "model_units"
+      }
     ],
-    "time_grid": {"t0": 0.0, "t1": 20.0, "n_points": 21}
+    "time_grid": {
+      "t0": 0.0,
+      "t1": 20.0,
+      "n_points": 21
+    }
   },
   "design": {
     "strategy": "grid",
-    "grid": {"k_on": [0.0001]}
+    "grid": {
+      "k_on": [
+        0.0001
+      ]
+    }
   },
   "adapter": {
     "id": "biomodels_sbml_adapter_v1",
     "input_mapping": [
-      {"var": "k_on", "to": {"kind": "sbml_parameter", "key": "k_on"}}
+      {
+        "var": "k_on",
+        "to": {
+          "kind": "sbml_parameter",
+          "key": "k_on"
+        }
+      }
     ],
     "output_mapping": [
-      {"var": "time_series", "from": {"kind": "generated", "key": "timeseries"}}
+      {
+        "var": "time_series",
+        "from": {
+          "kind": "generated",
+          "key": "timeseries"
+        }
+      }
     ]
   },
-  "reproducibility": {"seed": 123},
-  "storage": {"root": "tmp/biomodels_prompt4_store"}
+  "reproducibility": {
+    "seed": 123
+  },
+  "storage": {
+    "root": "tmp/biomodels_prompt4_store"
+  }
 }
