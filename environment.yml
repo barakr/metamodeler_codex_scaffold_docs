@@ -8,7 +8,14 @@ dependencies:
   - requests>=2,<3
   - scipy>=1.11,<2
   - numpy
+  # Tutorial-execution stack. `jupyter` is the metapackage; `nbclient` and
+  # `nbconvert` are listed explicitly to guarantee `jupyter execute` works
+  # even if a future conda solve picks a slim `jupyter` variant. `notebook`
+  # provides the local server for opening tutorials interactively.
   - jupyter
+  - nbclient>=0.8
+  - nbconvert>=7
+  - notebook>=6
   - matplotlib
   # Optional surrogate backends — comment out if not needed
   - pymc>=5,<6

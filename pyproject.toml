@@ -24,8 +24,19 @@ sbi = ["sbi>=0.22,<1", "torch>=2,<3"]
 # Tutorial-only extras (NOT framework runtime). Required to *execute* the
 # Jupyter notebooks in `tutorials/`; not needed if you're using the package
 # from your own scripts. `numpy` is here defensively (transitive via scipy
-# but pinned for tutorial-cell stability).
-tutorials = ["jupyter>=1", "matplotlib>=3.7", "numpy>=1.25"]
+# but pinned for tutorial-cell stability). `nbclient`/`nbconvert` are
+# explicit because the bare `jupyter` metapackage doesn't always pull them
+# transitively in conda envs that were created kernel-only (e.g. starting
+# from `ipykernel` and adding pieces) — without them, `jupyter execute`
+# (the verification path) is missing.
+tutorials = [
+    "jupyter>=1",
+    "nbclient>=0.8",
+    "nbconvert>=7",
+    "notebook>=6",
+    "matplotlib>=3.7",
+    "numpy>=1.25",
+]
 # Tutorial-2-only extras: BioModels SBML simulator (libRoadRunner + tellurium).
 # Required only if you want `bayesmm run` to actually execute SBML models
 # (Tutorial 2). The `bayesmm` CLI itself does not require it; you can
@@ -39,6 +50,9 @@ all = [
     "sbi>=0.22,<1",
     "torch>=2,<3",
     "jupyter>=1",
+    "nbclient>=0.8",
+    "nbconvert>=7",
+    "notebook>=6",
     "matplotlib>=3.7",
     "numpy>=1.25",
     "libroadrunner>=2.5",
