@@ -763,6 +763,25 @@ package + `bayesmm` CLI. Backup ref `claude/develop-pre-port` retained.
   - `ruff check src tests` + `ruff format --check src tests` clean on the main
     repo.
 
+## Windows CI fix: cross-platform file lock (2026-05-15)
+- The first CI matrix run on `claude/develop` had Linux + macOS green but
+  Windows red at the test step. Root cause: `src/bayesian_metamodeling/storage/_filelock.py`
+  did `import fcntl` unconditionally; `fcntl` is POSIX-only, so any module
+  that touched the registry (run_store, surrogate_store, meta_store,
+  meta/sampling) failed at import on Windows, killing pytest collection.
+- Fix: cross-platform `_filelock.py` — `fcntl.flock(LOCK_EX/LOCK_UN)` on
+  POSIX, `msvcrt.locking(LK_LOCK/LK_UNLCK, 1)` on Windows. The lock file is
+  pre-seeded with one byte (Windows requires the locked region to actually
+  exist; POSIX doesn't care). Each call opens its own fd, so threads inside
+  one process are serialized too — matching the pre-existing
+  `tests/test_storage_unit.py::test_locked_registry_concurrent_writes`
+  contract.
+- Audited the rest of the codebase for other Windows traps (POSIX-only
+  imports, `os.fork`/`os.uname`, `shell=True` subprocess, `bash`
+  invocations, residual `%%bash` notebook cells). `_filelock.py` was the
+  only blocker.
+- Re-verified `tests/test_storage_unit.py` (8/8 pass) on macOS POSIX.
+
 ## Open issues
 - Tutorial 2 full run depends on external BioModels download; in restricted/offline sandboxes this step will fail while validate/plan still pass.
 - PyMC backend tests skip automatically when `pymc` is not installed in the active environment.
