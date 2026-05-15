@@ -57,6 +57,13 @@ def test_substitution_actually_runs_in_correct_env(tmp_path: Path) -> None:
     Catches a regression where _build_command does the substitution but the
     runner fails to use the substituted command (e.g. caller passes the
     wrong list, future refactor breaks the contract).
+
+    Note: compare paths via `Path.resolve()` rather than string equality —
+    Windows is case-insensitive and may have different short-path / long-path
+    representations of the same exe (e.g. `Python\\3.12.x\\x64\\python.exe`
+    vs `PYTHON~1\\3~1\\X64\\PYTHON.EXE`). Resolving normalizes both sides
+    so the assertion is genuinely "same executable" rather than "same
+    string spelling".
     """
     runner = _runner()
     run_dir = tmp_path / "run"
@@ -69,7 +76,7 @@ def test_substitution_actually_runs_in_correct_env(tmp_path: Path) -> None:
     result = runner.run(materialization=mat, run_dir=run_dir)
     assert result.returncode == 0, result.stderr_path.read_text()
     captured = result.stdout_path.read_text().strip()
-    assert captured == sys.executable, (
+    assert Path(captured).resolve() == Path(sys.executable).resolve(), (
         f"Worker subprocess ran with python={captured!r} but the runner's "
         f"env is {sys.executable!r}. The worker must inherit the kernel/CLI's env."
     )
