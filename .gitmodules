@@ -1,3 +1,4 @@
 [submodule "projects/tcr_signaling"]
 	path = projects/tcr_signaling
-	url = git@github.com:barakr/tcr_signaling.git
+	url = https://github.com/barakr/tcr_signaling.git
+	branch = main
