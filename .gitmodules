@@ -2,3 +2,4 @@
 	path = projects/tcr_signaling
 	url = https://github.com/barakr/tcr_signaling.git
 	branch = main
+	update = rebase
