@@ -53,7 +53,18 @@ This is the canonical path for DOE sweep numeric results across:
 
 Runs on Python 3.12+ on Windows, macOS, and Linux. Clone the repo, then either:
 
-**conda (recommended)** — `conda env create -f environment.yml && conda activate bayesian-metamodeling`
+**conda (recommended)** — `conda env create -f environment.yml && conda activate py314_bayesmm`
+
+This is the main development environment: the framework, the tutorial stack,
+and the dev tooling (`pytest`, `ruff`, `cmake`) that `make fast`, `make lint`
+and the `githooks/` hooks all expect. The two surrogate backends live in their
+own environments, because pinning PyMC, SBI and PyTorch in one solve is fragile:
+
+| File | Environment | Use |
+|------|-------------|-----|
+| `environment.yml` | `py314_bayesmm` | main dev: build, test, tutorials |
+| `environment-pymc.yml` | `py312_bayesmm_pymc` | PyMC GP surrogates |
+| `environment-sbi.yml` | `py312_bayesmm_sbi` | SBI NPE surrogates |
 
 **pip + venv**:
 ```

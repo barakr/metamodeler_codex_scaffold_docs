@@ -1,8 +1,19 @@
-name: bayesian-metamodeling
+# Main development environment (see CLAUDE.md "Conda Environments during
+# development"). The two surrogate backends live in their own files —
+# environment-pymc.yml and environment-sbi.yml — because pinning PyMC, SBI and
+# PyTorch together in one solve is what forced the split in the first place.
+#
+#   conda env create -f environment.yml && conda activate py314_bayesmm
+name: py314_bayesmm
 channels:
   - conda-forge
 dependencies:
-  - python>=3.12,<3.15
+  - python=3.14
+  # Pin the standard (GIL) CPython ABI. conda-forge also ships a free-threaded
+  # 3.14 build (`*_cp314t`); under it `import _brotli` raises a GIL
+  # RuntimeWarning, which `filterwarnings = error` in pytest.ini escalates into
+  # a collection error — the whole suite fails to start.
+  - python_abi=3.14.*=*_cp314
   - pip
   - pydantic>=2,<3
   - requests>=2,<3
@@ -17,10 +28,13 @@ dependencies:
   - nbconvert>=7
   - notebook>=6
   - matplotlib
-  # Optional surrogate backends — comment out if not needed
-  - pymc>=5,<6
-  - arviz>=0.17,<1
-  - pytorch>=2,<3
-  - sbi>=0.22,<1
+  # Dev tooling. `make fast`, `make lint` and both githooks invoke these, and
+  # the hooks fall back to this env by name when they aren't on PATH.
+  - pytest
+  - ruff
+  # Native build for projects/tcr_signaling (CMake). Only the build driver is
+  # from conda — the compiler must be the system Apple clang, since the KS
+  # model needs Objective-C++ and `-framework Metal`.
+  - cmake
   - pip:
       - -e .

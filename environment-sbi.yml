@@ -1,0 +1,27 @@
+# SBI surrogate-fitting environment (see CLAUDE.md "Conda Environments during
+# development").
+#
+#   conda env create -f environment-sbi.yml && conda activate py312_bayesmm_sbi
+#
+# `sbi` is pinned rather than taken from conda-forge: 0.23.3 is the version
+# recorded in Status.md as verified. Note that sbi 0.27.0 does NOT converge
+# within its default 100 epochs on these test problems, which `filterwarnings =
+# error` in pytest.ini turns into hard failures — see the pinning discussion in
+# pyproject.toml before raising this.
+name: py312_bayesmm_sbi
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - python_abi=3.12.*=*_cp312
+  - pip
+  - pydantic>=2,<3
+  - requests>=2,<3
+  - scipy>=1.11,<2
+  - numpy
+  - matplotlib
+  - pytest
+  - pytorch=2.10.0
+  - pip:
+      - sbi==0.23.3
+      - -e .

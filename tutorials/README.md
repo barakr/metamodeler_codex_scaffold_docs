@@ -18,7 +18,7 @@ PowerShell, macOS, and Linux.
 **conda (recommended):**
 ```
 conda env create -f environment.yml
-conda activate bayesian-metamodeling
+conda activate py314_bayesmm
 ```
 **pip + venv:**
 ```

@@ -1,0 +1,25 @@
+# PyMC surrogate-fitting environment (see CLAUDE.md "Conda Environments during
+# development"). Kept separate from the main env because pinning PyMC, SBI and
+# PyTorch in a single solve is fragile.
+#
+#   conda env create -f environment-pymc.yml && conda activate py312_bayesmm_pymc
+#
+# Referenced from specs as `{"execution_env": {"conda_env": "py312_bayesmm_pymc"}}`.
+name: py312_bayesmm_pymc
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - python_abi=3.12.*=*_cp312
+  - pip
+  - pydantic>=2,<3
+  - requests>=2,<3
+  - scipy>=1.11,<2
+  - numpy
+  - matplotlib
+  - pytest
+  # Versions recorded in Status.md for the verified environment.
+  - pymc=5.27.1
+  - arviz>=0.17,<1
+  - pip:
+      - -e .
