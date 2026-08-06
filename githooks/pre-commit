@@ -45,8 +45,11 @@ run_pytest() {
   run_pytest -q -m "not slow"
 
   changed_staged="$(git diff --cached --name-only || true)"
-  if echo "$changed_staged" | rg -q '^(src/|examples/)'; then
-    if ! echo "$changed_staged" | rg -q '^Status.md$'; then
+  # POSIX grep, not rg: hooks run non-interactively, so shell functions and
+  # user PATH additions are absent. A missing tool here fails open (127 inside
+  # an `if` condition is just "false"), which silently disabled this gate.
+  if echo "$changed_staged" | grep -qE '^(src/|examples/)'; then
+    if ! echo "$changed_staged" | grep -qE '^Status\.md$'; then
       echo "pre-commit: Status.md must be staged when src/ or examples/ changes."
       exit 1
     fi
