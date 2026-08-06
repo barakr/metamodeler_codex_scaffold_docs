@@ -200,9 +200,16 @@ If you cloned without `--recurse-submodules`, the submodule is empty and the
 submodule if you actually need the case study:
 ```bash
 git submodule update --init projects/tcr_signaling
+git submodule foreach 'git checkout main'   # see note below
 cd projects/tcr_signaling/models/kinetic_segregation && make
 cd projects/tcr_signaling && pytest -q
 ```
+
+The `git checkout main` is a one-time step. Git's initial submodule checkout
+always lands on a detached HEAD — it checks out the recorded commit before any
+branch exists — so commits made there would belong to no branch. Running it once
+attaches the submodule; `update = rebase` in `.gitmodules` keeps it attached
+through every later `git submodule update` and `git pull`.
 
 ## Reliability policy
 - No silent downsampling/subsampling.
