@@ -71,7 +71,12 @@ where = ["src"]
 [tool.ruff]
 line-length = 100
 target-version = "py314"
-extend-exclude = ["*.ipynb"]
+# `projects/` holds research submodules with their own lifecycle and lint
+# conventions — root config governs the framework only (see CLAUDE.md
+# "Submodule Boundary"). This mirrors `testpaths = tests` in pytest.ini.
+# `*.md` keeps `ruff format` out of fenced code blocks in design docs — the
+# pre-commit hook runs it in-place, which would silently rewrite prose files.
+extend-exclude = ["*.ipynb", "*.md", "projects/"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]
