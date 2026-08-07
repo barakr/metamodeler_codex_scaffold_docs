@@ -168,8 +168,13 @@ immediately — none of the three reproduced on macOS.
     `local_sbml_path` at it, so CI verifies parse/simulate/mapping/flattening.
     T2 keeps fetching by default — that is part of what it teaches — and probes
     the URL first, falling back to the vendored copy when offline or blocked.
-    Consequence to accept: the network-fetch path cannot be CI-verified at all,
-    because the service will not serve CI.
+    The fetch is covered by a *separate* test, `test_biomodels_adapter_fetch_slow`,
+    which calls the adapter directly (not via a sweep, where a failed download
+    surfaces as "N/N points failed" with the cause buried in sweep_logs.jsonl) and
+    skips with an explicit HTTP-code reason where the service refuses. So the
+    download IS tested on a developer machine and only unverifiable on hosted CI.
+    First attempt got this wrong: pinning `local_sbml_path` in the one existing
+    test made the fetch untested *everywhere*, not just in CI.
 
 #### Decisions taken with the user (2026-08-07)
 

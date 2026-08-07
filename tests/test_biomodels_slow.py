@@ -1,16 +1,25 @@
 """Slow integration tests for the BioModels adapter.
 
-These tests validate two behaviors:
-- fetching a BioModels model by identifier
-- simulating the fetched model and persisting outputs
+Two behaviours, split into two tests because only one of them can run everywhere:
 
-They are marked `slow` because model fetch/simulate can take time and may
-require network access.
+- `test_biomodels_adapter_simulate_slow` uses the vendored SBML, so it runs
+  anywhere libroadrunner is installed and deterministically covers the part that
+  can break silently: SBML parse, simulate, adapter output mapping, sweep row
+  flattening.
+- `test_biomodels_adapter_fetch_slow` performs the real download. biomodels.org
+  returns 403 to GitHub's runner IP ranges while serving ordinary connections
+  fine, so this one skips in CI — with an explicit reason — and covers the fetch
+  path on a developer machine, which is the only place it can be covered at all.
+
+Keeping them separate matters: folding the fetch into the simulate test made the
+download untested *everywhere*, not just in CI.
 """
 
 import copy
 import csv
 import json
+import urllib.error
+import urllib.request
 from pathlib import Path
 from uuid import uuid4
 
@@ -19,30 +28,81 @@ import pytest
 import bayesian_metamodeling.storage.run_store as run_store
 from bayesian_metamodeling.cli.main import main
 
+SPEC_PATH = Path("examples/biomodels/spec.prompt4.model1907260003.json")
+VENDORED_SBML = "examples/biomodels/MODEL1907260003.xml"
 
-@pytest.mark.slow
-def test_biomodels_adapter_fetch_and_simulate_slow(monkeypatch, capsys, tmp_path):
+
+def _require_roadrunner() -> None:
     try:
         import roadrunner  # noqa: F401
     except ImportError:
         pytest.skip("libroadrunner is not installed")
 
+
+@pytest.mark.slow
+def test_biomodels_adapter_fetch_slow(tmp_path):
+    """The real download, exercised wherever the service will actually serve us.
+
+    Deliberately does NOT go through a sweep — a failed fetch there surfaces as
+    "N/N DOE points failed" with the cause buried in sweep_logs.jsonl. Calling
+    the adapter directly makes the HTTP failure the test failure.
+    """
+    _require_roadrunner()
+
+    from bayesian_metamodeling.adapters.biomodels_sbml import BioModelsSBMLAdapter
+    from bayesian_metamodeling.spec import ModelSpec
+
+    payload = copy.deepcopy(json.loads(SPEC_PATH.read_text()))
+    source_url = payload["model"]["artifact"]["source_url"]
+
+    # Probe first so a blocked network is a clear skip rather than an opaque
+    # failure. 403 specifically is what GitHub's runners get.
+    try:
+        with urllib.request.urlopen(source_url, timeout=30) as resp:
+            if resp.status != 200:
+                pytest.skip(f"BioModels returned HTTP {resp.status} for {source_url}")
+    except urllib.error.HTTPError as exc:
+        pytest.skip(
+            f"BioModels refused the download (HTTP {exc.code}). Expected on hosted CI: "
+            f"biomodels.org blocks cloud IP ranges. The simulate path is covered by "
+            f"test_biomodels_adapter_simulate_slow using the vendored SBML."
+        )
+    except Exception as exc:  # noqa: BLE001 - any transport failure means "cannot fetch"
+        pytest.skip(f"BioModels unreachable ({type(exc).__name__}: {exc}) — no network?")
+
+    # No local_sbml_path: force the adapter down the download path.
+    payload["model"]["artifact"].pop("local_sbml_path", None)
+    spec = ModelSpec.model_validate(payload)
+
+    cache_dir = tmp_path / "_cache" / "biomodels"
+    sbml_path = BioModelsSBMLAdapter()._download_if_missing(
+        spec=spec, cache_dir=cache_dir, repo_root=Path.cwd()
+    )
+
+    assert sbml_path.exists(), "adapter reported success but wrote no file"
+    text = sbml_path.read_text(encoding="utf-8", errors="replace")
+    # An HTML error page is the classic silent failure here — it downloads fine,
+    # caches fine, and then every DOE point dies inside libroadrunner.
+    assert "<sbml" in text, f"downloaded file is not SBML (starts: {text[:80]!r})"
+    assert payload["model"]["artifact"]["biomodels_id"] in sbml_path.name
+
+
+@pytest.mark.slow
+def test_biomodels_adapter_simulate_slow(monkeypatch, capsys, tmp_path):
+    _require_roadrunner()
+
     registry_path = tmp_path / "run_registry_biomodels.json"
     monkeypatch.setattr(run_store, "REGISTRY_PATH", registry_path)
 
-    spec_path = Path("examples/biomodels/spec.prompt4.model1907260003.json")
-    payload = json.loads(spec_path.read_text())
-    payload = copy.deepcopy(payload)
+    payload = copy.deepcopy(json.loads(SPEC_PATH.read_text()))
     payload["storage"] = {"root": f"tmp/pytest_biomodels_store_{uuid4().hex}"}
 
-    # Use the vendored SBML rather than fetching. biomodels.org returns 403 to
-    # GitHub's runner IPs (it works from a normal connection), so a fetching test
-    # is red in CI forever — and the alternative, letting it skip, is the same
-    # green-by-skipping this suite exists to prevent. The fetch path itself
-    # therefore cannot be CI-verified by anything here; what this test does verify
-    # is the part that can break silently: SBML parse, simulate, adapter output
-    # mapping and sweep row flattening.
-    payload["model"]["artifact"]["local_sbml_path"] = "examples/biomodels/MODEL1907260003.xml"
+    # Vendored SBML, so this runs identically everywhere and isolates the
+    # simulate pipeline from network availability. The download is covered
+    # separately by test_biomodels_adapter_fetch_slow, which skips where the
+    # service refuses to serve — keeping them apart is what stops the fetch from
+    # becoming untested everywhere.
+    payload["model"]["artifact"]["local_sbml_path"] = VENDORED_SBML
 
     temp_spec = tmp_path / "biomodels_spec.json"
     temp_spec.write_text(json.dumps(payload))
