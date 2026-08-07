@@ -189,6 +189,7 @@ bayesmm --version
 | `py314_bayesmm` | Main dev (Python 3.14) | `conda env create -f environment.yml` |
 | `py312_bayesmm_pymc` | PyMC 5.27.1 + ArviZ | `conda env create -f environment-pymc.yml` |
 | `py312_bayesmm_sbi` | SBI 0.23.3 + Torch 2.10.0 | `conda env create -f environment-sbi.yml` |
+| `py312_bayesmm_biomodels` | libRoadRunner + tellurium (Tutorial 2) | `conda env create -f environment-biomodels.yml` |
 
 `py314_bayesmm` is the env the `githooks/` hooks fall back to by name, and the
 only one carrying `pytest`, `ruff` and `cmake`.

@@ -43,9 +43,10 @@ install as needed. The main env deliberately ships without them.
 | `py314_bayesmm` | T0, T1, T3, T4 (+ all others in skip mode) | `conda env create -f environment.yml` |
 | `py312_bayesmm_pymc` | T5, T7, T8, T9 | `conda env create -f environment-pymc.yml` |
 | `py312_bayesmm_sbi` | T6 | `conda env create -f environment-sbi.yml` |
+| `py312_bayesmm_biomodels` | T2 | `conda env create -f environment-biomodels.yml` |
 
-Tutorial 2 additionally needs `pip install libroadrunner tellurium` (PyPI-only, not
-on conda-forge).
+Tutorial 2's simulator deps are PyPI-only (not on conda-forge), which is why they
+get their own env rather than weighing down the main one.
 
 Check what your kernel has with `bayesmm doctor`; `bayesmm setup` prints
 OS-correct install commands.
@@ -66,12 +67,10 @@ identically on Windows cmd, Windows PowerShell, macOS and Linux.
 - Prerequisites, estimated time, learning aims and success criteria
 - A **predict-before-you-run** moment — commit to an answer, then check it
 - A recap of the load-bearing ideas
-- A troubleshooting table (all except T0, which is orientation)
+- A troubleshooting table
+- At least one plot or diagram
 - A self-check cell printing `[T<N> self-check OK]`, asserting the tutorial's
   scientific artifact actually exists and is non-trivial
-
-All except T3 include a plot; T3 is about reading validator output, where a figure
-would add nothing.
 
 ## Verifying the whole set
 

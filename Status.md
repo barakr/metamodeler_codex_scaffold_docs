@@ -136,9 +136,32 @@ Three things went wrong, ordered by lesson value:
   troubleshooting 2→9 (T0 excepted, being orientation), predict-before-you-run
   5→9, inter-tutorial threading 6→10, recap 7→10, objectives 9→10.
 - **`tutorials/README.md` rewritten.** It claimed troubleshooting in every
-  notebook (there were two) and a visual checkpoint in every notebook (T3 has no
-  plot, correctly — it is about reading validator output). Now states the course
-  arc, the per-tutorial question/capability table, and the env matrix.
+  notebook (there were two) and a visual checkpoint in every notebook (T3 had
+  none). Now states the course arc, the per-tutorial question/capability table,
+  and the env matrix.
+
+#### Decisions taken with the user (2026-08-07)
+
+- **Deep CI runs nightly, not weekly** (03:00 UTC). Tutorials are user-facing; a
+  break sitting for a week would be found by a learner before CI found it.
+- **Deep CI runs a 4-way matrix mirroring the documented envs**, not one
+  all-backends job. T5/T9 crashed *only* in the backend-less main env, which a
+  single full-install job would never have caught. The three partial jobs prove
+  tutorials DEGRADE correctly (skips allowed); the `full` job sets
+  `REQUIRE_TUTORIAL_BACKENDS=1` and proves the science RUNS (no skips allowed).
+- **Fourth env added: `environment-biomodels.yml` → `py312_bayesmm_biomodels`.**
+  libRoadRunner/tellurium are heavy and PyPI-only and only T2 needs them, so
+  they do not belong in `environment.yml`; but leaving them installed nowhere
+  meant T2 could only ever be debugged through CI logs — which is the condition
+  that let its silent failure survive. Own env, symmetric with pymc and sbi.
+- **T0 troubleshooting and T3 plot added** (reversing the earlier call to leave
+  them). T0's table covers the kernel-vs-env mismatch that causes most newcomer
+  failures, and is arguably the highest-value one in the course despite T0
+  running no models. T3's figure is a ModelSpec anatomy map showing which error
+  each block raises and marking the two cross-block contracts — which is where
+  the confusing errors come from, since the reported `loc` is often not the
+  field just edited. Every notebook now has a plot and a troubleshooting table,
+  so the README needs no exceptions.
 
 ### 2026-03-05: Fix KS model MC loop + self-contained example specs
 - **MC loop fix**: Changed from single-particle stepping to full sweeps — each

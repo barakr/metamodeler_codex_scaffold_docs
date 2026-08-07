@@ -1,0 +1,39 @@
+# BioModels SBML environment — Tutorial 2 only.
+#
+#   conda env create -f environment-biomodels.yml
+#   conda activate py312_bayesmm_biomodels
+#
+# Kept as its own env rather than folded into environment.yml because
+# libroadrunner and tellurium are heavy, PyPI-only (NOT on conda-forge), and
+# needed by exactly one of the ten tutorials. Same reasoning that keeps PyMC and
+# SBI in their own files.
+#
+# It exists at all because T2 is the tutorial with a documented history of
+# silent failure (see Status.md, "post-mortem on missed T2 silent failure"):
+# every DOE point failed while the summary line looked healthy. Being unable to
+# reproduce that locally — the state this repo was in until now, with
+# libroadrunner in no env at all — is what let it hide. The nightly Deep CI job
+# also covers it, but debugging through CI logs alone is a bad position.
+name: py312_bayesmm_biomodels
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - python_abi=3.12.*=*_cp312
+  - pip
+  - pydantic>=2,<3
+  - requests>=2,<3
+  - scipy>=1.11,<2
+  - numpy
+  - matplotlib
+  - pytest
+  # Notebook execution, so Tutorial 2 can be run and verified in this env.
+  - jupyter
+  - nbclient>=0.8
+  - nbconvert>=7
+  - ipykernel
+  - pip:
+      # PyPI-only — these have no conda-forge builds.
+      - libroadrunner>=2.5
+      - tellurium>=2.2
+      - -e .

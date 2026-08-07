@@ -17,23 +17,47 @@ name: Deep CI
 
 on:
   schedule:
-    # Mondays 09:00 UTC — after CI (06:00), KS model (07:00) and Interface
-    # (08:00), so a shared upstream break surfaces in dependency order.
-    - cron: "0 9 * * 1"
+    # Nightly, 03:00 UTC. Tutorials are user-facing, and a break that sat for a
+    # week would be found by a learner before it was found by CI.
+    - cron: "0 3 * * *"
   workflow_dispatch:
   # Deliberately NOT on push: minutes-long, and the fast suite already gates
   # pushes. Use the Actions "Run workflow" button when you want it on demand.
 
 jobs:
   slow:
-    name: slow suite + all tutorials
+    name: ${{ matrix.label }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        # Mirrors the documented conda envs, because a tutorial can be broken in
+        # ONE env and fine in others — T5 and T9 crashed only in the backend-less
+        # main env, which a single all-backends job would never have caught.
+        #
+        # `require_backends` is on only for `full`: the partial envs are meant to
+        # skip their backend steps, so demanding no-skips there would fail by
+        # construction. Those jobs prove tutorials DEGRADE correctly; `full`
+        # proves the science RUNS.
+        include:
+          - label: "main env (no backends)"
+            extras: "tutorials"
+            require_backends: "0"
+          - label: "pymc env"
+            extras: "pymc,tutorials"
+            require_backends: "0"
+          - label: "sbi env"
+            extras: "sbi,tutorials"
+            require_backends: "0"
+          - label: "full (all backends, no skips allowed)"
+            extras: "pymc,sbi,tutorials,biomodels"
+            require_backends: "1"
     env:
       # PyTensor needs a system BLAS to compile its C ops; the C-less mode keeps
       # this deterministic, matching the main CI workflow.
       PYTENSOR_FLAGS: cxx=
-      REQUIRE_TUTORIAL_BACKENDS: "1"
+      REQUIRE_TUTORIAL_BACKENDS: ${{ matrix.require_backends }}
 
     steps:
       - uses: actions/checkout@v4
@@ -44,14 +68,13 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install with every backend
-        # `biomodels` matters most here: libroadrunner/tellurium are PyPI-only
-        # and are in none of the local conda envs, so Tutorial 2's BioModels
-        # sweep — the tutorial whose silent failure prompted all of this — has
-        # not actually been exercised anywhere since it was fixed.
+      - name: Install (extras = ${{ matrix.extras }})
+        # `biomodels` appears only in the full job: libroadrunner/tellurium are
+        # PyPI-only, and Tutorial 2's BioModels sweep — the tutorial whose silent
+        # failure prompted all of this — is otherwise exercised nowhere.
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e ".[pymc,sbi,tutorials,biomodels]" pytest
+          python -m pip install -e ".[${{ matrix.extras }}]" pytest
 
       - name: Report resolved backend versions
         # Printed so a drift-induced failure can be diagnosed from the log alone.
