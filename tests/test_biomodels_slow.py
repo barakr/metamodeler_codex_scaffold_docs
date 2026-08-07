@@ -55,6 +55,28 @@ def test_biomodels_adapter_fetch_and_simulate_slow(monkeypatch, capsys, tmp_path
         rows = list(csv.DictReader(handle))
     assert len(rows) == 1
     assert rows[0]["status"] == "success"
+    row = rows[0]
 
-    timeseries_payload = json.loads(rows[0]["time_series__json"])
-    assert "rows" in timeseries_payload
+    # The timeseries is flattened per-key by `flatten_outputs_for_row`, not stored
+    # as one `time_series__json` blob. `_flatten_nested` only emits a whole-payload
+    # column when some member could not be flattened at all; here every member can
+    # be, so the data lands in `time_series__{n_points,t0,t1,columns__N,rows__json}`.
+    #
+    # This assertion previously looked for `time_series__json` and had therefore
+    # never passed: the test needs libroadrunner (installed in no environment until
+    # now) and is marked `slow`, so it was excluded from every CI run. Asserting on
+    # the real schema, and on the values, so it fails if the sweep goes hollow
+    # rather than merely if a column is renamed.
+    assert int(row["time_series__n_points"]) > 1, "timeseries has no samples"
+    assert float(row["time_series__t1"]) > float(row["time_series__t0"]), "empty time span"
+
+    columns = [row[k] for k in sorted(row) if k.startswith("time_series__columns__")]
+    assert "time" in columns, f"no time column in {columns}"
+
+    series = json.loads(row["time_series__rows__json"])
+    assert len(series) == int(row["time_series__n_points"])
+    assert set(series[0]) == set(columns), "row keys disagree with declared columns"
+    # A simulation that silently produced nothing would still be uniformly zero.
+    assert any(v != 0.0 for k, v in series[0].items() if k != "time"), (
+        "every species is zero at t0 — the SBML simulated but produced no state"
+    )

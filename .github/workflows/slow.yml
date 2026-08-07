@@ -148,7 +148,11 @@ jobs:
               for tag in ("failure", "error"):
                   for node in case.findall(tag):
                       name = f"{case.get('classname')}::{case.get('name')}"
-                      msg = (node.get("message") or "").replace("\n", " ")[:400]
+                      raw = ((node.get("message") or "") + " " + (node.text or "")).replace("\n", " ")
+                      # Head AND tail: for a notebook CellExecutionError the head
+                      # names the cell and the tail carries the actual exception,
+                      # and a head-only truncation cuts off exactly the useful part.
+                      msg = raw if len(raw) <= 900 else f"{raw[:450]} ... [snip] ... {raw[-450:]}"
                       bad.append((name, msg))
                       # Annotation: readable without auth, unlike the log itself.
                       print(f"::error title=slow suite {tag}::{name} :: {msg}")
