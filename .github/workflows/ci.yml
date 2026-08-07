@@ -10,6 +10,14 @@ on:
   push:
     branches: ["**"]
   pull_request:
+  # Weekly drift check. The optional backends install from open ranges
+  # (`pymc>=5,<6`, `torch>=2,<3`, `arviz>=0.17,<1`), so a new upstream release
+  # can turn this red with no commit here. That is exactly how sbi 0.27 broke
+  # CI unnoticed for ~3 months in 2026 — the last green run was in May and
+  # nobody pushed until August. A scheduled run surfaces drift while it is one
+  # version old instead of four. Mondays, 06:00 UTC.
+  schedule:
+    - cron: "0 6 * * 1"
   workflow_dispatch:
 
 jobs:
