@@ -115,6 +115,42 @@ jobs:
       - name: Run the slow suite (includes all 10 tutorials)
         run: python -m pytest -q -ra --tb=short -m slow --junit-xml=slow-results.xml
 
+      - name: Dump per-point sweep errors on failure
+        # A failed sweep reports only "N/N DOE points failed" — the actual
+        # per-point exception goes to sweep_logs.jsonl, which is precisely the
+        # asymmetry that let the original T2 silent failure survive. Surfacing it
+        # as annotations makes a red run diagnosable from its URL, since Actions
+        # logs need an authenticated token to fetch but annotations do not.
+        if: failure()
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          logs = sorted(pathlib.Path("tmp").rglob("sweep_logs.jsonl"))
+          if not logs:
+              print("::warning::no sweep_logs.jsonl found under tmp/")
+          seen = set()
+          for log in logs:
+              for line in log.read_text(encoding="utf-8", errors="replace").splitlines():
+                  try:
+                      rec = json.loads(line)
+                  except Exception:
+                      continue
+                  err = str(rec.get("error") or rec.get("stderr") or "").strip()
+                  if not err:
+                      continue
+                  key = err[:200]
+                  if key in seen:      # every point usually fails identically
+                      continue
+                  seen.add(key)
+                  print(f"::error title=sweep point error ({log.parent.name})::{err[:900]}")
+                  if len(seen) >= 5:
+                      break
+              if len(seen) >= 5:
+                  break
+          if not seen:
+              print("::warning::sweep_logs.jsonl found but carried no error field")
+          PY
+
       - name: Summarise result (and surface failures as annotations)
         # Two jobs. (1) The same collapse guard as KS model CI: zero collected
         # tests would otherwise exit 0 and read as success. (2) Emit each
