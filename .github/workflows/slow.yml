@@ -113,24 +113,60 @@ jobs:
           PY
 
       - name: Run the slow suite (includes all 10 tutorials)
-        run: python -m pytest -q -m slow --junit-xml=slow-results.xml
+        run: python -m pytest -q -ra --tb=short -m slow --junit-xml=slow-results.xml
 
-      - name: Assert the slow suite actually ran
-        # Same guard as the KS model CI: a collapse to zero collected tests
-        # would otherwise exit 0 and read as success.
+      - name: Summarise result (and surface failures as annotations)
+        # Two jobs. (1) The same collapse guard as KS model CI: zero collected
+        # tests would otherwise exit 0 and read as success. (2) Emit each
+        # failure as a `::error::` annotation and into the run summary.
+        #
+        # That second part is not cosmetic. Actions *logs* need an authenticated
+        # token to fetch, but *annotations* are readable on a public repo without
+        # one — so putting the failing test names and messages here is the
+        # difference between diagnosing a red run from its URL and having to
+        # reproduce it blind. Learned the hard way on the first matrix run.
         if: always()
         run: |
           python - <<'PY'
-          import sys, xml.etree.ElementTree as ET
+          import os, sys, xml.etree.ElementTree as ET
+
           root = ET.parse("slow-results.xml").getroot()
-          s = root.find("testsuite")
-          if s is None:
-              s = root
-          total = int(s.get("tests", 0)); skipped = int(s.get("skipped", 0))
-          failures = int(s.get("failures", 0)); errors = int(s.get("errors", 0))
+          suite = root.find("testsuite")
+          if suite is None:
+              suite = root
+          total = int(suite.get("tests", 0)); skipped = int(suite.get("skipped", 0))
+          failures = int(suite.get("failures", 0)); errors = int(suite.get("errors", 0))
           passed = total - skipped - failures - errors
           print(f"total={total} passed={passed} skipped={skipped} failed={failures} errors={errors}")
+
+          lines = [f"| total | passed | skipped | failed | errors |",
+                   f"|---|---|---|---|---|",
+                   f"| {total} | {passed} | {skipped} | {failures} | {errors} |", ""]
+
+          bad = []
+          for case in suite.iter("testcase"):
+              for tag in ("failure", "error"):
+                  for node in case.findall(tag):
+                      name = f"{case.get('classname')}::{case.get('name')}"
+                      msg = (node.get("message") or "").replace("\n", " ")[:400]
+                      bad.append((name, msg))
+                      # Annotation: readable without auth, unlike the log itself.
+                      print(f"::error title=slow suite {tag}::{name} :: {msg}")
+
+          if bad:
+              lines.append("### Failures")
+              for name, msg in bad:
+                  lines.append(f"- **{name}**")
+                  lines.append(f"  - `{msg}`")
+
+          summary = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary:
+              with open(summary, "a", encoding="utf-8") as fh:
+                  fh.write("\n".join(lines) + "\n")
+
           if total < 10:
-              sys.exit(f"FAIL: only {total} slow tests collected; expected >=10 (the tutorials alone are 10).")
-          print("OK: slow suite ran.")
+              sys.exit(f"FAIL: only {total} slow tests collected; expected >=10 (tutorials alone are 10).")
+          if bad:
+              sys.exit(f"FAIL: {len(bad)} slow test(s) failed — see annotations above.")
+          print("OK: slow suite ran clean.")
           PY
