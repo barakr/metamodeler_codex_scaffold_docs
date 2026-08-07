@@ -23,3 +23,11 @@ Hooks to implement (scripts live in this folder):
 Notes:
 - Store any hook logs under tmp/hook_logs
 - Hooks must be deterministic and fast
+- Never use `rg` (or any non-POSIX tool) in a hook. Hooks run
+  non-interactively, so shell functions and user PATH additions are absent. A
+  missing command inside an `if` condition exits 127, which reads as "false" —
+  the check then silently passes without ever running. Use `grep`.
+
+The submodule at `projects/tcr_signaling/` has its own `githooks/` directory
+with equivalent hooks, activated separately from inside that repo. It does not
+block commits on `main`, because `main` is that repo's trunk.

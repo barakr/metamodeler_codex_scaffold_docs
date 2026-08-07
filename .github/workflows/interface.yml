@@ -1,0 +1,58 @@
+name: Interface CI
+
+# Third, independent signal. The other two answer "is the framework OK?" (CI,
+# this repo) and "is the KS model OK?" (KS model CI, the tcr_signaling repo).
+# This one answers "do they still fit together?" — nothing else does: the
+# framework's suite never checks out the submodule, and the submodule's suite
+# imports no framework code.
+#
+# Kept as its own workflow rather than a job inside CI so a contract break does
+# not turn the framework's status red, matching how the KS model is separated.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  # Runs on EVERY push, not on `paths: projects/**`. The contract can break from
+  # either side, and the framework side is the likelier one — editing
+  # src/spec/*.py can invalidate every case-study spec while `projects/` never
+  # changes, so a path filter would simply never fire. Path filters fail open:
+  # when they are wrong you get silence, not an error. The job needs no native
+  # build and takes seconds, so there is nothing to save by filtering.
+  schedule:
+    - cron: "0 8 * * 1"
+  workflow_dispatch:
+
+jobs:
+  interface:
+    name: framework <-> tcr_signaling specs
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout (WITH submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install framework
+        # No optional backends: the contract under test is the spec schemas,
+        # which are pure pydantic. Keeps this fast and independent of the
+        # pymc/sbi pins.
+        run: python -m pip install --upgrade pip && python -m pip install -e . pytest
+
+      - name: Verify the submodule actually checked out
+        run: |
+          test -d projects/tcr_signaling/specs || {
+            echo "submodule missing — the checkout step did not fetch it"; exit 1; }
+          echo "specs found: $(ls projects/tcr_signaling/specs/*.json | wc -l)"
+
+      - name: Run interface contract tests
+        # REQUIRE_SUBMODULE_INTERFACE=1 turns "submodule absent" from a skip into
+        # a failure. Without it this job could pass green having run nothing.
+        env:
+          REQUIRE_SUBMODULE_INTERFACE: "1"
+        run: python -m pytest -q tests/test_submodule_interface.py

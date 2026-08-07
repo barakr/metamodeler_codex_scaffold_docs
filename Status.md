@@ -79,6 +79,28 @@ Three things went wrong, ordered by lesson value:
   `ravehlab`, which has no push access to `barakr/tcr_signaling`. Added
   `update = rebase` to `.gitmodules` — it had been in `.git/config`, which is
   never cloned, so every fresh clone still landed in detached HEAD.
+- **Three independent CI signals, deliberately not merged.** `CI` (here) =
+  framework broken; `KS model CI` (tcr_signaling repo) = KS model broken;
+  `Interface CI` (here) = the two no longer fit. Keeping them separate avoids
+  a submodule toolchain failure colouring the framework's status.
+- **Interface contract tests added** (`tests/test_submodule_interface.py`).
+  Nothing tested the framework against the case study before: the framework
+  suite never checks out the submodule (`submodules: false` in CI) and the
+  submodule suite imports no framework code, so a change to `spec/*.py` could
+  invalidate all 9 case-study specs unnoticed. Validates each spec against the
+  schema its filename prefix selects, plus schema_version presence and
+  metamodel→surrogate name references. Pure pydantic — no CMake, no Metal.
+- **`Interface CI` runs on every push, not `paths: projects/**`.** The contract
+  breaks from either side and the framework side is likelier; a path filter on
+  `projects/` would never fire for a `src/spec/` edit. Path filters fail open —
+  when wrong they give silence, not an error.
+- **`REQUIRE_SUBMODULE_INTERFACE=1`** makes "submodule absent" a failure rather
+  than a skip in that job, so it cannot pass green having run nothing. Same
+  concern as the KS suite's skip guard.
+- Note: `bayesmm validate` only ever applies `ModelSpec`. Pointing it at a
+  surrogate or metamodel spec reports a misleading "Extra inputs are not
+  permitted" that looks like spec rot but is not — the interface tests
+  dispatch on the filename prefix instead.
 
 ### 2026-03-05: Fix KS model MC loop + self-contained example specs
 - **MC loop fix**: Changed from single-particle stepping to full sweeps — each
