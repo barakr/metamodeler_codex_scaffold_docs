@@ -20,9 +20,33 @@ on:
     # Nightly, 03:00 UTC. Tutorials are user-facing, and a break that sat for a
     # week would be found by a learner before it was found by CI.
     - cron: "0 3 * * *"
+
+  # Also on push — for two reasons, the second less obvious than the first.
+  #
+  # 1. These paths are the ones that actually break tutorials, so waiting until
+  #    tonight to learn about it is needless.
+  # 2. GitHub disables scheduled workflows in PUBLIC repos after 60 days of
+  #    repository inactivity, emails the admins, and does NOT re-enable them on
+  #    the next push — you must click Enable per workflow. That would leave a
+  #    returning project with zero scheduled coverage precisely when
+  #    dependencies have drifted most. Push triggers are never disabled, so this
+  #    keeps a safety net after dormancy even if the crons are asleep.
+  #
+  # `src/**` is included deliberately: T5/T9 broke from backend behaviour, not
+  # from notebook edits. That does mean this fires on most substantive pushes —
+  # acceptable because Actions minutes are free on public repos, so the cost is
+  # queue time, not money. Narrow the list if the noise outweighs that.
+  push:
+    branches: ["**"]
+    paths:
+      - "tutorials/**"
+      - "src/**"
+      - "tests/test_tutorial_integration.py"
+      - "pyproject.toml"
+      - "environment*.yml"
+      - ".github/workflows/slow.yml"
+
   workflow_dispatch:
-  # Deliberately NOT on push: minutes-long, and the fast suite already gates
-  # pushes. Use the Actions "Run workflow" button when you want it on demand.
 
 jobs:
   slow:
