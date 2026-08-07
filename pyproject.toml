@@ -20,7 +20,15 @@ pymc = ["arviz>=0.17,<1", "pymc>=5,<6"]
 # (2) `_TrackerCompatWriter` adapts a `tensorboard.SummaryWriter` to expose
 #     the `log_metric()` method the new sbi training loop calls.
 # Together these let one wheel work across the full supported sbi range.
-sbi = ["sbi>=0.22,<1", "torch>=2,<3"]
+#
+# Upper bound is 0.27, not 1: on 0.27.0 the NPE trainer no longer converges
+# within its default 100 epochs on these test problems, so it emits
+# "Maximum number of epochs ... reached, but network has not yet fully
+# converged". `filterwarnings = error` in pytest.ini escalates that to a hard
+# failure in 5 tests. Nothing above 0.26 has been validated. Lift this once
+# 0.27+ is checked against the surrogate suite (the training budget in
+# `backends.py::max_num_epochs` is the likely knob).
+sbi = ["sbi>=0.22,<0.27", "torch>=2,<3"]
 # Tutorial-only extras (NOT framework runtime). Required to *execute* the
 # Jupyter notebooks in `tutorials/`; not needed if you're using the package
 # from your own scripts. `numpy` is here defensively (transitive via scipy
@@ -47,7 +55,7 @@ biomodels = ["libroadrunner>=2.5", "tellurium>=2.2"]
 all = [
     "arviz>=0.17,<1",
     "pymc>=5,<6",
-    "sbi>=0.22,<1",
+    "sbi>=0.22,<0.27",  # see the `sbi` extra above for why the upper bound
     "torch>=2,<3",
     "jupyter>=1",
     "nbclient>=0.8",

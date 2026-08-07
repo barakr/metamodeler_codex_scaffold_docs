@@ -39,6 +39,47 @@ Three things went wrong, ordered by lesson value:
 
 ## Decision Log
 
+### 2026-08-07: Pin `sbi<0.27`; reconcile conda envs; repair submodule + hook setup
+- **CI had been red since 2026-05-15 without anyone noticing.** The last green
+  run was `a34b3e0`; no runs happened between then and 2026-08-06, so the break
+  was pure PyPI drift, not a code change. `src/` and `tests/` were untouched.
+- **`sbi` pinned to `>=0.22,<0.27`.** On sbi 0.27.0 the NPE trainer no longer
+  converges within its default 100 epochs on the test problems and warns
+  "Maximum number of epochs ... reached"; `filterwarnings = error` escalates
+  that to hard failures in 5 tests. `pyproject.toml` already documented the
+  supported range as 0.22..0.26, so 0.27 was never validated. Reproduced in a
+  clean venv matching CI's install, and verified green after the pin (sbi
+  resolves to 0.26.1). Lift once 0.27+ is checked against the surrogate suite —
+  `backends.py::max_num_epochs` (default 120) is the likely knob.
+- **Conda env files reconciled with the documented three envs.** README and
+  `tutorials/README.md` told users to create `bayesian-metamodeling`, while
+  CLAUDE.md, the submodule docs and both githooks reference `py314_bayesmm` /
+  `py312_bayesmm_pymc` / `py312_bayesmm_sbi`. The hooks fall back to
+  `~/miniconda3/envs/py314_bayesmm/bin/{ruff,pytest}` **by name**, so an env
+  built from the old file could not satisfy them. `environment.yml` now builds
+  `py314_bayesmm` and carries `pytest`/`ruff`/`cmake` (previously absent — so
+  `make fast` and `make lint` could not run in it); backends split into
+  `environment-pymc.yml` and `environment-sbi.yml`.
+- **`python_abi=*_cp314` pinned** in `environment.yml`: conda-forge resolves a
+  bare `python=3.14` to the free-threaded build, under which `import _brotli`
+  raises a GIL `RuntimeWarning` that `filterwarnings = error` turns into a
+  collection error — the suite cannot even start.
+- **Ruff scoped to the framework.** `ruff check .` from the root reported 46
+  errors, all inside `projects/tcr_signaling`, which root config does not
+  govern. Added `projects/` and `*.md` to `extend-exclude` (this ruff formats
+  fenced code blocks, so the hook's in-place `ruff format .` was silently
+  rewriting `CodeDesign.md`). CI was unaffected — it already scoped to
+  `src tests`.
+- **`githooks/pre-commit` Status.md gate was dead.** It called `rg`, which is
+  not installed; inside an `if` condition exit 127 reads as false, so the hook
+  reported success while enforcing nothing. Switched to POSIX `grep`.
+- **Submodule now tracks `main` over HTTPS.** `tcr_signaling` `main` was 19
+  commits stale; fast-forwarded to the `feature/ks-metamodel-sweep` tip and
+  deleted the four fully-merged branches. The SSH remote authenticates as
+  `ravehlab`, which has no push access to `barakr/tcr_signaling`. Added
+  `update = rebase` to `.gitmodules` — it had been in `.git/config`, which is
+  never cloned, so every fresh clone still landed in detached HEAD.
+
 ### 2026-03-05: Fix KS model MC loop + self-contained example specs
 - **MC loop fix**: Changed from single-particle stepping to full sweeps — each
   `n_steps` iteration now updates every molecule and every grid cell once,
