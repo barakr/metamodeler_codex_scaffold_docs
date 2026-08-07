@@ -140,6 +140,37 @@ Three things went wrong, ordered by lesson value:
   none). Now states the course arc, the per-tutorial question/capability table,
   and the env matrix.
 
+#### Deep CI's first matrix run found three real bugs (2026-08-07)
+
+The matrix and the REQUIRE flag were justified on the argument that a single
+all-backends job hides env-specific breakage. Its first run substantiated that
+immediately — none of the three reproduced on macOS.
+
+- **T6 needed PyMC as well as SBI.** Step 4 compares the SBI surrogate against
+  T5's `pymc_gp` surrogate but guarded only on `SBI_AVAILABLE`, so the sbi-only
+  job raised. Same unguarded-backend bug as T5/T9. Now detects PyMC separately
+  and skips only the comparison.
+- **`test_biomodels_slow` asserted a column that never existed.** It read
+  `time_series__json`; `_flatten_nested` only emits a whole-payload blob when a
+  member cannot be flattened, and here every member can, so the data lands in
+  `time_series__{n_points,t0,t1,columns__N,rows__json}`. The assertion had never
+  passed — the test needs libroadrunner (installed in no env until now) and is
+  `slow`, so it was excluded from every CI run. Rewritten against the real
+  schema and against values, including a check that not every species is zero,
+  so a hollow simulation cannot pass.
+- **biomodels.org returns 403 to GitHub runner IPs.** T2 failed 11/11 DOE points
+  in CI while passing locally. Not a code bug: the service refuses cloud address
+  ranges. The `403` was only visible after adding a step that surfaces
+  `sweep_logs.jsonl` as annotations — Actions *logs* need an authenticated token
+  to fetch, but *annotations* do not, so a red run was otherwise undiagnosable
+  from its URL.
+  - Fix: vendored `examples/biomodels/MODEL1907260003.xml` (40K). Tests pin
+    `local_sbml_path` at it, so CI verifies parse/simulate/mapping/flattening.
+    T2 keeps fetching by default — that is part of what it teaches — and probes
+    the URL first, falling back to the vendored copy when offline or blocked.
+    Consequence to accept: the network-fetch path cannot be CI-verified at all,
+    because the service will not serve CI.
+
 #### Decisions taken with the user (2026-08-07)
 
 - **Deep CI runs nightly, not weekly** (03:00 UTC). Tutorials are user-facing; a

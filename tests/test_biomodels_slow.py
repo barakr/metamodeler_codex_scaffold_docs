@@ -35,6 +35,15 @@ def test_biomodels_adapter_fetch_and_simulate_slow(monkeypatch, capsys, tmp_path
     payload = copy.deepcopy(payload)
     payload["storage"] = {"root": f"tmp/pytest_biomodels_store_{uuid4().hex}"}
 
+    # Use the vendored SBML rather than fetching. biomodels.org returns 403 to
+    # GitHub's runner IPs (it works from a normal connection), so a fetching test
+    # is red in CI forever — and the alternative, letting it skip, is the same
+    # green-by-skipping this suite exists to prevent. The fetch path itself
+    # therefore cannot be CI-verified by anything here; what this test does verify
+    # is the part that can break silently: SBML parse, simulate, adapter output
+    # mapping and sweep row flattening.
+    payload["model"]["artifact"]["local_sbml_path"] = "examples/biomodels/MODEL1907260003.xml"
+
     temp_spec = tmp_path / "biomodels_spec.json"
     temp_spec.write_text(json.dumps(payload))
 
