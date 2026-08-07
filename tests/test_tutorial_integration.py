@@ -29,6 +29,7 @@ stability hardening + post-mortem" for the full story.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
@@ -163,3 +164,24 @@ def test_tutorial_executes_and_self_check_passes(notebook_path: Path, tmp_path: 
         f"broken. Every tutorial must end with a `[T<N> self-check OK]` "
         f"print so this test can confirm the assertion cell actually ran."
     )
+
+    # 3) In the deep/scheduled run, a preflight skip is a FAILURE.
+    #
+    # Every backend-gated tutorial degrades to a "SKIPPED" path when its
+    # backend is absent, and the self-check then reports OK for having skipped
+    # cleanly. That is correct for a learner on a laptop, but it means a green
+    # run proves nothing about the science. T2 sat in exactly that state — its
+    # whole BioModels sweep skipped, self-check green — which is the same
+    # false-success shape as the original post-mortem, merely sanctioned.
+    #
+    # The scheduled job installs every backend and sets this variable, so there
+    # is no legitimate reason for a skip there.
+    if os.environ.get("REQUIRE_TUTORIAL_BACKENDS") == "1":
+        skip_markers = ("SKIPPED", "skipped per preflight")
+        found = sorted({m for m in skip_markers if m in output_text})
+        assert not found, (
+            f"{notebook_path.name} took a preflight-skip path {found} while "
+            f"REQUIRE_TUTORIAL_BACKENDS=1. This job exists to exercise the "
+            f"backends, so a skip means a dependency is missing from the job "
+            f"(install it) — not that the tutorial passed."
+        )

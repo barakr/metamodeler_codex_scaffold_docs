@@ -1,0 +1,89 @@
+name: Deep CI
+
+# Fourth signal. `CI` runs `-m "not slow"` on every push, which by construction
+# never executes the slow suite — so the tutorial integration test, the thing
+# that actually runs all ten notebooks end to end, had never run in CI at all.
+# Tutorials 5 and 9 were broken in the documented main env and nothing noticed.
+#
+# Separate workflow, not a job inside CI: this is minutes long and installs
+# heavy backends, so it must not gate every push, and a failure here should not
+# redden the push signal.
+#
+# The distinguishing feature of this job is REQUIRE_TUTORIAL_BACKENDS=1. Every
+# backend-gated tutorial degrades to a clean "SKIPPED" path when its backend is
+# missing and still reports its self-check OK — correct for a learner, useless
+# as verification. That flag turns any such skip into a failure, so this job
+# cannot go green while the science is being skipped.
+
+on:
+  schedule:
+    # Mondays 09:00 UTC — after CI (06:00), KS model (07:00) and Interface
+    # (08:00), so a shared upstream break surfaces in dependency order.
+    - cron: "0 9 * * 1"
+  workflow_dispatch:
+  # Deliberately NOT on push: minutes-long, and the fast suite already gates
+  # pushes. Use the Actions "Run workflow" button when you want it on demand.
+
+jobs:
+  slow:
+    name: slow suite + all tutorials
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      # PyTensor needs a system BLAS to compile its C ops; the C-less mode keeps
+      # this deterministic, matching the main CI workflow.
+      PYTENSOR_FLAGS: cxx=
+      REQUIRE_TUTORIAL_BACKENDS: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install with every backend
+        # `biomodels` matters most here: libroadrunner/tellurium are PyPI-only
+        # and are in none of the local conda envs, so Tutorial 2's BioModels
+        # sweep — the tutorial whose silent failure prompted all of this — has
+        # not actually been exercised anywhere since it was fixed.
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[pymc,sbi,tutorials,biomodels]" pytest
+
+      - name: Report resolved backend versions
+        # Printed so a drift-induced failure can be diagnosed from the log alone.
+        run: |
+          python - <<'PY'
+          import importlib.metadata as md
+          for p in ("pymc","arviz","sbi","torch","pytensor","libroadrunner","tellurium","numpy","scipy"):
+              try:
+                  print(f"{p:15} {md.version(p)}")
+              except Exception:
+                  print(f"{p:15} MISSING")
+          PY
+
+      - name: Run the slow suite (includes all 10 tutorials)
+        run: python -m pytest -q -m slow --junit-xml=slow-results.xml
+
+      - name: Assert the slow suite actually ran
+        # Same guard as the KS model CI: a collapse to zero collected tests
+        # would otherwise exit 0 and read as success.
+        if: always()
+        run: |
+          python - <<'PY'
+          import sys, xml.etree.ElementTree as ET
+          root = ET.parse("slow-results.xml").getroot()
+          s = root.find("testsuite")
+          if s is None:
+              s = root
+          total = int(s.get("tests", 0)); skipped = int(s.get("skipped", 0))
+          failures = int(s.get("failures", 0)); errors = int(s.get("errors", 0))
+          passed = total - skipped - failures - errors
+          print(f"total={total} passed={passed} skipped={skipped} failed={failures} errors={errors}")
+          if total < 10:
+              sys.exit(f"FAIL: only {total} slow tests collected; expected >=10 (the tutorials alone are 10).")
+          print("OK: slow suite ran.")
+          PY

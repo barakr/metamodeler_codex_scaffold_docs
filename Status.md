@@ -102,6 +102,44 @@ Three things went wrong, ordered by lesson value:
   permitted" that looks like spec rot but is not — the interface tests
   dispatch on the filename prefix instead.
 
+### Tutorial review (2026-08-07)
+
+- **T5 and T9 crashed in `py314_bayesmm`, the documented main env.** Both call
+  `bayesmm surrogate fit` with the `pymc_gp` backend and had no preflight, so a
+  missing PyMC produced a mid-notebook `RuntimeError` rather than a skip. T6
+  already solved this for SBI; its idiom was applied verbatim. All ten now pass
+  in the main env, degrading with an actionable banner.
+- **The tutorial integration test had never run in CI.** It is marked `slow`,
+  and CI runs `-m "not slow"` — which is why the T5/T9 breakage survived. Added
+  the `Deep CI` workflow (weekly + manual) to run the slow suite with every
+  backend installed.
+- **`REQUIRE_TUTORIAL_BACKENDS=1` added.** Every backend-gated tutorial degrades
+  to a clean "SKIPPED" path and still reports its self-check OK — correct for a
+  learner, worthless as verification, and the same false-success shape as the
+  original post-mortem. The flag makes any preflight skip a failure. Verified:
+  with pymc+sbi installed locally, exactly one tutorial fails under the flag —
+  T2, because `libroadrunner` is in no conda env. Deep CI installs `[biomodels]`
+  to close that, so T2's BioModels sweep gets exercised for the first time since
+  it was fixed.
+- **Verified for real, not just for exit code**: 10/10 in `py314_bayesmm` (37s,
+  backend steps skipped), 10/10 in `py312_bayesmm_pymc` (235s) and
+  `py312_bayesmm_sbi` (237s). The 6× runtime difference is the evidence that GP
+  fitting actually ran rather than being skipped.
+- **Pedagogical audit — first pass was wrong.** A keyword scan reported
+  objectives 3/10 and recap 4/10; the notebooks use "Learning aims" and
+  "Scientific checkpoint", so the real figures were 9/10 and 8/10. The material
+  was already substantially pedagogical (T1 in particular has a
+  predict-then-verify exercise and plants a question T5 answers). Corrected
+  before acting on it — the flawed measurement would have justified a needless
+  rewrite of all ten notebooks.
+- **Real gaps closed** (~20 markdown cells, additive; no existing cell altered):
+  troubleshooting 2→9 (T0 excepted, being orientation), predict-before-you-run
+  5→9, inter-tutorial threading 6→10, recap 7→10, objectives 9→10.
+- **`tutorials/README.md` rewritten.** It claimed troubleshooting in every
+  notebook (there were two) and a visual checkpoint in every notebook (T3 has no
+  plot, correctly — it is about reading validator output). Now states the course
+  arc, the per-tutorial question/capability table, and the env matrix.
+
 ### 2026-03-05: Fix KS model MC loop + self-contained example specs
 - **MC loop fix**: Changed from single-particle stepping to full sweeps — each
   `n_steps` iteration now updates every molecule and every grid cell once,
