@@ -39,12 +39,10 @@ jobs:
           python-version: "3.12"
 
       - name: Install framework
-        # pymc is here for the slow notebook step below: two of the submodule's
-        # notebooks fit surrogates and would otherwise importorskip. The fast
-        # contract tests need none of it — they are pure pydantic.
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e ".[pymc,tutorials]" pytest
+        # No optional backends: the contract under test is the spec schemas,
+        # which are pure pydantic. Keeps this fast and independent of the
+        # pymc/sbi pins.
+        run: python -m pip install --upgrade pip && python -m pip install -e . pytest
 
       - name: Verify the submodule actually checked out
         run: |
@@ -62,13 +60,15 @@ jobs:
             tests/test_submodule_interface.py \
             tests/test_submodule_notebooks.py
 
-      - name: Execute the submodule's notebooks (slow)
-        # These 4 tests could previously run NOWHERE. Interface CI deselected
-        # them with `-m "not slow"`, and Deep CI — which does run `-m slow` —
-        # checks out with `submodules: false`, so they skipped there. This is
-        # the only job that both has the submodule and sets the REQUIRE flag,
-        # which is what makes a missing submodule a failure rather than a skip.
-        env:
-          REQUIRE_SUBMODULE_INTERFACE: "1"
-          PYTENSOR_FLAGS: cxx=
-        run: python -m pytest -q -m slow tests/test_submodule_notebooks.py
+# NOT run here: the 4 slow tests in tests/test_submodule_notebooks.py, which
+# execute notebooks/01-04. Those notebooks drive `ks_gpu` by subprocess, so they
+# need the submodule's compiled native model as well as the framework, and they
+# run real sweeps (>10 min locally). Building the KS model in this job would
+# cross the submodule boundary this workflow exists to police, and would turn a
+# seconds-long per-push signal into a minutes-long one.
+#
+# Consequence, stated plainly: notebooks/01-04 are exercised by NO CI job. The
+# submodule's own KS model CI covers notebooks/models/kinetic_segregation/KS_*
+# — a different set. Closing this needs a deliberate choice about which side
+# pays (parent builds KS, or submodule installs the framework); until then the
+# skip is sanctioned in Deep CI with that reason rather than pretended away.

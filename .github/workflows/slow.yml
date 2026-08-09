@@ -145,6 +145,14 @@ jobs:
       - name: Run the slow suite (includes all 10 tutorials)
         run: python -m pytest -q -ra --tb=short -m slow --junit-xml=slow-results.xml
 
+      - name: Run the MPI sweep test under mpirun (full job only)
+        # Installing mpi4py is not sufficient: the test needs >=2 ranks, so under
+        # a plain `pytest` it skips with "requires >=2 ranks" no matter what is
+        # installed. It has to be LAUNCHED by mpirun. --oversubscribe because a
+        # hosted runner may report fewer slots than ranks requested.
+        if: matrix.mpi == '1'
+        run: mpirun --oversubscribe -n 2 python -m pytest -q -m mpi
+
       - name: Dump per-point sweep errors on failure
         # A failed sweep reports only "N/N DOE points failed" — the actual
         # per-point exception goes to sweep_logs.jsonl, which is precisely the
@@ -246,13 +254,15 @@ jobs:
               ("mpiexec",        "MPI not installed in this job (the `full` job has it)"),
               ("both pymc and",  "needs pymc AND sbi together; only the `full` job has both"),
               ("submodule",      "submodule not checked out here by design — covered by Interface CI"),
+              (">=2 ranks",      "run separately under `mpirun -n 2` in this job; a plain pytest run cannot supply ranks"),
+              ("BioModels refused", "biomodels.org returns 403 to hosted-runner IPs; the simulate path is covered via the vendored SBML"),
               ("needs pymc",     "pymc not installed in this job"),
               ("needs sbi",      "sbi not installed in this job"),
               ("needs torch",    "torch not installed in this job"),
           ]
           # In the fully-provisioned job, only the submodule skip is defensible.
           STRICT = os.environ.get("STRICT_SKIPS") == "1"
-          STRICT_ALLOWED = ("submodule",)
+          STRICT_ALLOWED = ("submodule", ">=2 ranks", "biomodels refused")
 
           skips = []
           for case in suite.iter("testcase"):

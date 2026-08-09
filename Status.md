@@ -140,6 +140,33 @@ Three things went wrong, ordered by lesson value:
   none). Now states the course arc, the per-tutorial question/capability table,
   and the env matrix.
 
+#### Sanctioned-skip registry, and a coverage gap it exposed (2026-08-07)
+
+- **Every skip in Deep CI is now classified** against a registry of sanctioned
+  reasons and rendered in the job summary as `verdict | test | reason | why
+  that's OK`. Unsanctioned skips emit an annotation and fail the job. The `full`
+  job is strict: with everything installed the only defensible skips are the
+  three external constraints below.
+- **mpi4py installed, and the test actually launched.** `test_mpi_sweep_integration`
+  had never run anywhere — mpi4py was in no conda env and no CI job. Installing
+  it was necessary but not sufficient: the test needs >=2 ranks, so under a
+  plain `pytest` it skips regardless. The full job now also runs it under
+  `mpirun --oversubscribe -n 2`.
+- **The strict check immediately caught two skips I had not sanctioned** — the
+  MPI rank requirement and the BioModels 403 — which is the check working, not
+  failing. Both are external constraints rather than missing dependencies, so
+  both are now sanctioned with written justifications.
+- **Gap found and NOT papered over: `notebooks/01-04` run in no CI job.** They
+  drive `ks_gpu` by subprocess, so they need the submodule's compiled native
+  model *and* the framework, and they run real sweeps (>10 min locally). An
+  attempt to run them from Interface CI was reverted: building the KS model
+  there would cross the submodule boundary that workflow exists to police, and
+  would turn a seconds-long per-push signal into a minutes-long one. The
+  submodule's own CI covers `notebooks/models/kinetic_segregation/KS_*`, a
+  different set. Closing this needs a deliberate choice about which side pays
+  (parent builds KS, or submodule installs the framework); until then the skip
+  is sanctioned with that reason rather than pretended away.
+
 #### Policy: no silent no-ops; dev envs must match what CI installs (2026-08-07)
 
 - **Rule 12 added to CLAUDE.md** — "a gate that can skip must be able to fail for
