@@ -190,6 +190,41 @@ from a pass. Mechanisms already in place — reuse them rather than inventing mo
 When adding a suite that can degrade, give it one of these. The question to ask
 is: *if every step silently did nothing, would this still be green?*
 
+### Reading skipped tests in CI
+
+Skips are normal — most jobs deliberately install only some backends. What is
+not acceptable is a skip nobody can account for. So **every skip must match a
+sanctioned reason, and the job summary says which and why.**
+
+`Deep CI`'s summary carries a table like:
+
+| verdict | test | reason | why that's OK |
+|---|---|---|---|
+| OK | `test_biomodels_slow::…` | libroadrunner is not installed | biomodels extra not installed in this job (the `full` job has it) |
+| **UNEXPECTED** | `test_foo::…` | some new reason | — not a sanctioned reason |
+
+Anything marked **UNEXPECTED** emits a `::error::` annotation and **fails the
+job**. So when you look at a green run, the skips in it have already been
+accounted for; you do not have to reason about them.
+
+Two levels of strictness:
+
+- **Partial jobs** (`main env`, `pymc env`, `sbi env`) — a backend-absence skip
+  is expected; that is what those jobs exist to test.
+- **`full` job** — everything is installed, so the *only* sanctioned skip is
+  "submodule not checked out" (covered by `Interface CI`). Any other skip there
+  means a dependency is missing from the job, and it goes red.
+
+**When a new skip appears**, you have exactly two honest options — and picking
+neither is what the check prevents:
+
+1. Install the missing dependency in that job, so the test runs; or
+2. Add the reason to `SANCTIONED` in `.github/workflows/slow.yml` **with a
+   written justification** — the third column of that table is the justification,
+   and it is there so the next reader does not have to re-derive it.
+
+Never silence a skip by loosening the pattern without saying why.
+
 ### CI trigger paths (revisit if trouble arises)
 
 `Deep CI` is the only workflow using `paths:` filters, and it is currently

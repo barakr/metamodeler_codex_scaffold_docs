@@ -73,15 +73,29 @@ jobs:
           - label: "main env (no backends)"
             extras: "tutorials"
             require_backends: "0"
+            mpi: "0"
+            strict_skips: "0"
           - label: "pymc env"
             extras: "pymc,tutorials"
             require_backends: "0"
+            mpi: "0"
+            strict_skips: "0"
           - label: "sbi env"
             extras: "sbi,tutorials"
             require_backends: "0"
+            mpi: "0"
+            strict_skips: "0"
           - label: "full (all backends, no skips allowed)"
             extras: "pymc,sbi,tutorials,biomodels"
             require_backends: "1"
+            # Only this job installs MPI, so test_mpi_sweep_integration actually
+            # runs somewhere. It had never run anywhere: mpi4py is in no conda
+            # env and was in no CI job.
+            mpi: "1"
+            # strict: in the job with everything installed, the ONLY sanctioned
+            # skip is "submodule not checked out" (covered by Interface CI).
+            # Anything else means a dependency is missing from the job.
+            strict_skips: "1"
     env:
       # PyTensor needs a system BLAS to compile its C ops; the C-less mode keeps
       # this deterministic, matching the main CI workflow.
@@ -96,6 +110,17 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      - name: Install MPI (full job only)
+        # mpi4py needs a system MPI to build against; openmpi is the one the
+        # ubuntu image can install cleanly. Without this the mpi sweep test skips
+        # everywhere, which is how it went unrun since it was written.
+        if: matrix.mpi == '1'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libopenmpi-dev openmpi-bin
+          python -m pip install mpi4py
+          mpiexec --version
 
       - name: Install (extras = ${{ matrix.extras }})
         # `biomodels` appears only in the full job: libroadrunner/tellurium are
@@ -167,6 +192,9 @@ jobs:
         # difference between diagnosing a red run from its URL and having to
         # reproduce it blind. Learned the hard way on the first matrix run.
         if: always()
+        env:
+          STRICT_SKIPS: ${{ matrix.strict_skips }}
+          JOB_LABEL: ${{ matrix.label }}
         run: |
           python - <<'PY'
           import os, sys, xml.etree.ElementTree as ET
@@ -204,24 +232,50 @@ jobs:
                   lines.append(f"- **{name}**")
                   lines.append(f"  - `{msg}`")
 
-          # List WHICH tests skipped and why. A bare skip count is unauditable —
-          # three jobs with different backends installed reported an identical
-          # "skipped: 8" and there was no way to tell from the summary whether
-          # that was the same eight tests or a coincidence. Rule 12 applies to
-          # the report as much as to the suite.
+          # Classify every skip against a registry of sanctioned reasons, so the
+          # summary answers "is this skip fine, and why?" without anyone having
+          # to reason it out. A bare count is unauditable: three jobs with
+          # different backends once reported an identical "skipped: 8" and there
+          # was no way to tell whether that was the same eight tests.
+          #
+          # (substring, short justification). Order matters only for display.
+          SANCTIONED = [
+              ("libroadrunner",  "biomodels extra not installed in this job (the `full` job has it)"),
+              ("roadrunner",     "biomodels extra not installed in this job (the `full` job has it)"),
+              ("mpi4py",         "MPI not installed in this job (the `full` job has it)"),
+              ("mpiexec",        "MPI not installed in this job (the `full` job has it)"),
+              ("both pymc and",  "needs pymc AND sbi together; only the `full` job has both"),
+              ("submodule",      "submodule not checked out here by design — covered by Interface CI"),
+              ("needs pymc",     "pymc not installed in this job"),
+              ("needs sbi",      "sbi not installed in this job"),
+              ("needs torch",    "torch not installed in this job"),
+          ]
+          # In the fully-provisioned job, only the submodule skip is defensible.
+          STRICT = os.environ.get("STRICT_SKIPS") == "1"
+          STRICT_ALLOWED = ("submodule",)
+
           skips = []
           for case in suite.iter("testcase"):
               for node in case.findall("skipped"):
                   name = f"{case.get('classname', '').split('.')[-1]}::{case.get('name')}"
                   reason = (node.get("message") or node.text or "").replace("\n", " ").strip()
-                  skips.append((name, reason[:220]))
+                  why = next((w for pat, w in SANCTIONED if pat.lower() in reason.lower()), None)
+                  if why and STRICT and not any(p in reason.lower() for p in STRICT_ALLOWED):
+                      why = None  # sanctioned in general, not in the full job
+                  skips.append((name, reason[:200], why))
+
+          unexpected = [s for s in skips if s[2] is None]
           if skips:
               lines.append("")
-              lines.append(f"### Skipped ({len(skips)})")
-              lines.append("| test | reason |")
-              lines.append("|---|---|")
-              for name, reason in sorted(skips):
-                  lines.append(f"| `{name}` | {reason} |")
+              lines.append(f"### Skipped ({len(skips)}) — {len(unexpected)} unexpected")
+              lines.append("| verdict | test | reason | why that's OK |")
+              lines.append("|---|---|---|---|")
+              for name, reason, why in sorted(skips):
+                  mark = "OK" if why else "**UNEXPECTED**"
+                  lines.append(f"| {mark} | `{name}` | {reason} | {why or '— not a sanctioned reason'} |")
+
+          for name, reason, _ in unexpected:
+              print(f"::error title=unsanctioned skip::{name} skipped: {reason}")
 
           summary = os.environ.get("GITHUB_STEP_SUMMARY")
           if summary:
@@ -232,5 +286,11 @@ jobs:
               sys.exit(f"FAIL: only {total} slow tests collected; expected >=10 (tutorials alone are 10).")
           if bad:
               sys.exit(f"FAIL: {len(bad)} slow test(s) failed — see annotations above.")
-          print("OK: slow suite ran clean.")
+          if unexpected:
+              sys.exit(
+                  f"FAIL: {len(unexpected)} test(s) skipped for a reason not in the sanctioned "
+                  f"registry. Either install the missing dependency in this job, or add the "
+                  f"reason to SANCTIONED with a justification."
+              )
+          print(f"OK: slow suite ran clean; {len(skips)} sanctioned skip(s).")
           PY

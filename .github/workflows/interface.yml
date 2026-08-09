@@ -39,10 +39,12 @@ jobs:
           python-version: "3.12"
 
       - name: Install framework
-        # No optional backends: the contract under test is the spec schemas,
-        # which are pure pydantic. Keeps this fast and independent of the
-        # pymc/sbi pins.
-        run: python -m pip install --upgrade pip && python -m pip install -e . pytest
+        # pymc is here for the slow notebook step below: two of the submodule's
+        # notebooks fit surrogates and would otherwise importorskip. The fast
+        # contract tests need none of it — they are pure pydantic.
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[pymc,tutorials]" pytest
 
       - name: Verify the submodule actually checked out
         run: |
@@ -59,3 +61,14 @@ jobs:
           python -m pytest -q -m "not slow" \
             tests/test_submodule_interface.py \
             tests/test_submodule_notebooks.py
+
+      - name: Execute the submodule's notebooks (slow)
+        # These 4 tests could previously run NOWHERE. Interface CI deselected
+        # them with `-m "not slow"`, and Deep CI — which does run `-m slow` —
+        # checks out with `submodules: false`, so they skipped there. This is
+        # the only job that both has the submodule and sets the REQUIRE flag,
+        # which is what makes a missing submodule a failure rather than a skip.
+        env:
+          REQUIRE_SUBMODULE_INTERFACE: "1"
+          PYTENSOR_FLAGS: cxx=
+        run: python -m pytest -q -m slow tests/test_submodule_notebooks.py
