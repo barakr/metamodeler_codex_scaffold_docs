@@ -253,7 +253,7 @@ jobs:
               ("mpi4py",         "MPI not installed in this job (the `full` job has it)"),
               ("mpiexec",        "MPI not installed in this job (the `full` job has it)"),
               ("both pymc and",  "needs pymc AND sbi together; only the `full` job has both"),
-              ("submodule",      "submodule not checked out here by design — covered by Interface CI"),
+              ("submodule",      "submodule not checked out here by design — contracts covered by Interface CI, notebooks by Submodule notebooks CI"),
               (">=2 ranks",      "run separately under `mpirun -n 2` in this job; a plain pytest run cannot supply ranks"),
               ("BioModels refused", "biomodels.org returns 403 to hosted-runner IPs; the simulate path is covered via the vendored SBML"),
               ("needs pymc",     "pymc not installed in this job"),

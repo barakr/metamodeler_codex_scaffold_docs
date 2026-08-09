@@ -190,6 +190,24 @@ from a pass. Mechanisms already in place — reuse them rather than inventing mo
 When adding a suite that can degrade, give it one of these. The question to ask
 is: *if every step silently did nothing, would this still be green?*
 
+### CI signals
+
+Five workflows, deliberately kept separate so a failure in one never reddens
+another. Read the name to know what broke.
+
+| Workflow | Repo | Red means | Runs |
+|---|---|---|---|
+| `CI` | this | the framework is broken | every push, 3 OSes |
+| `Interface CI` | this | framework and submodule specs no longer fit | every push |
+| `Deep CI` | this | the slow suite or a tutorial is broken | nightly + relevant pushes, 4-env matrix |
+| `Submodule notebooks CI` | this | notebooks 01-04 broke against the compiled KS model | weekly + gitlink moves |
+| `KS model CI` | tcr_signaling | the KS model is broken | every push, macOS + Linux |
+
+`Submodule notebooks CI` is the only job that both checks out the submodule and
+builds its native model — `notebooks/01-04` drive `ks_gpu` by subprocess, so
+nothing cheaper can cover them. It is weekly because the build plus real sweeps
+take minutes.
+
 ### Reading skipped tests in CI
 
 Skips are normal — most jobs deliberately install only some backends. What is

@@ -1,0 +1,138 @@
+name: Submodule notebooks CI
+
+# Fifth signal, and the deepest integration the project has: the framework and
+# the submodule's COMPILED model, exercised together through
+# `projects/tcr_signaling/notebooks/01-04`.
+#
+# Those notebooks drive `ks_gpu` by subprocess, so this is the one job that has
+# to do both things the other workflows deliberately avoid — check out the
+# submodule AND build its native model. That is why it is weekly rather than
+# per-push: the build plus real sweeps run for minutes, and `Interface CI` must
+# stay a seconds-long per-push signal.
+#
+# Separate workflow rather than a job inside `Interface CI`, so a slow weekly
+# integration failure never reddens the fast per-push interface status. Same
+# reasoning that keeps `KS model CI` in the tcr_signaling repo.
+#
+# Before this existed, notebooks/01-04 were exercised by no CI job at all: the
+# submodule's own CI covers `notebooks/models/kinetic_segregation/KS_*`, a
+# different set, and `Deep CI` runs `-m slow` but checks out with
+# `submodules: false`. Deep CI still skips them, sanctioned as "covered here".
+
+on:
+  schedule:
+    # Mondays 10:00 UTC — after CI (06:00), KS model (07:00) and Interface
+    # (08:00), so a shared upstream break surfaces in dependency order.
+    - cron: "0 10 * * 1"
+
+  # Also on pushes that can invalidate this specific integration: the gitlink
+  # moving, the test changing, or this workflow changing. Same dormancy argument
+  # as Deep CI — GitHub disables scheduled workflows in public repos after 60
+  # days of inactivity and does not re-enable them on the next push, whereas
+  # push triggers are never disabled.
+  push:
+    paths:
+      - "projects/tcr_signaling"
+      - ".gitmodules"
+      - "tests/test_submodule_notebooks.py"
+      - ".github/workflows/notebooks.yml"
+
+  workflow_dispatch:
+
+jobs:
+  notebooks:
+    name: framework + compiled KS / notebooks 01-04
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      PYTENSOR_FLAGS: cxx=
+      # Turns "submodule absent" from a skip into a failure. Without it this job
+      # could pass green having executed nothing — the whole point of it is that
+      # the submodule IS present.
+      REQUIRE_SUBMODULE_INTERFACE: "1"
+
+    steps:
+      - name: Checkout (WITH submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify the submodule actually checked out
+        run: |
+          test -d projects/tcr_signaling/models/kinetic_segregation || {
+            echo "submodule missing — checkout did not fetch it"; exit 1; }
+
+      - name: Build the KS model
+        # ubuntu takes the gpu_stub.c CPU-fallback path (no Metal), which is what
+        # the notebooks need — they only require a working `ks_gpu` binary.
+        working-directory: projects/tcr_signaling/models/kinetic_segregation
+        run: |
+          cmake --version
+          make
+          test -x ./ks_gpu || { echo "build produced no ks_gpu binary"; exit 1; }
+
+      - name: Install framework + pymc
+        # pymc because 02_fit_surrogates and 03_metamodel_inference fit
+        # surrogates; without it they importorskip and this job goes green
+        # having run half of what it claims.
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[pymc,tutorials]" pytest
+
+      - name: Execute notebooks 01-04
+        run: python -m pytest -q -ra --tb=short -m slow tests/test_submodule_notebooks.py --junit-xml=nb-results.xml
+
+      - name: Summarise, and reject unexplained skips
+        # Same policy as Deep CI: a skip must carry a sanctioned reason, and the
+        # summary says which and why. Everything this job needs is installed, so
+        # here there is no sanctioned reason at all — any skip means the job did
+        # not do its one task.
+        if: always()
+        run: |
+          python - <<'PY'
+          import os, sys, xml.etree.ElementTree as ET
+
+          root = ET.parse("nb-results.xml").getroot()
+          suite = root.find("testsuite")
+          if suite is None:
+              suite = root
+          total = int(suite.get("tests", 0)); skipped = int(suite.get("skipped", 0))
+          failures = int(suite.get("failures", 0)); errors = int(suite.get("errors", 0))
+          passed = total - skipped - failures - errors
+          print(f"total={total} passed={passed} skipped={skipped} failed={failures} errors={errors}")
+
+          lines = ["| total | passed | skipped | failed | errors |", "|---|---|---|---|---|",
+                   f"| {total} | {passed} | {skipped} | {failures} | {errors} |", ""]
+
+          problems = []
+          if total < 4:
+              problems.append(f"only {total} notebook tests collected; expected 4 (01-04)")
+
+          for case in suite.iter("testcase"):
+              name = f"{case.get('classname','').split('.')[-1]}::{case.get('name')}"
+              for node in case.findall("skipped"):
+                  reason = (node.get("message") or node.text or "").replace("\n", " ").strip()
+                  print(f"::error title=unexplained skip::{name} skipped: {reason[:400]}")
+                  problems.append(f"{name} skipped ({reason[:120]})")
+              for tag in ("failure", "error"):
+                  for node in case.findall(tag):
+                      msg = ((node.get("message") or "") + " " + (node.text or "")).replace("\n", " ")
+                      msg = msg if len(msg) <= 900 else f"{msg[:450]} ... [snip] ... {msg[-450:]}"
+                      print(f"::error title=notebook {tag}::{name} :: {msg}")
+                      lines.append(f"- **{name}** — `{msg[:300]}`")
+
+          summary = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary:
+              with open(summary, "a", encoding="utf-8") as fh:
+                  fh.write("\n".join(lines) + "\n")
+
+          if failures or errors:
+              sys.exit(f"FAIL: {failures + errors} notebook test(s) failed — see annotations.")
+          if problems:
+              sys.exit("FAIL: " + "; ".join(problems))
+          print(f"OK: all {passed} notebooks executed and self-checked.")
+          PY

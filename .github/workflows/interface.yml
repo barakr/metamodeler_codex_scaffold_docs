@@ -63,12 +63,10 @@ jobs:
 # NOT run here: the 4 slow tests in tests/test_submodule_notebooks.py, which
 # execute notebooks/01-04. Those notebooks drive `ks_gpu` by subprocess, so they
 # need the submodule's compiled native model as well as the framework, and they
-# run real sweeps (>10 min locally). Building the KS model in this job would
-# cross the submodule boundary this workflow exists to police, and would turn a
-# seconds-long per-push signal into a minutes-long one.
+# run real sweeps. Building the KS model here would cross the submodule boundary
+# this workflow exists to police, and would turn a seconds-long per-push signal
+# into a minutes-long one.
 #
-# Consequence, stated plainly: notebooks/01-04 are exercised by NO CI job. The
-# submodule's own KS model CI covers notebooks/models/kinetic_segregation/KS_*
-# — a different set. Closing this needs a deliberate choice about which side
-# pays (parent builds KS, or submodule installs the framework); until then the
-# skip is sanctioned in Deep CI with that reason rather than pretended away.
+# They are covered instead by `Submodule notebooks CI` (.github/workflows/
+# notebooks.yml), which runs weekly, checks out the submodule, builds the KS
+# model, and executes them.
