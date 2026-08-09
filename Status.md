@@ -39,6 +39,30 @@ Three things went wrong, ordered by lesson value:
 
 ## Decision Log
 
+### 2026-08-07: Framework bug — a relative `storage.root` silently lost every output
+
+`_run_single_point` built its run directory as `Path(spec.storage.root)/...`,
+which is relative. The adapter hands that to the model as `--run-dir`, but the
+model subprocess runs with `cwd=REPO_ROOT` — not the cwd of whoever invoked
+`bayesmm`. The two therefore resolved to different directories: the model wrote
+its outputs under REPO_ROOT while `parse_outputs` looked under the invoking cwd.
+Every point failed with "Output parsing failed: No such file or directory". The
+outputs existed; nobody looked where they were.
+
+It hid because every test and example invoked the CLI **from the repo root**,
+where the two paths coincide. It surfaced only when the `projects/tcr_signaling`
+notebooks ran it from the submodule root — 21/21 and 64/64 points failing, with
+the summary line reporting nothing more useful than a failure count.
+
+Fix: resolve the run directory to an absolute path. Verified both ways —
+21/21 successful from the submodule root, 21/21 from the parent root.
+
+`tests/test_run_dir_cwd_independence.py` pins the property rather than the
+implementation: a sweep must succeed when invoked from an arbitrary cwd.
+Confirmed bidirectional — it passes with the fix and fails with "9/9 points
+failed" without it. That the whole existing suite passed while this was broken
+is the point: the tests all ran from the one directory where it worked.
+
 ### 2026-08-07: Pin `sbi<0.27`; reconcile conda envs; repair submodule + hook setup
 - **CI had been red since 2026-05-15 without anyone noticing.** The last green
   run was `a34b3e0`; no runs happened between then and 2026-08-06, so the break

@@ -200,7 +200,15 @@ def _execute_design_point(
     runner = LocalProcessRunner(timeout_sec=spec.runner.resources.walltime_min * 60)
 
     run_label = f"{spec.model.name}_{point_index + 1}"
-    temp_run_dir = Path(spec.storage.root) / "_active" / run_token / run_label
+    # Absolute, deliberately. The adapter passes this to the model as `--run-dir`
+    # and the model subprocess runs with `cwd=REPO_ROOT`, not with this process's
+    # cwd. A relative `storage.root` therefore resolved to two different
+    # directories: the model wrote its outputs under REPO_ROOT while
+    # `parse_outputs` looked under the invoking cwd, and every point failed with
+    # "Output parsing failed: No such file or directory" — the outputs existed,
+    # just somewhere nobody looked. It only appeared to work when `bayesmm` was
+    # invoked from REPO_ROOT, which made the two paths coincide.
+    temp_run_dir = (Path(spec.storage.root) / "_active" / run_token / run_label).resolve()
     temp_run_dir.mkdir(parents=True, exist_ok=True)
 
     started_at = datetime.now(UTC)
