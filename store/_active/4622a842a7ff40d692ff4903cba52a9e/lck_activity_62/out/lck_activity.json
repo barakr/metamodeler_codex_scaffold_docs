@@ -1,0 +1,9 @@
+{
+  "inputs": {
+    "cd45_boundary_density": 789.0625,
+    "contact_radius": 1.3203125,
+    "lck_activation_rate": 0.1984375,
+    "lck_decay_length": 0.054375
+  },
+  "mean_lck_activity": 12.365828290231683
+}

@@ -1,0 +1,10 @@
+{
+  "inputs": {
+    "dephosphorylation_rate": 0.27296875,
+    "mean_lck_activity": 23.4375,
+    "phosphorylation_rate": 0.30859375,
+    "tcr_density": 225.78125
+  },
+  "ptcr_density": 217.56992244270904,
+  "ptcr_fraction": 0.963631490403694
+}

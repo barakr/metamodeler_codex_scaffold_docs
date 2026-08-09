@@ -141,10 +141,23 @@ def _load_from_centralized_sweeps(
 
     x_rows: list[list[float]] = []
     y_rows: list[list[float]] = []
+    skipped: list[str] = []
 
     for csv_path in sweep_csv_paths:
         with csv_path.open(newline="", encoding="utf-8") as handle:
             reader = csv.DictReader(handle)
+            # A centralized store legitimately holds sweeps from SEVERAL models —
+            # that is what "centralized" means, and it is how a multi-model project
+            # such as projects/tcr_signaling is laid out. A sweep that does not
+            # carry this surrogate's input columns simply belongs to another model,
+            # so skip it rather than raising KeyError on the first foreign row.
+            # Before this, fitting any surrogate in a shared store broke as soon as
+            # a second model had been swept.
+            fields = set(reader.fieldnames or ())
+            missing = [name for name in spec.inputs if name not in fields]
+            if missing:
+                skipped.append(f"{csv_path.parent.name} (no {', '.join(missing)})")
+                continue
             for row in reader:
                 if row is None:
                     continue
@@ -160,7 +173,15 @@ def _load_from_centralized_sweeps(
                 )
 
     if not x_rows:
-        raise ValueError(f"No successful rows found in centralized sweep CSVs under {sweeps_root}")
+        detail = (
+            f" Skipped {len(skipped)} sweep(s) belonging to other models: {skipped[:5]}."
+            if skipped
+            else ""
+        )
+        raise ValueError(
+            f"No successful rows found in centralized sweep CSVs under {sweeps_root} "
+            f"providing inputs {spec.inputs}.{detail}"
+        )
     return np.asarray(x_rows, dtype=float), np.asarray(y_rows, dtype=float)
 
 

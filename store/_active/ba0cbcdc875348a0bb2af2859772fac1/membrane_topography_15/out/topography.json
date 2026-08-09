@@ -1,0 +1,8 @@
+{
+  "contact_fraction": 0.44178646691106466,
+  "contact_perimeter_um": 9.42477796076938,
+  "inputs": {
+    "contact_radius": 1.5,
+    "patch_size": 4.0
+  }
+}

@@ -134,22 +134,12 @@ def test_ks_series_stays_framework_free():
 # ------------------------------------------------------------- execution
 
 
-# Notebooks that cannot currently pass, with the reason. `strict=True` means a
-# fix turns the XPASS into a failure, so the entry has to be removed rather than
-# quietly outliving the defect.
-#
-# 03_metamodel_inference: specs/metamodel.tcr_signaling.json references four
-# surrogate artifacts under projects/tcr_signaling/artifacts/ that NOTHING
-# produces — `surrogate fit` (which 02 runs) writes into the surrogate store, not
-# there — so `meta build` dies with "Could not resolve surrogate_ref". This is a
-# reference-chain defect in the research config, not a test problem; see
-# tcr_signaling Status.md, which already recorded the artifacts as missing.
-_KNOWN_BROKEN = {
-    "03_metamodel_inference.ipynb": (
-        "metamodel spec references surrogate artifacts that no pipeline step creates "
-        "(meta build: Could not resolve surrogate_ref)"
-    ),
-}
+# No notebook is currently declared known-broken. `_KNOWN_BROKEN` stays as the
+# mechanism: entries are strict xfails, so a fix turns XPASS into a failure and
+# the entry must be removed rather than outliving the defect. That is exactly how
+# 03_metamodel_inference's entry came out — once the surrogate publish step in 02
+# existed, `meta build` resolved and the strict marker forced this cleanup.
+_KNOWN_BROKEN: dict[str, str] = {}
 
 
 def _execution_params():

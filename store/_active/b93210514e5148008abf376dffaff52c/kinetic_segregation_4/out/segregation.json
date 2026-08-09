@@ -1,0 +1,35 @@
+{
+  "depletion_width_nm": 128.831285018348,
+  "diagnostics": {
+    "D_h_nm2_per_s": 50000.0,
+    "D_mol_nm2_per_s": 10000.0,
+    "accept_rate": 0.8103733975852574,
+    "depletion_bound_tcr_cd45_nn_p10_nm": null,
+    "depletion_cd45_bound_tcr_nn_p10_nm": null,
+    "depletion_cross_nn_median_nm": 42.369099141801904,
+    "depletion_frontier_nn_gap_nm": 91.28760328614186,
+    "depletion_ks_statistic": 0.21800000000000008,
+    "depletion_overlap_coeff": 0.5840000000000004,
+    "depletion_percentile_gap_nm": -285.7148176234573,
+    "dt_auto_seconds": 5e-05,
+    "dt_factor": 0.0,
+    "dt_seconds": 5e-05,
+    "final_cd45_mean_r_nm": 767.3517859018992,
+    "final_tcr_mean_r_nm": 652.5481273392559,
+    "n_steps_actual": 200000,
+    "pmhc_deposition": "area",
+    "pmhc_influence_expected": 10.783353420628979,
+    "pmhc_influence_max": 0.0770367756485939,
+    "pmhc_influence_sum": 10.783353438081656,
+    "step_size_h_nm": 2.23606797749979,
+    "step_size_mol_nm": 1.0
+  },
+  "inputs": {
+    "patch_size_nm": 2000.0,
+    "rigidity_kT": 5.0,
+    "sigma_bind_nm": 3.0,
+    "sigma_r_nm": 2.0,
+    "time_sec": 10.0,
+    "u_assoc": 20.0
+  }
+}

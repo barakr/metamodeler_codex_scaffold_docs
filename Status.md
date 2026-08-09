@@ -39,6 +39,31 @@ Three things went wrong, ordered by lesson value:
 
 ## Decision Log
 
+### 2026-08-07: Framework bug — a shared store broke every surrogate fit
+
+`_load_from_centralized_sweeps` globs every `sweep_rows.csv` under the store and
+indexed the surrogate's input columns on each row, so a store holding more than
+one model's sweeps raised `KeyError: '<input>'` on the first foreign row. Fitting
+ANY surrogate therefore broke as soon as a second model had been swept.
+
+That is not an exotic layout — it is what "centralized sweep store" means, and it
+is exactly how `projects/tcr_signaling` is arranged: four partial models sharing
+one `store/`. It is why the surrogates there had never been fitted, and why
+`metamodel.tcr_signaling.json` referenced four artifacts that did not exist.
+
+Fix: skip sweeps whose header does not provide this surrogate's inputs, and if
+nothing matches, say so — naming the inputs sought and how many foreign sweeps
+were passed over, so the skip cannot become silent.
+
+`tests/test_dataset_multi_model_store.py` pins all three edges: a foreign sweep
+is ignored, a store with only foreign sweeps still raises with a useful message,
+and the status filter was not loosened in the process. Verified bidirectional —
+the first test raises `KeyError: 'a'` without the fix.
+
+With this and the run-directory fix, `projects/tcr_signaling` notebooks 01-04
+execute end to end for the first time (~3 min), and the metamodel samples:
+14 variables, 16 factors, 2000 draws.
+
 ### 2026-08-07: Framework bug — a relative `storage.root` silently lost every output
 
 `_run_single_point` built its run directory as `Path(spec.storage.root)/...`,
