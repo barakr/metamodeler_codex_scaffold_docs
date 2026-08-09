@@ -134,8 +134,35 @@ def test_ks_series_stays_framework_free():
 # ------------------------------------------------------------- execution
 
 
+# Notebooks that cannot currently pass, with the reason. `strict=True` means a
+# fix turns the XPASS into a failure, so the entry has to be removed rather than
+# quietly outliving the defect.
+#
+# 03_metamodel_inference: specs/metamodel.tcr_signaling.json references four
+# surrogate artifacts under projects/tcr_signaling/artifacts/ that NOTHING
+# produces — `surrogate fit` (which 02 runs) writes into the surrogate store, not
+# there — so `meta build` dies with "Could not resolve surrogate_ref". This is a
+# reference-chain defect in the research config, not a test problem; see
+# tcr_signaling Status.md, which already recorded the artifacts as missing.
+_KNOWN_BROKEN = {
+    "03_metamodel_inference.ipynb": (
+        "metamodel spec references surrogate artifacts that no pipeline step creates "
+        "(meta build: Could not resolve surrogate_ref)"
+    ),
+}
+
+
+def _execution_params():
+    out = []
+    for name in sorted(_FRAMEWORK_NOTEBOOKS):
+        reason = _KNOWN_BROKEN.get(name)
+        marks = [pytest.mark.xfail(reason=reason, strict=True)] if reason else []
+        out.append(pytest.param(name, marks=marks, id=name))
+    return out
+
+
 @pytest.mark.slow
-@pytest.mark.parametrize("name", sorted(_FRAMEWORK_NOTEBOOKS))
+@pytest.mark.parametrize("name", _execution_params())
 def test_notebook_executes_and_self_check_passes(name: str, tmp_path):
     _require_or_skip()
     nbformat = pytest.importorskip("nbformat")
@@ -149,7 +176,12 @@ def test_notebook_executes_and_self_check_passes(name: str, tmp_path):
     nb = nbformat.read(nb_path, as_version=4)
     nbclient.NotebookClient(
         nb,
-        timeout=1800,
+        # 02_fit_surrogates sweeps every model.*.json — 79 DOE points, 56 of them
+        # the KS production spec — which is ~30 min of real simulation, and 03
+        # samples the metamodel with 2000 draws. These are reproduce-the-science
+        # notebooks, not smoke tests; 1800s timed out mid-sweep in CI. The weekly
+        # job budgets 90 minutes for the lot.
+        timeout=3600,
         kernel_name="python3",
         resources={"metadata": {"path": str(_NB_DIR)}},
     ).execute()

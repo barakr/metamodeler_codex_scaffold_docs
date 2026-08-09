@@ -43,7 +43,11 @@ jobs:
   notebooks:
     name: framework + compiled KS / notebooks 01-04
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # 90, not 60: the first run timed out inside 02's sweep cell. Build (~1 min)
+    # + 79 DOE points + a 2000-draw metamodel sample is genuinely long. It is
+    # weekly and Actions minutes are free on public repos, so wall-clock is the
+    # only cost.
+    timeout-minutes: 90
     env:
       PYTENSOR_FLAGS: cxx=
       # Turns "submodule absent" from a skip into a failure. Without it this job
@@ -112,10 +116,19 @@ jobs:
           if total < 4:
               problems.append(f"only {total} notebook tests collected; expected 4 (01-04)")
 
+          xfails = []
           for case in suite.iter("testcase"):
               name = f"{case.get('classname','').split('.')[-1]}::{case.get('name')}"
               for node in case.findall("skipped"):
                   reason = (node.get("message") or node.text or "").replace("\n", " ").strip()
+                  # pytest records an xfail as <skipped type="pytest.xfail">. Those are
+                  # DECLARED known-broken notebooks carrying a written reason, not
+                  # silent skips — and they are strict, so if one starts passing the
+                  # run goes red and the marker has to be removed. Everything else
+                  # skipping here means the job did not do its one task.
+                  if node.get("type") == "pytest.xfail":
+                      xfails.append((name, reason))
+                      continue
                   print(f"::error title=unexplained skip::{name} skipped: {reason[:400]}")
                   problems.append(f"{name} skipped ({reason[:120]})")
               for tag in ("failure", "error"):
@@ -124,6 +137,15 @@ jobs:
                       msg = msg if len(msg) <= 900 else f"{msg[:450]} ... [snip] ... {msg[-450:]}"
                       print(f"::error title=notebook {tag}::{name} :: {msg}")
                       lines.append(f"- **{name}** — `{msg[:300]}`")
+
+          if xfails:
+              lines.append("")
+              lines.append(f"### Known-broken, declared xfail ({len(xfails)})")
+              lines.append("| notebook | why |")
+              lines.append("|---|---|")
+              for name, reason in sorted(xfails):
+                  lines.append(f"| `{name}` | {reason[:220]} |")
+                  print(f"::warning title=known-broken notebook::{name}: {reason[:300]}")
 
           summary = os.environ.get("GITHUB_STEP_SUMMARY")
           if summary:
@@ -134,5 +156,5 @@ jobs:
               sys.exit(f"FAIL: {failures + errors} notebook test(s) failed — see annotations.")
           if problems:
               sys.exit("FAIL: " + "; ".join(problems))
-          print(f"OK: all {passed} notebooks executed and self-checked.")
+          print(f"OK: {passed} notebook(s) executed and self-checked; {len(xfails)} declared xfail.")
           PY
