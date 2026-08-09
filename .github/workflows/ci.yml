@@ -57,7 +57,45 @@ jobs:
         run: python -m ruff format --check src tests
 
       - name: Run fast test suite
-        run: python -m pytest -q -m "not slow" tests
+        run: python -m pytest -q -ra --tb=short -m "not slow" tests --junit-xml=fast-results.xml
+
+      - name: Surface failures as annotations
+        # Actions *logs* need an authenticated token to fetch; *annotations* are
+        # readable on a public repo without one. Without this, a Windows-only
+        # failure here reports nothing but "exit code 1" — which is exactly the
+        # position this workflow left us in, on a matrix leg that cannot be
+        # reproduced locally from a Mac.
+        if: always()
+        run: |
+          python - <<'PY'
+          import os, sys, xml.etree.ElementTree as ET
+          try:
+              root = ET.parse("fast-results.xml").getroot()
+          except Exception as exc:
+              print(f"::error::could not read fast-results.xml: {exc}")
+              sys.exit(0)
+          suite = root.find("testsuite")
+          if suite is None:
+              suite = root
+          total = int(suite.get("tests", 0)); skipped = int(suite.get("skipped", 0))
+          failures = int(suite.get("failures", 0)); errors = int(suite.get("errors", 0))
+          print(f"total={total} passed={total-skipped-failures-errors} "
+                f"skipped={skipped} failed={failures} errors={errors}")
+          lines = [f"| total | passed | skipped | failed | errors |", "|---|---|---|---|---|",
+                   f"| {total} | {total-skipped-failures-errors} | {skipped} | {failures} | {errors} |", ""]
+          for case in suite.iter("testcase"):
+              name = f"{case.get('classname','').split('.')[-1]}::{case.get('name')}"
+              for tag in ("failure", "error"):
+                  for node in case.findall(tag):
+                      msg = ((node.get("message") or "") + " " + (node.text or "")).replace("\n", " ")
+                      msg = msg if len(msg) <= 900 else f"{msg[:450]} ... [snip] ... {msg[-450:]}"
+                      print(f"::error title=fast suite {tag}::{name} :: {msg}")
+                      lines.append(f"- **{name}** — `{msg[:300]}`")
+          summary = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary:
+              with open(summary, "a", encoding="utf-8") as fh:
+                  fh.write("\n".join(lines) + "\n")
+          PY
 
       - name: bayesmm doctor smoke
         run: |
