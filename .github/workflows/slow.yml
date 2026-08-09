@@ -204,6 +204,25 @@ jobs:
                   lines.append(f"- **{name}**")
                   lines.append(f"  - `{msg}`")
 
+          # List WHICH tests skipped and why. A bare skip count is unauditable —
+          # three jobs with different backends installed reported an identical
+          # "skipped: 8" and there was no way to tell from the summary whether
+          # that was the same eight tests or a coincidence. Rule 12 applies to
+          # the report as much as to the suite.
+          skips = []
+          for case in suite.iter("testcase"):
+              for node in case.findall("skipped"):
+                  name = f"{case.get('classname', '').split('.')[-1]}::{case.get('name')}"
+                  reason = (node.get("message") or node.text or "").replace("\n", " ").strip()
+                  skips.append((name, reason[:220]))
+          if skips:
+              lines.append("")
+              lines.append(f"### Skipped ({len(skips)})")
+              lines.append("| test | reason |")
+              lines.append("|---|---|")
+              for name, reason in sorted(skips):
+                  lines.append(f"| `{name}` | {reason} |")
+
           summary = os.environ.get("GITHUB_STEP_SUMMARY")
           if summary:
               with open(summary, "a", encoding="utf-8") as fh:
