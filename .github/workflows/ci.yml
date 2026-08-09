@@ -66,6 +66,11 @@ jobs:
         # position this workflow left us in, on a matrix leg that cannot be
         # reproduced locally from a Mac.
         if: always()
+        # `shell: bash` is required: this matrix includes windows-latest, whose
+        # default shell is PowerShell, where a `<<'PY'` heredoc is a syntax error.
+        # The step failed on Windows for exactly that reason on its first run —
+        # while the test suite it was reporting on had passed.
+        shell: bash
         run: |
           python - <<'PY'
           import os, sys, xml.etree.ElementTree as ET
