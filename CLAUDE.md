@@ -122,6 +122,10 @@ submodules. Each is a separate repository with its own lifecycle.
 9. **No destructive shell commands** — never run recursive deletes, force pushes, or history rewrites without explicit user approval; record in Status.md
 10. **Tests with every change** — any non-trivial change must add or update tests
 11. **Commit regularly** — make git commits at logical milestones (feature complete, bug fix verified, refactor done). Do not accumulate large uncommitted changesets
+12. **A gate that can skip must be able to fail for skipping** — any suite that
+    degrades when a dependency is absent needs a mode where that degradation is
+    an error. Otherwise "green" means "nothing ran" and nobody can tell. See
+    *Guarding against silent no-ops* below for the mechanisms already available
 
 ## Coding Conventions
 
@@ -159,6 +163,51 @@ filterwarnings = error
 - Missing deps → skip with reason (not a regression)
 - `MM_SKIP_OPTIONAL_BACKEND_TESTS=1` to force-skip all optional backend tests
 - PyMC compile failures treated as runtime constraints (skip), not regressions
+
+### Guarding against silent no-ops
+
+Rule 12 exists because every defect found during the 2026-08-07 CI hardening was
+the same shape — **a check that quietly did not run, and therefore reported
+success**:
+
+- 118 KS tests skipped on a broken toolchain; the suite exited 0
+- Tutorial 2 skipped its entire BioModels sweep and printed `self-check OK`
+- the slow suite had never run in CI at all (`CI` runs `-m "not slow"`)
+- `test_biomodels_slow` asserted a column that never existed — it needs
+  libroadrunner, which was installed in no environment, so it never ran
+- `Deep CI`'s push filter did not include the tests it runs
+
+Skips are legitimate. What is not legitimate is a skip that is indistinguishable
+from a pass. Mechanisms already in place — reuse them rather than inventing more:
+
+| Mechanism | Where | What it does |
+|---|---|---|
+| `REQUIRE_TUTORIAL_BACKENDS=1` | `tests/test_tutorial_integration.py` | a preflight skip becomes a failure |
+| `REQUIRE_SUBMODULE_INTERFACE=1` | `tests/test_submodule_interface.py` | an absent submodule becomes a failure |
+| junit floor + skip audit | `KS model CI`, `Deep CI` | fails on too few collected tests, or on any skip without a sanctioned reason |
+| `::error::` annotations | `Deep CI` | failing test names and per-point `sweep_logs.jsonl` errors, readable without a token — logs are not |
+
+When adding a suite that can degrade, give it one of these. The question to ask
+is: *if every step silently did nothing, would this still be green?*
+
+### CI trigger paths (revisit if trouble arises)
+
+`Deep CI` is the only workflow using `paths:` filters, and it is currently
+correct — the filter covers everything the job runs. Two things to know if it
+misbehaves:
+
+- **Path filters fail open.** When the list is wrong you get silence, not an
+  error. A fix to `tests/test_biomodels_slow.py`, for a failure only `Deep CI`
+  could see, once failed to re-run `Deep CI` because the filter named a
+  different test file.
+- **The filter must cover everything the job executes**, not just the files that
+  seem topical. `Deep CI` runs the whole slow suite, so it watches all of
+  `tests/`.
+
+If path filters cause a missed run again, the simple move is to drop them and
+let the job run on every push — Actions minutes are free on public repos, so the
+cost is queue time, not money. They were added only to keep a 4-job matrix off
+unrelated commits, which is a convenience, not a requirement.
 
 ## CLI Reference
 

@@ -140,6 +140,33 @@ Three things went wrong, ordered by lesson value:
   none). Now states the course arc, the per-tutorial question/capability table,
   and the env matrix.
 
+#### Policy: no silent no-ops; dev envs must match what CI installs (2026-08-07)
+
+- **Rule 12 added to CLAUDE.md** — "a gate that can skip must be able to fail for
+  skipping" — with a *Guarding against silent no-ops* section listing the five
+  instances found today and a table of the mechanisms that already exist, so the
+  next suite reuses them rather than reinventing. The test to apply: *if every
+  step silently did nothing, would this still be green?*
+- **Conda env pins replaced with pyproject's ranges.** The exact pins were not
+  cosmetic drift, they were the mechanism: `sbi==0.23.3` lists `pymc>=5.0.0` as a
+  HARD dependency, so `py312_bayesmm_sbi` always contained PyMC and was never
+  sbi-only. It structurally could not reproduce CI's sbi-only job — which is
+  exactly why Tutorial 6's missing PyMC guard was invisible locally and only
+  surfaced in CI. From 0.26 pymc is an optional extra. Rebuilt: sbi 0.26.1,
+  torch 2.13.0, pymc absent — identical to what CI resolves, and T6 now
+  reproduces the CI behaviour locally (skips Step 4, self-check green).
+  Trade-off accepted: exact pins give reproducibility, ranges give fidelity to
+  what users actually get; for a *dev* env fidelity wins, and exact versions
+  behind a published result belong in that project's own Status.md.
+- **Notebook tooling added to both backend env files.** Without nbclient,
+  `pytest -m slow tests/test_tutorial_integration.py` importorskips and reports
+  green having run nothing — rule 12 applied to the envs themselves.
+- **CI trigger paths documented as a future consideration, not a rule.** Deep CI
+  is the only workflow using `paths:` and it is now correct. Recorded that path
+  filters fail open, that the filter must cover everything the job executes, and
+  that the escape hatch is simply to drop them (Actions minutes are free on
+  public repos).
+
 #### Deep CI's first matrix run found three real bugs (2026-08-07)
 
 The matrix and the REQUIRE flag were justified on the argument that a single

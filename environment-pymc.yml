@@ -18,8 +18,19 @@ dependencies:
   - numpy
   - matplotlib
   - pytest
-  # Versions recorded in Status.md for the verified environment.
-  - pymc=5.27.1
+  # Tracks pyproject's range rather than an exact version, so this env installs
+  # what CI and users actually get. An exact pin here means testing something
+  # nobody else runs; exact versions behind a published result belong in that
+  # project's own Status.md, not in the framework's dev env.
+  # Notebook execution, so the tutorials can be verified IN this env — CI's Deep
+  # matrix tests each backend combination separately, and without nbclient here
+  # `pytest -m slow tests/test_tutorial_integration.py` importorskips and reports
+  # green having run nothing (rule 12).
+  - jupyter
+  - nbclient>=0.8
+  - nbconvert>=7
+  - ipykernel
+  - pymc>=5,<6
   - arviz>=0.17,<1
   - pip:
       - -e .

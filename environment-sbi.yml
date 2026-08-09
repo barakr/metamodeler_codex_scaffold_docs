@@ -3,11 +3,18 @@
 #
 #   conda env create -f environment-sbi.yml && conda activate py312_bayesmm_sbi
 #
-# `sbi` is pinned rather than taken from conda-forge: 0.23.3 is the version
-# recorded in Status.md as verified. Note that sbi 0.27.0 does NOT converge
-# within its default 100 epochs on these test problems, which `filterwarnings =
-# error` in pytest.ini turns into hard failures — see the pinning discussion in
-# pyproject.toml before raising this.
+# `sbi` tracks pyproject's range rather than an exact version, deliberately.
+#
+# It used to pin ==0.23.3, and that pin was actively harmful: sbi 0.23.3 lists
+# `pymc>=5.0.0` as a HARD dependency, so this env always contained PyMC and was
+# therefore never sbi-only. It could not reproduce CI's sbi-only job — which is
+# exactly why Tutorial 6's missing PyMC guard was invisible locally and only
+# surfaced in CI. From 0.26 onward pymc is an optional extra, so tracking the
+# range both matches what CI installs and makes this env honest about its name.
+#
+# The <0.27 bound comes from pyproject: on 0.27.0 the NPE trainer stops
+# converging within its default 100 epochs, and `filterwarnings = error` turns
+# that warning into hard failures.
 name: py312_bayesmm_sbi
 channels:
   - conda-forge
@@ -21,7 +28,16 @@ dependencies:
   - numpy
   - matplotlib
   - pytest
-  - pytorch=2.10.0
+  # Range, not an exact pin, for the same reason as sbi below.
+  # Notebook execution, so the tutorials can be verified IN this env — CI's Deep
+  # matrix tests each backend combination separately, and without nbclient here
+  # `pytest -m slow tests/test_tutorial_integration.py` importorskips and reports
+  # green having run nothing (rule 12).
+  - jupyter
+  - nbclient>=0.8
+  - nbconvert>=7
+  - ipykernel
+  - pytorch>=2,<3
   - pip:
-      - sbi==0.23.3
+      - sbi>=0.22,<0.27
       - -e .
