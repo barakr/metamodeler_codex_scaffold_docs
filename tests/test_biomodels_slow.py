@@ -18,12 +18,11 @@ download untested *everywhere*, not just in CI.
 import copy
 import csv
 import json
-import urllib.error
-import urllib.request
 from pathlib import Path
 from uuid import uuid4
 
 import pytest
+import requests
 
 import bayesian_metamodeling.storage.run_store as run_store
 from bayesian_metamodeling.cli.main import main
@@ -57,17 +56,22 @@ def test_biomodels_adapter_fetch_slow(tmp_path):
 
     # Probe first so a blocked network is a clear skip rather than an opaque
     # failure. 403 specifically is what GitHub's runners get.
+    #
+    # `requests`, not `urllib.request.urlopen`: on an HTTPError urlopen leaves the
+    # SSL socket for the garbage collector, and `filterwarnings = error` promotes
+    # the resulting ResourceWarning to a failure — attributed to whichever test
+    # happens to be running when GC fires, which was the *next* one. requests is
+    # already a core dependency and its Response is a context manager, and a 403
+    # comes back as a status code rather than an exception.
     try:
-        with urllib.request.urlopen(source_url, timeout=30) as resp:
-            if resp.status != 200:
-                pytest.skip(f"BioModels returned HTTP {resp.status} for {source_url}")
-    except urllib.error.HTTPError as exc:
-        pytest.skip(
-            f"BioModels refused the download (HTTP {exc.code}). Expected on hosted CI: "
-            f"biomodels.org blocks cloud IP ranges. The simulate path is covered by "
-            f"test_biomodels_adapter_simulate_slow using the vendored SBML."
-        )
-    except Exception as exc:  # noqa: BLE001 - any transport failure means "cannot fetch"
+        with requests.get(source_url, timeout=30) as resp:
+            if resp.status_code != 200:
+                pytest.skip(
+                    f"BioModels refused the download (HTTP {resp.status_code}). Expected on "
+                    f"hosted CI: biomodels.org blocks cloud IP ranges. The simulate path is "
+                    f"covered by test_biomodels_adapter_simulate_slow using the vendored SBML."
+                )
+    except requests.RequestException as exc:
         pytest.skip(f"BioModels unreachable ({type(exc).__name__}: {exc}) — no network?")
 
     # No local_sbml_path: force the adapter down the download path.
