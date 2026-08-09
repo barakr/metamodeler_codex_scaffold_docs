@@ -41,7 +41,12 @@ on:
     paths:
       - "tutorials/**"
       - "src/**"
-      - "tests/test_tutorial_integration.py"
+      # All of tests/, not just the tutorial file: this job runs the whole slow
+      # suite, so any test it executes must be able to trigger it. Naming one
+      # file meant a fix to tests/test_biomodels_slow.py — for a failure only
+      # this job could see — did not re-run the job that would confirm it.
+      - "tests/**"
+      - "examples/biomodels/**"
       - "pyproject.toml"
       - "environment*.yml"
       - ".github/workflows/slow.yml"
