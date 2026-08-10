@@ -29,6 +29,43 @@ This was not caused by the joint-sampling work, though it first appeared alongsi
 the failing test is self-contained (its own `tmp_path`, its own registry), so it cannot
 be pollution from another test.
 
+**A second Windows bug behind the first**, found by the new 16-thread test rather than
+by inspection: with the thread lock in place, 1 of 16 writers still raised
+`PermissionError(13)`. The lock file was prepared *outside* the lock with
+`lock_path.write_bytes(b" ")` — and `write_bytes` truncates. Truncating a file whose
+byte 0 another handle has locked is denied on Windows. Sixteen threads starting
+together all saw a missing lock file and all tried to create it; the ones arriving
+after the first had locked byte 0 raised instead of writing.
+
+Preparation now happens inside the lock, via `os.open(O_RDWR | O_CREAT)` — created if
+absent, never `O_TRUNC` over a live lock region — and the initial byte write tolerates
+`PermissionError`, since another process holding byte 0 means the byte is already
+there. Verified 20/20 consecutive runs locally; the Windows path is CI's to confirm.
+
+Worth noting the shape of this: the first fix was correct and insufficient, and the
+only reason the remainder surfaced is that the new test asserts *no writer raised*
+rather than only checking the final contents. A dropped writer whose key happened to
+be written by someone else would have passed a contents-only check.
+
+## Joint sampling verified against both surrogate backends (2026-08-10)
+
+`sample_joint` conditions on surrogates through exactly one call — `log_prob` — and
+that call was exercised on `pymc_gp` only, because the TCR metamodel fits all four of
+its surrogates with `pymc_gp`. Nothing in the repo drove `sbi_npe` through a joint
+sample, so "joint sampling works" was a claim about one backend.
+
+`tests/test_joint_sampling_backends.py` (new) runs the same test against both: fit a
+surrogate on data from a known linear map, give the output a deliberately vague prior
+(sd 5.0), and require joint sampling to pull it onto the surrogate's prediction
+(residual sd < 1.0). If the likelihood were skipped — which is what `--method
+propagate` still does — the output would return at its prior and the test would fail
+loudly rather than quietly agreeing. A second test pins the single-row calling
+convention `CompiledMetaModel.evaluate_log_prob` actually uses, which batch-oriented
+surrogate tests would not catch.
+
+Each parametrisation skips when its backend is absent; `REQUIRE_JOINT_BACKENDS=1`
+turns that skip into a failure (rule 12).
+
 ## `meta sample` now records which sampler produced a dataset (2026-08-10)
 
 `sample_joint_to_store` wrote `method: "random_walk_metropolis"`; the `propagate` path

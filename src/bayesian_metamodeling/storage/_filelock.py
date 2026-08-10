@@ -82,22 +82,33 @@ def locked_registry(path: Path) -> Iterator[None]:
     """
     lock_path = path.with_suffix(path.suffix + ".lock")
     lock_path.parent.mkdir(parents=True, exist_ok=True)
-    # Windows `msvcrt.locking()` requires the locked region to actually exist
-    # in the file; `fcntl.flock()` doesn't care. Ensure there is at least one
-    # byte at offset 0 before opening for locking. The conditional write is
-    # idempotent — concurrent processes that both decide the file is empty
-    # will write the same byte to the same offset, so the resulting file is
-    # the same regardless of interleaving.
-    if not lock_path.exists() or lock_path.stat().st_size == 0:
-        lock_path.write_bytes(b" ")
-    # Threads first, then the OS. Taking the in-process lock before opening the
-    # descriptor means only one thread ever contends for the OS lock on this
-    # registry, which is precisely the case `msvcrt.locking()` cannot survive.
+
+    # Threads first, then the OS. Taking the in-process lock before touching the file
+    # at all means only one thread per process ever contends for the OS lock, which is
+    # precisely the case `msvcrt.locking()` cannot survive.
+    #
+    # Everything below must stay INSIDE this block. An earlier version prepared the
+    # lock file outside it with `lock_path.write_bytes(b" ")`, and that was a second,
+    # separate Windows bug: `write_bytes` truncates, and truncating a file whose byte 0
+    # another handle has locked fails with PermissionError. With 16 threads starting
+    # together they all saw a missing file, all tried to create it, and whichever ones
+    # arrived after the first had locked byte 0 raised instead of writing.
     with _thread_lock_for(lock_path):
-        # Open in read+write binary without truncation so we don't erase the byte
-        # that the lock relies on.
-        fd = lock_path.open("rb+")
+        # O_CREAT without O_TRUNC: create if absent, never destroy an existing lock
+        # region. `msvcrt.locking()` requires the locked byte to actually exist in the
+        # file; `fcntl.flock()` does not care.
+        raw = os.open(lock_path, os.O_RDWR | os.O_CREAT)
+        fd = os.fdopen(raw, "rb+")
         try:
+            if os.fstat(fd.fileno()).st_size == 0:
+                try:
+                    fd.write(b" ")
+                    fd.flush()
+                except PermissionError:
+                    # Another *process* holds byte 0, which means the byte is already
+                    # there and this write was redundant. Only reachable in the narrow
+                    # window before the first writer's byte is visible to us.
+                    pass
             _acquire(fd)
             yield
         finally:
