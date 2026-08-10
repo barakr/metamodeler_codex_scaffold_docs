@@ -1,5 +1,51 @@
 # Status: Metamodeling Automation Framework
 
+## Formatter emitted syntax the package's own minimum Python cannot parse (2026-08-10)
+
+`ruff format` rewrote `except (OSError, json.JSONDecodeError):` in
+`meta/joint_sampling.py` into the unparenthesized PEP 758 form
+`except OSError, json.JSONDecodeError:`. That is valid only on Python 3.14+, and
+`requires-python` is `>=3.12` while CI runs 3.12 — so `tests/test_joint_sampling.py`
+could not even be *collected* on any of the three CI operating systems, while the
+same tree was green locally on 3.14.
+
+**Cause:** `[tool.ruff] target-version = "py314"` did not track
+`[project] requires-python = ">=3.12"`. Ruff treats target-version as permission to
+emit newer syntax, so the formatter was targeting the newest interpreter on the dev
+box rather than the oldest one the package supports.
+
+What made this costly to diagnose was the feedback shape: every hand-fix of the
+`except` line was undone by the next `make fmt`, which reads as an editor fighting
+back rather than as a configuration mismatch. Isolating it needed a two-line file
+formatted in a scratch directory, plus running that file under both interpreters.
+
+**Fixes:**
+- `pyproject.toml`: `target-version` → `"py312"`, with a comment saying it must
+  track `requires-python`. Re-running `ruff format` now leaves the parenthesized
+  form alone.
+- `tests/test_ruff_target_matches_requires_python.py` (new, `contract`): asserts
+  `target-version <= min(requires-python)`. Verified it actually fails when
+  target-version is put back to `py314` — a guard that cannot fail is rule 12's
+  whole complaint.
+
+**Verified:** `ruff format --check .` + `ruff check .` clean; fast suite green on
+3.14 (104 files formatted, 0 failures); `tests/test_joint_sampling.py` collects and
+passes 4/4 on Python 3.12, which is the exact thing that was broken.
+
+### Pre-existing, unrelated: pytensor/numpy einsum break in the local pymc env
+
+`tests/test_surrogate_multi_output.py::test_pymc_gp_multi_output_full_cov_runs_and_recovers_means`
+fails in `py312_bayesmm_pymc` with `ValueError: not enough values to unpack
+(expected 5, got 3)` at `pytensor/tensor/einsum.py:672`. pytensor 2.37.0 calls
+numpy's *private* `np.einsum_path(..., einsum_call=True)` and unpacks 5-tuples;
+numpy 2.4.6 returns 3-tuples. Purely upstream.
+
+Confirmed pre-existing by stashing the changes above and re-running the same test at
+HEAD — identical failure. Recorded rather than silently tolerated (rule 2): local env
+is pytensor 2.37.0 / numpy 2.4.6 / pymc 5.27.1. CI installs numpy unpinned, so
+whether CI sees it depends on what pip resolves there. If it turns up in CI, the fix
+is a numpy upper bound on the `pymc` extra, not a change to our code.
+
 ## Tutorial-stability hardening + post-mortem on missed T2 silent failure (2026-05-15, commits 28835b8..)
 
 A previous verification commit (`61454b5`) reported "30/30 PASS" — 10 tutorials × 3 conda envs (`py312_bayesmm_sbi`, `py312_bayesmm_pymc`, `py312_bayesmm`). The user then opened Tutorial 2 manually in `py312_bayesmm_sbi` and saw `Run complete: 0 successful runs / 11/11 points failed`. The BioModels SBML sweep failed silently for every DOE point even though `libroadrunner 2.9.2` was installed in the kernel. **My verification reported PASS for a tutorial that did no useful work.**

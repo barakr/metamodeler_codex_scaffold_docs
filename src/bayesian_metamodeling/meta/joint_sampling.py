@@ -93,7 +93,7 @@ def load_surrogates_for_ir(
             continue
         try:
             payload = json.loads(candidate_path.read_text(encoding="utf-8"))
-        except OSError, json.JSONDecodeError:
+        except (OSError, json.JSONDecodeError):
             continue
         artifact_id = payload.get("artifact_id")
         if artifact_id:

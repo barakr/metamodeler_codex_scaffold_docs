@@ -78,7 +78,11 @@ where = ["src"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py314"
+# MUST track `requires-python` above, not the newest interpreter on the dev box.
+# At py314 the formatter emits PEP 758 syntax — `except A, B:` without parentheses —
+# which is a SyntaxError on 3.12 and 3.13. That shipped a module CI could not even
+# import, on all three OSes, while it ran fine locally on 3.14.
+target-version = "py312"
 # `projects/` holds research submodules with their own lifecycle and lint
 # conventions — root config governs the framework only (see CLAUDE.md
 # "Submodule Boundary"). This mirrors `testpaths = tests` in pytest.ini.
