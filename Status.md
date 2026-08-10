@@ -39,6 +39,21 @@ Three things went wrong, ordered by lesson value:
 
 ## Decision Log
 
+### 2026-08-07: pre-commit formatted in place, so it shipped unformatted commits
+
+The hook ran `ruff format .` — in place, after staging. So it rewrote files the
+commit had already captured: the commit kept the unformatted content while the
+working tree quietly held the fix.
+
+It bit exactly as you would expect. `meta/joint_sampling.py` and `cli/main.py`
+were committed unformatted, `CI`'s `ruff format --check src tests` went red on all
+three OSes, and the working-tree difference looked like an unexplained local edit
+— so it was reverted, discarding the fix and leaving the repo red.
+
+Changed to `ruff format --check .`, which refuses the commit and says to run
+`make fmt`. What gets committed and what got checked are now the same bytes. The
+`ruff check` and pytest gates are unchanged.
+
 ### 2026-08-07: `meta sample --method joint` — the coupling step now samples
 
 Raised by Amit Meiri: the coupling step "didn't exist" — practically, how do you

@@ -551,7 +551,12 @@ def _meta_sample_command(
             print(f"Joint sampling unavailable: {exc}")
             return 1
         artifact = sample_joint_to_store(
-            spec=spec, ir=ir, draws=draws, tune=tune, chains=chains, seed=seed,
+            spec=spec,
+            ir=ir,
+            draws=draws,
+            tune=tune,
+            chains=chains,
+            seed=seed,
             surrogates=surrogates,
         )
         print(

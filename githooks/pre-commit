@@ -40,7 +40,23 @@ run_pytest() {
 
 {
   echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] pre-commit start"
-  run_ruff format .
+
+  # `--check`, NOT an in-place `ruff format .`.
+  #
+  # Formatting in place here rewrites files AFTER they were staged, so the commit
+  # keeps the unformatted content while the working tree quietly holds the fix.
+  # That is not hypothetical: it shipped an unformatted `meta/joint_sampling.py`
+  # and `cli/main.py`, CI's `ruff format --check src tests` went red on all three
+  # OSes, and the working-tree fix looked like an unexplained local edit and was
+  # reverted. Refusing to commit and telling the author to run `make fmt` keeps
+  # what is committed and what was checked as the same bytes.
+  if ! run_ruff format --check .; then
+    echo
+    echo "pre-commit: files need formatting. Run 'make fmt', re-stage, and commit again."
+    echo "            (this hook does NOT format in place: that would leave the staged"
+    echo "             content unformatted while the working tree looked fine)"
+    exit 1
+  fi
   run_ruff check .
   run_pytest -q -m "not slow"
 
