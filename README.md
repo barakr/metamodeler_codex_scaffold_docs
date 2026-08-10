@@ -247,6 +247,42 @@ Known numerical differences:
 - The current baseline samplers may produce slightly different coupling-noise realizations between backends.
 - Small posterior summary differences are expected due backend-specific sampling jitter and initialization.
 
+## Sampling method (`--method`)
+
+`bayesmm meta sample` takes `--method`, and the choice decides whether you get
+inference or propagation. This is the single most consequential flag in the metamodel
+layer, so it is worth reading before interpreting any output.
+
+| | `propagate` (default) | `joint` |
+|---|---|---|
+| how draws are made | each variable from its prior, then coupled targets overwritten by `transform(source)` | Metropolis over the full joint log-density |
+| surrogate likelihoods | **not evaluated** | evaluated — the surrogates are evidence |
+| a coupling informs | its **target** only | **both** ends |
+| honest name for the output | forward uncertainty propagation | posterior |
+
+```bash
+bayesmm meta sample metamodel.json --draws 2000 --tune 1000 --seed 7 --method joint
+```
+
+Use `joint` when you have asked "how do I sample after declaring a coupling between
+two models' variables?" — that is what it answers. Under `propagate`, declaring a
+Gaussian coupling reshapes the target and leaves the source at exactly its prior, and
+the surrogates in your spec are validated but never consulted.
+
+Two practical notes:
+
+- **It is gradient-free.** A fitted surrogate's `log_prob` is a black box, so the
+  sampler is random-walk Metropolis. That costs efficiency, not correctness — but
+  check the reported `accept_rate`, and treat effective sample size as something to
+  measure rather than assume, especially in higher dimensions.
+- **Cost is dominated by surrogate evaluations.** `sbi_npe.log_prob` measures ~23 ms
+  per call against ~0.2 ms for `pymc_gp`, so an NPE-backed joint sample is roughly
+  100x more expensive per step. Budget accordingly, and prefer fewer, longer chains.
+
+`joint` needs real fitted surrogates: run `bayesmm surrogate fit` first. If an artifact
+is a placeholder without a `backend_payload`, the command says so and names the fix
+rather than silently sampling something meaningless.
+
 ## End-to-End Quickstart
 ```bash
 PYTHONPATH=src python -m bayesian_metamodeling.cli.main validate examples/toy_program/spec.toy_program.json

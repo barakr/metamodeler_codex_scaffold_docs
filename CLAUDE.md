@@ -109,6 +109,25 @@ submodules. Each is a separate repository with its own lifecycle.
 - IR compiled to PyMC or NumPyro model
 - Sampling produces canonical `inference_data.json` + `samples_dataset.json`
 
+**Two sampling methods, and the difference is not a detail** (`--method`):
+
+- `propagate` (default) — draw every variable from its prior, then overwrite each
+  coupled target with `transform(source)`. Surrogate likelihoods are **not** evaluated
+  (the compiled model is called with `surrogates={}`). A coupling informs its target
+  only; the source stays at exactly its prior. This is forward uncertainty
+  propagation, and calling its output a "posterior" is a misnomer.
+- `joint` (`meta/joint_sampling.py`) — random-walk Metropolis over the full joint
+  log-density: priors, couplings **and** surrogate likelihoods. Both ends of a coupling
+  move; deterministic couplings are computed from their source rather than sampled.
+  Gradient-free because a fitted surrogate's `log_prob` is a black box; expressing it
+  as a PyTensor graph is what would unlock NUTS.
+
+`inference_data.json` records `method` for both paths, so a stored dataset says how it
+was made. Correctness of `joint` is pinned against a closed-form Gaussian in
+`tests/test_joint_sampling.py`, and against both surrogate backends in
+`tests/test_joint_sampling_backends.py` (`slow`; NPE `log_prob` is ~100x the cost of
+`pymc_gp`, so it does not belong in the fast suite).
+
 ## Non-Negotiable Rules
 
 1. **Small, incremental commits** — one logical change per commit
@@ -277,7 +296,7 @@ bayesmm surrogate eval <spec.json> --inputs <json> --n N
 bayesmm surrogate list                 # List surrogate artifacts
 
 bayesmm meta build <spec.json>         # Build metamodel IR
-bayesmm meta sample <spec.json> --draws D --tune T
+bayesmm meta sample <spec.json> --draws D --tune T [--method propagate|joint]
 bayesmm meta list                      # List metamodel samples
 
 bayesmm tutorial                       # Print workflow guide
