@@ -64,7 +64,31 @@ convention `CompiledMetaModel.evaluate_log_prob` actually uses, which batch-orie
 surrogate tests would not catch.
 
 Each parametrisation skips when its backend is absent; `REQUIRE_JOINT_BACKENDS=1`
-turns that skip into a failure (rule 12).
+turns that skip into a failure, and is set for Deep CI's `full` job alongside
+`REQUIRE_TUTORIAL_BACKENDS` (rule 12). Skip reasons are worded to begin "needs pymc" /
+"needs sbi" so they match Deep CI's existing `SANCTIONED` patterns — a reason that
+cannot match fails the job, which is the intended behaviour, not something to work
+around.
+
+**Result: both backends work.** Verified by running the file in each env —
+`py312_bayesmm_pymc` (pymc passes, sbi skips) and `py312_bayesmm_sbi` (sbi passes,
+pymc skips).
+
+**Marked `slow`, and the reason is a fact worth carrying:** joint sampling's cost is
+dominated by surrogate evaluations, and the two backends are ~100x apart. Measured
+here: `sbi_npe.log_prob` ≈ **23.5 ms/call** against ≈ 0.2 ms for `pymc_gp`, with the
+NPE *fit* itself only 4.5 s. So the chain, not the training, is what costs — 2800
+evaluations run in 8.6 s on pymc_gp and 3 min 8 s on sbi_npe.
+
+Two consequences:
+- These tests cannot live in the fast suite. CI's fast job installs both backends, so
+  unmarked they would have added minutes to every push on three operating systems.
+  The first draft used 4000 draws x 2 chains and took ~20 minutes; it is now 2000
+  draws x 1 chain, which still constrains `y` from a prior sd of 5.0 to a residual sd
+  below 1.0.
+- For real use with NPE surrogates: budget for it, and prefer fewer, longer chains
+  over many short ones. A gradient-based sampler would need the surrogate `log_prob`
+  as a PyTensor graph, which is the same prerequisite as unlocking NUTS.
 
 ## `meta sample` now records which sampler produced a dataset (2026-08-10)
 

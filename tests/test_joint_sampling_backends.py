@@ -16,6 +16,16 @@ fail loudly.
 Both backends are optional dependencies, so each parametrisation skips when its
 backend is absent. `REQUIRE_JOINT_BACKENDS=1` turns those skips into failures, per
 CLAUDE.md rule 12: a gate that can skip needs a mode where skipping is an error.
+
+**Marked `slow`, deliberately.** Cost here is dominated by surrogate evaluations, not
+by sampling: a fitted NPE's `log_prob` measures ~23 ms per call against ~0.2 ms for
+`pymc_gp`, so a chain that is instant on one backend takes minutes on the other. The
+fast suite has a 30-second budget and CI's fast job installs both backends, so leaving
+these unmarked would have put several minutes on every push, on three operating
+systems. They belong in `Deep CI`, which is provisioned for exactly this.
+
+That 100x gap is itself worth knowing when using this feature: joint sampling with NPE
+surrogates is practical, but budget for it, and prefer fewer, longer chains.
 """
 
 from __future__ import annotations
@@ -57,9 +67,12 @@ def _require_backends() -> bool:
 
 
 def _skip_or_fail(backend: str) -> None:
+    # Wording matters: Deep CI's skip audit matches "needs pymc" / "needs sbi" against
+    # its SANCTIONED list. A reason it cannot match fails the job, by design.
+    extra = "pymc" if backend == "pymc_gp" else "sbi"
     message = (
-        f"{backend} is not installed, so joint sampling was never exercised against it. "
-        f"Install it (pip install -e '.[{'pymc' if backend == 'pymc_gp' else 'sbi'}]')."
+        f"needs {extra}: {backend} is not installed, so joint sampling is not "
+        f"exercised against it here (pip install -e '.[{extra}]')."
     )
     if _require_backends():
         pytest.fail(f"REQUIRE_JOINT_BACKENDS=1: {message}")
@@ -97,6 +110,7 @@ def _ir_with_surrogate() -> MetamodelIR:
     )
 
 
+@pytest.mark.slow
 @pytest.mark.optional_backend
 @pytest.mark.integration
 @pytest.mark.parametrize("backend", ["pymc_gp", "sbi_npe"])
@@ -137,9 +151,9 @@ def test_joint_sampling_conditions_on_each_surrogate_backend(backend):
 
     samples, diag = sample_joint(
         compile_metamodel(_ir_with_surrogate()),
-        draws=4000,
-        tune=1500,
-        chains=2,
+        draws=2000,
+        tune=800,
+        chains=1,
         seed=17,
         surrogates={"toy": model},
     )
@@ -163,6 +177,7 @@ def test_joint_sampling_conditions_on_each_surrogate_backend(backend):
     assert diag["surrogates_loaded"] == ["toy"], diag
 
 
+@pytest.mark.slow
 @pytest.mark.optional_backend
 @pytest.mark.parametrize("backend", ["pymc_gp", "sbi_npe"])
 def test_surrogate_log_prob_accepts_the_single_row_call_the_compiler_makes(backend):

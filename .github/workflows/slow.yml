@@ -101,6 +101,11 @@ jobs:
       # this deterministic, matching the main CI workflow.
       PYTENSOR_FLAGS: cxx=
       REQUIRE_TUTORIAL_BACKENDS: ${{ matrix.require_backends }}
+      # Same idea, for tests/test_joint_sampling_backends.py: in the `full` job an
+      # absent surrogate backend is a failure, not a skip. Joint sampling touches each
+      # backend through exactly one call (`log_prob`), so "it works" has to mean "it
+      # was run against both" — pymc_gp alone was the entire coverage before.
+      REQUIRE_JOINT_BACKENDS: ${{ matrix.require_backends }}
 
     steps:
       - uses: actions/checkout@v4
