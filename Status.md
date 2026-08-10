@@ -1,5 +1,48 @@
 # Status: Metamodeling Automation Framework
 
+## Registry writes were silently lost under concurrency on Windows (2026-08-10)
+
+`test_locked_registry_concurrent_writes` went red on Windows only: four threads wrote
+to one registry, three raised, and the file ended with **one key of four**.
+
+`_filelock.py`'s docstring asserted that opening a fresh descriptor per acquirer
+serialized threads — *"both backends behave correctly when separate fds are used per
+acquirer"*. True for `fcntl.flock()`, false for `msvcrt.locking()`, whose locks belong
+to the **process**, not the descriptor. And `LK_LOCK` does not block: it retries ten
+times at one-second intervals, then raises `OSError`. So concurrent threads did not
+queue — they failed, and their registry entries disappeared. Silent data loss, caught
+only because that test asserts all four keys rather than merely that the file parses.
+
+**Fix:** a `threading.Lock` per registry path, taken *before* the descriptor is opened,
+so only one thread in a process ever contends for the OS lock. The OS lock still does
+cross-process exclusion. Locks are keyed by resolved path, so two names for one file
+contend correctly. Nesting for the same path deadlocks and is documented as
+unsupported — a reentrant lock would only hide that the OS lock cannot be reacquired
+either.
+
+**Test added:** `test_locked_registry_under_contention_never_drops_a_writer` — 16
+threads released together from a `threading.Barrier`, asserting that no writer raised,
+none hung, and every key landed. The existing 4-thread test asserts contents only; a
+dropped writer that happened not to change the key set would slip past it.
+
+This was not caused by the joint-sampling work, though it first appeared alongside it:
+the failing test is self-contained (its own `tmp_path`, its own registry), so it cannot
+be pollution from another test.
+
+## `meta sample` now records which sampler produced a dataset (2026-08-10)
+
+`sample_joint_to_store` wrote `method: "random_walk_metropolis"`; the `propagate` path
+wrote no `method` key at all. Both write into `tmp/metamodel_samples/`, so the two were
+distinguishable only by a **missing** field, and a store containing both could not be
+read without knowing which command had produced which entry. `_sample_core` now records
+`method: "prior_propagation"` and `surrogates_evaluated: false` — the latter being the
+consequential difference, since that path calls the compiled model with `surrogates={}`
+and therefore propagates rather than conditions.
+
+Pinned by `test_both_sampling_methods_label_themselves_in_their_artifacts`: both paths
+must name a sampler, and the two names must differ. This is what lets notebook 03 select
+its propagate and joint datasets explicitly instead of by mtime.
+
 ## Formatter emitted syntax the package's own minimum Python cannot parse (2026-08-10)
 
 `ruff format` rewrote `except (OSError, json.JSONDecodeError):` in

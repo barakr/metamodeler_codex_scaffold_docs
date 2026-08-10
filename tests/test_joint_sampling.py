@@ -16,6 +16,9 @@ prior), and a deterministic coupling must hold exactly in every draw.
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import numpy as np
 import pytest
 
@@ -127,6 +130,49 @@ def test_deterministic_coupling_holds_exactly_in_every_draw():
     )
     # And it must be reported as derived rather than silently sampled.
     assert diag["derived_variables"] == ["y"], diag
+
+
+@pytest.mark.contract
+def test_both_sampling_methods_label_themselves_in_their_artifacts(tmp_path, monkeypatch):
+    """A stored dataset must say which sampler produced it.
+
+    The two methods answer different questions — `propagate` does forward propagation
+    with `surrogates={}`, `joint` conditions on the surrogate likelihoods — and they
+    write into the same store. Before this, only the joint path recorded `method`, so
+    the two were distinguishable only by a *missing* key, and a directory of samples
+    could not be read without knowing which command had produced each entry.
+    """
+    monkeypatch.chdir(tmp_path)
+    params = dict(mx=1.0, sx=0.5, my=0.0, sy=2.0, alpha=1.5, beta=-0.4, sigma=0.3)
+    ir = _two_variable_ir(**params)
+
+    from bayesian_metamodeling.meta.joint_sampling import sample_joint_to_store
+    from bayesian_metamodeling.meta.sampling import _sample_core
+
+    propagated = _sample_core(
+        backend="pymc",
+        ir=ir,
+        spec_payload={"name": "pair"},
+        dataset_digest="[]",
+        draws=20,
+        tune=5,
+        chains=1,
+        seed=0,
+    )
+    joint = sample_joint_to_store(
+        spec=None, ir=ir, draws=40, tune=20, chains=1, seed=0, surrogates={}
+    )
+
+    methods = {}
+    for label, result in (("propagate", propagated), ("joint", joint)):
+        payload = json.loads(Path(result["inference_data_path"]).read_text(encoding="utf-8"))
+        assert "method" in payload, f"{label} artifact does not name its sampler: {sorted(payload)}"
+        methods[label] = payload["method"]
+
+    assert methods["propagate"] != methods["joint"], (
+        f"both methods labelled themselves {methods['propagate']!r}; the artifacts are "
+        "indistinguishable"
+    )
 
 
 @pytest.mark.integration

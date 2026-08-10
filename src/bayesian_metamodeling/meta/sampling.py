@@ -115,6 +115,16 @@ def _sample_core(
         "chains": chains,
         "seed": seed,
         "variables": sample_vars,
+        # Name the sampler in the artifact. `sample_joint` records
+        # `method: "random_walk_metropolis"`, and without a counterpart here the two
+        # methods were distinguishable only by a *missing* key — so a propagate
+        # dataset and a joint dataset in the same store could not be told apart
+        # without re-deriving which command produced which. `surrogates_evaluated`
+        # is the consequential difference: this path calls the compiled model with
+        # `surrogates={}`, so surrogate likelihood factors contribute nothing and
+        # the draws are forward propagation, not conditioning.
+        "method": "prior_propagation",
+        "surrogates_evaluated": False,
         "created_at": datetime.now(UTC).isoformat(),
     }
     inference_path = out_dir / "inference_data.json"
@@ -127,6 +137,7 @@ def _sample_core(
     registry_entry = {
         "sample_id": sample_id,
         "ir_name": ir.name,
+        "method": "prior_propagation",
         "backend": backend,
         "draws": draws,
         "tune": tune,

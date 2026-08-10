@@ -67,6 +67,49 @@ def test_locked_registry_concurrent_writes(tmp_path):
         assert result[f"k{i}"] == f"value_k{i}"
 
 
+def test_locked_registry_under_contention_never_drops_a_writer(tmp_path):
+    """Every thread must complete its write, and none may raise acquiring the lock.
+
+    The 4-thread test above found a real bug on Windows and nothing else: because
+    `msvcrt.locking()` locks per *process* rather than per descriptor, and `LK_LOCK`
+    gives up after ten retries and raises, concurrent writers did not queue — they
+    failed, and their entries vanished from the registry.
+
+    This raises the contention and, crucially, asserts on *exceptions* as well as on
+    the final contents. A dropped writer that happens not to change the key set would
+    slip past a contents-only check.
+    """
+    registry_path = tmp_path / "registry.json"
+    registry_path.write_text("{}")
+
+    n = 16
+    errors: list[BaseException] = []
+    barrier = threading.Barrier(n)
+
+    def _write_key(key: str) -> None:
+        try:
+            barrier.wait(timeout=30)  # maximise overlap rather than hoping for it
+            with locked_registry(registry_path):
+                data = json.loads(registry_path.read_text())
+                data[key] = f"value_{key}"
+                registry_path.write_text(json.dumps(data))
+        except BaseException as exc:  # noqa: BLE001 - recorded and re-asserted below
+            errors.append(exc)
+
+    threads = [threading.Thread(target=_write_key, args=(f"k{i}",)) for i in range(n)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=60)
+
+    assert not errors, f"{len(errors)} of {n} writers raised while locking: {errors[:3]}"
+    assert not [t for t in threads if t.is_alive()], "a writer never finished — deadlock"
+    result = json.loads(registry_path.read_text())
+    assert set(result) == {f"k{i}" for i in range(n)}, (
+        f"{n - len(result)} write(s) were silently lost under contention"
+    )
+
+
 # --- sha256 ---
 
 
