@@ -110,6 +110,16 @@ def _ir_with_surrogate() -> MetamodelIR:
     )
 
 
+# NUTS explores extreme parameter values while tuning, and on some BLAS builds that
+# overflows inside a dot product in pymc's own internals. `filterwarnings = error` in
+# pytest.ini promotes it to a failure — which it did on Deep CI's ubuntu runners while
+# passing locally three times over, including under CI's own `PYTENSOR_FLAGS=cxx=`.
+#
+# This is narrowed to the one message, and it is safe *because the test does not infer
+# fit quality from the absence of warnings*: it asserts directly that the fitted
+# surrogate prefers the true output to a wrong one before using it. A genuinely broken
+# fit still fails, loudly, on an assertion that says so.
+@pytest.mark.filterwarnings("ignore:overflow encountered in dot:RuntimeWarning")
 @pytest.mark.slow
 @pytest.mark.optional_backend
 @pytest.mark.integration
@@ -177,6 +187,16 @@ def test_joint_sampling_conditions_on_each_surrogate_backend(backend):
     assert diag["surrogates_loaded"] == ["toy"], diag
 
 
+# NUTS explores extreme parameter values while tuning, and on some BLAS builds that
+# overflows inside a dot product in pymc's own internals. `filterwarnings = error` in
+# pytest.ini promotes it to a failure — which it did on Deep CI's ubuntu runners while
+# passing locally three times over, including under CI's own `PYTENSOR_FLAGS=cxx=`.
+#
+# This is narrowed to the one message, and it is safe *because the test does not infer
+# fit quality from the absence of warnings*: it asserts directly that the fitted
+# surrogate prefers the true output to a wrong one before using it. A genuinely broken
+# fit still fails, loudly, on an assertion that says so.
+@pytest.mark.filterwarnings("ignore:overflow encountered in dot:RuntimeWarning")
 @pytest.mark.slow
 @pytest.mark.optional_backend
 @pytest.mark.parametrize("backend", ["pymc_gp", "sbi_npe"])

@@ -72,7 +72,21 @@ around.
 
 **Result: both backends work.** Verified by running the file in each env —
 `py312_bayesmm_pymc` (pymc passes, sbi skips) and `py312_bayesmm_sbi` (sbi passes,
-pymc skips).
+pymc skips), and confirmed on Deep CI.
+
+**One CI-only wrinkle**, worth recording because the fix looks like a suppression and
+is not: on Deep CI's ubuntu runners the `pymc_gp` parametrisation failed with
+`RuntimeWarning: overflow encountered in dot`, raised inside pymc's own internals while
+NUTS explored extreme values during tuning, and promoted to an error by
+`filterwarnings = error`. It did not reproduce locally in three runs, including under
+CI's own `PYTENSOR_FLAGS=cxx=` — it is BLAS-build dependent.
+
+Handled with a `@pytest.mark.filterwarnings` scoped to that exact message. That is
+defensible here specifically because **the test does not infer fit quality from the
+absence of warnings**: it asserts directly that the fitted surrogate assigns higher
+`log_prob` to the true output than to a wrong one, before using it for anything. A
+genuinely broken fit still fails on an assertion that says what broke. A blanket
+`ignore::RuntimeWarning` would not have been acceptable.
 
 **Marked `slow`, and the reason is a fact worth carrying:** joint sampling's cost is
 dominated by surrogate evaluations, and the two backends are ~100x apart. Measured
