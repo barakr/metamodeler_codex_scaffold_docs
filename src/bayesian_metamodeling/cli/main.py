@@ -132,6 +132,17 @@ def build_parser() -> argparse.ArgumentParser:
     meta_sample.add_argument("--tune", type=int, default=0)
     meta_sample.add_argument("--chains", type=int, default=1)
     meta_sample.add_argument("--seed", type=int, default=0)
+    meta_sample.add_argument(
+        "--method",
+        choices=["propagate", "joint"],
+        default="propagate",
+        help=(
+            "propagate (default): draw from the priors and apply couplings as a "
+            "post-draw transform — fast, and does NOT condition on the surrogates. "
+            "joint: Metropolis over the full joint log-density, including the "
+            "surrogate likelihoods, so a coupling informs both of its variables."
+        ),
+    )
     meta_subparsers.add_parser("list", help="List stored metamodel artifacts and samples")
 
     subparsers.add_parser("tutorial", help="Print guided end-to-end workflow")
@@ -515,20 +526,47 @@ def _meta_build_command(spec_path: Path) -> int:
     return 0
 
 
-def _meta_sample_command(spec_path: Path, *, draws: int, tune: int, chains: int, seed: int) -> int:
+def _meta_sample_command(
+    spec_path: Path, *, draws: int, tune: int, chains: int, seed: int, method: str = "propagate"
+) -> int:
     _, spec, code = _load_and_validate_metamodel(spec_path)
     if code != 0:
         return code
 
     ir = build_ir_from_metamodel_spec(spec)
-    artifact = sample_metamodel(
-        spec=spec,
-        ir=ir,
-        draws=draws,
-        tune=tune,
-        chains=chains,
-        seed=seed,
-    )
+    if method == "joint":
+        # The coupled joint, conditioned on the surrogates. Kept behind a flag rather
+        # than made the default because it is orders of magnitude slower than prior
+        # propagation and changes what the numbers mean — an opt-in, not a surprise.
+        from bayesian_metamodeling.meta.joint_sampling import (
+            load_surrogates_for_ir,
+            sample_joint_to_store,
+        )
+
+        try:
+            surrogates = load_surrogates_for_ir(ir, spec_refs=list(spec.surrogate_refs))
+        except (FileNotFoundError, ValueError) as exc:
+            # A missing or placeholder surrogate is a setup problem with a clear fix,
+            # not a bug: report it the way the other commands report spec errors.
+            print(f"Joint sampling unavailable: {exc}")
+            return 1
+        artifact = sample_joint_to_store(
+            spec=spec, ir=ir, draws=draws, tune=tune, chains=chains, seed=seed,
+            surrogates=surrogates,
+        )
+        print(
+            f"Joint sampling: {len(surrogates)} surrogate(s) conditioned on, "
+            f"accept_rate={artifact['accept_rate']:.2f}"
+        )
+    else:
+        artifact = sample_metamodel(
+            spec=spec,
+            ir=ir,
+            draws=draws,
+            tune=tune,
+            chains=chains,
+            seed=seed,
+        )
 
     print(
         "Metamodel sample stored: "
@@ -621,6 +659,7 @@ def main() -> int:
             tune=args.tune,
             chains=args.chains,
             seed=args.seed,
+            method=args.method,
         )
     if args.command == "meta" and args.meta_command == "list":
         return _meta_list_command()

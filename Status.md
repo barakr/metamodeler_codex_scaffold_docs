@@ -39,6 +39,65 @@ Three things went wrong, ordered by lesson value:
 
 ## Decision Log
 
+### 2026-08-07: `meta sample --method joint` — the coupling step now samples
+
+Raised by Amit Meiri: the coupling step "didn't exist" — practically, how do you
+sample once you have declared a Gaussian coupling between variables of two models?
+He was right, and the gap was narrower and stranger than it sounds.
+
+**What already worked.** `CompiledMetaModel.evaluate_log_prob` computes the full
+joint log-density: priors, couplings (gaussian_link / deterministic, identity /
+affine) and surrogate likelihoods. The target density was there all along.
+
+**What did not.** Nothing sampled from it. `sample_metamodel` draws each variable
+independently from its prior and overwrites coupled targets with
+`transform(source)`, and it calls `evaluate_log_prob(probe, surrogates={})` — an
+empty map — purely as an executability probe. There is no MCMC in `meta/`. So a
+declared coupling reshaped its **target** and left its **source** at the prior:
+information flowed one way, and the surrogates were never evidence.
+
+**Added** `meta/joint_sampling.py`:
+
+- `load_surrogates_for_ir` rehydrates the IR's surrogates. Three resolution routes,
+  because the builder stores the resolved artifact_id and discards the path: a
+  literal path, the spec's `surrogate_refs`, then the registry. A placeholder
+  artifact (no `backend_payload`) raises a message naming the fix rather than a
+  KeyError three frames down.
+- `sample_joint` runs random-walk Metropolis over the joint density, adapting the
+  proposal during tuning and freezing it for the retained draws. Deterministic
+  couplings are computed from their source rather than sampled — proposing them
+  freely would be rejected essentially always and the chain would stall.
+- `sample_joint_to_store` writes the same files as the existing sampler, so
+  `meta list` and the notebooks keep working either way.
+- CLI: `bayesmm meta sample --method {propagate,joint}`, default unchanged.
+  Opt-in because joint sampling is far slower and changes what the numbers mean.
+
+**Correctness is checked against a right answer, not against itself.** For normal
+priors and a linear-Gaussian coupling the joint is Gaussian in closed form, so
+`test_gaussian_link_matches_closed_form` compares sampled mean, sd and correlation
+with the analytic values. A sampler targeting the priors instead fails it: the
+prior mean of y is 0.0 against a joint mean of 0.95, and the prior sd 2.0 against
+0.75. Three further tests pin that a coupling tightens its SOURCE (the asymmetry
+propagation has), that a deterministic coupling holds exactly in every draw, and
+that a misspecified model is reported rather than sampled through.
+
+**On the real four-model TCR metamodel**, conditioned on four fitted surrogates:
+prior sd -> joint sd, contact_fraction 0.139 -> 0.099, cd45_boundary_density
+85.1 -> 58.3, mean_lck_activity 140 -> 13.7, ptcr_fraction 0.336 -> 0.235. 2.6 s
+for 400 draws, accept rate 0.32.
+
+**Why Metropolis and not NUTS**: a fitted surrogate's `log_prob` is a black box
+with no gradient, so a gradient-free sampler is what the model admits. That costs
+efficiency, not correctness. Expressing the model as a PyTensor graph would unlock
+NUTS and needs every surrogate backend to expose a symbolic log_prob — the natural
+next step, and a real piece of work.
+
+**Tutorials updated.** T7 gains a section contrasting the two methods and running
+the two-variable case with its closed form printed alongside; T7/T8's own specs use
+placeholder artifacts, so `--method joint` on them reports that clearly. The TCR
+notebook 03 and Tutorial_0 have their "this is not conditioning" caveats re-scoped
+to the default method.
+
 ### 2026-08-07: Framework bug — a shared store broke every surrogate fit
 
 `_load_from_centralized_sweeps` globs every `sweep_rows.csv` under the store and
