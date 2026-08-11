@@ -1,5 +1,55 @@
 # Status: Metamodeling Automation Framework
 
+## Tutorial 7b rebuilt around the paper's actual query (2026-08-11)
+
+Prompted by the question: *can I take any variable in one model and conditionally infer it
+from a variable in another?* The answer is yes with one real caveat, and the notebook now
+teaches both halves by reproducing the published inference rather than a toy analogue of it.
+
+**What the paper actually does** (Neve-Oz, Sherman & Raveh 2024,
+[doi:10.3389/fimmu.2024.1412221](https://doi.org/10.3389/fimmu.2024.1412221), Fig. 7):
+
+    Pr( DL, Dep, t_KS, R_KS, Diff, P_off | Phos_obs, Rg_obs )
+
+Two imaging measurements; six hidden parameters across three separately-built models. It
+reports using NUTS — the same sampler `--method nuts` now provides — and its headline
+structural finding is a **proportionality constraint `Diff = C·P_off`**: the two Lck
+parameters are not separately identifiable, only their ratio is.
+
+**7b now derives that rather than describing it.** The physics is
+`λ = sqrt(D / k_off)`, which in logs is linear — so a linear surrogate represents it
+exactly, and observing a decay length constrains `log D − log k_off` and nothing else.
+Measured in the notebook:
+
+| | value |
+|---|---|
+| `sd(log_diff)` | 0.882 (prior 1.2 — barely informed) |
+| `sd(log_poff)` | 0.875 (prior 1.2 — barely informed) |
+| **`sd(log_diff − log_poff)`** | **0.327** — the combination *is* informed |
+| correlation | +0.931 |
+
+and the hidden state is recovered through two model boundaries: `log_decay` 5.986 ± 0.162
+against a truth of 6.0, `depletion` 221.9 ± 23.5 against 220.0, from two numbers alone.
+The ridge plot is the notebook's Figure-7G analogue.
+
+**The caveat, and it is about this repo's own metamodel.** Conditioning travels along
+factors; a variable with no path to your data sits at its prior forever and nothing warns
+you. Step 6 checks this mechanically and finds `kinetic_segregation` **UNREACHABLE** — its
+only output feeds nothing. That is why `rigidity_kT_nm2` and `time_sec` keep tripping the
+mixing diagnostic: not a sampler problem, a missing coupling. Recorded in the submodule's
+Status.md; fixing it needs a refit, so it is the user's call.
+
+**Also in this pass:** a vocabulary table for onboarding readers who did T1–T7 but do not
+remember the jargon; the science of the immune synapse stated plainly (what CD45 and Lck
+each do, what a microscope can and cannot see); and an honest `pymc_gp` vs `sbi_npe`
+comparison — they are near-interchangeable for *fitting*, and not interchangeable here,
+because only a symbolic density gives NUTS its gradient. Guidance: pick on fit quality
+first, sampler speed second.
+
+**Verified:** all 11 notebooks pass in `py312_bayesmm_all` and backend-less in
+`py314_bayesmm`; 7b's structural lesson (Step 6) runs even without PyMC.
+
+
 ## Tutorial 7b: inference on a coupled model, with PyMC doing the sampling (2026-08-11, stage 3 of 3)
 
 Completes the conditioning work. T7 teaches what a coupling *is* and samples it with the
