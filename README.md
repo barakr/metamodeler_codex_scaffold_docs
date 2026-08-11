@@ -81,17 +81,16 @@ Runs on Python 3.12+ on Windows, macOS, and Linux. Clone the repo, then either:
 
 **conda (recommended)** — `conda env create -f environment.yml && conda activate py314_bayesmm`
 
-This is the main development environment: the framework, the tutorial stack,
-and the dev tooling (`pytest`, `ruff`, `cmake`) that `make fast`, `make lint`
-and the `githooks/` hooks all expect. The two surrogate backends live in their
-own environments, because pinning PyMC, SBI and PyTorch in one solve is fragile:
+This is the default environment and covers almost everything: the framework, the
+tutorial stack, the dev tooling (`pytest`, `ruff`, `cmake`) that `make fast`, `make lint`
+and the `githooks/` hooks expect, **and both surrogate backends**.
 
 | File | Environment | Use |
 |------|-------------|-----|
-| `environment.yml` | `py314_bayesmm` | main dev: build, test, tutorials |
-| `environment-pymc.yml` | `py312_bayesmm_pymc` | the `pymc_gp` surrogate backend |
-| `environment-sbi.yml` | `py312_bayesmm_sbi` | the `sbi_npe` surrogate backend |
-| `environment-all.yml` | `py312_bayesmm_all` | **both backends — use this to work through the tutorials** (T2 also needs `environment-biomodels.yml`) |
+| `environment.yml` | `py314_bayesmm` | **the default** — build, test, tutorials, both backends |
+| `environment-pymc.yml` | `py312_bayesmm_pymc` | fallback: only the `pymc_gp` backend |
+| `environment-sbi.yml` | `py312_bayesmm_sbi` | fallback: only the `sbi_npe` backend |
+| `environment-biomodels.yml` | `py312_bayesmm_biomodels` | Tutorial 2 only (libroadrunner, PyPI-only) |
 
 The two backends, since their ids appear throughout:
 
@@ -104,12 +103,19 @@ The two backends, since their ids appear throughout:
 - **`sbi_npe`** — neural posterior estimation (NPE) from the `sbi` package
   (simulation-based inference): a neural density estimator, genuinely flexible.
 
-The single-backend envs are deliberately single-backend: they mirror the per-backend jobs
-in continuous integration (CI, the checks GitHub runs on every push), and their value is
-in what they *don't* have. But several tutorial steps need both
-at once — Tutorial 6's Step 4 compares the two on the same query points, and that is the
-cell where you can actually see what each buys you. If you are learning rather than
-testing, create `py312_bayesmm_all`.
+**Use `py314_bayesmm` unless you have a reason not to.** The two single-backend
+environments exist for two narrower purposes: they reproduce the per-backend jobs in
+continuous integration (CI, the checks GitHub runs on every push) — an "SBI" environment
+that quietly also contained PyMC is what once hid a missing guard in Tutorial 6 — and they
+are the fallback if one of the two backends is hard to install on your platform. They sit
+on Python 3.12, which also keeps the `requires-python = ">=3.12"` floor exercised while the
+default environment tests the ceiling.
+
+One consequence worth knowing: with both backends installed, `pytest -m "not slow"` takes
+roughly 80 seconds rather than 7, nearly all of it importing PyMC, PyTensor and PyTorch.
+That is the same cost CI has always paid, since its fast job installs `.[pymc,sbi]` too. A
+backend-free development environment ran a *different* suite from CI, and that gap hid a
+real bug.
 
 **pip + venv**:
 ```

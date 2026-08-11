@@ -16,10 +16,18 @@
 ```bash
 make fmt          # ruff format .
 make lint         # ruff check .
-make fast         # pytest -q -m "not slow"   (must stay < 30s)
+make fast         # pytest -q -m "not slow"   (see the budget note below)
 make slow         # pytest -q -m slow
 pip install -e .  # editable install
 ```
+
+**Fast-suite budget.** The rule is *test-time*, not wall-clock: no test in the `not slow`
+suite may take seconds of compute. Wall-clock depends on the environment — with both
+surrogate backends installed (the default env, and what CI's fast job uses) it is ~80s,
+almost entirely `import pymc` / `import torch`; without them ~7s. If the suite creeps up
+because a *test* got slower, mark it `slow` or make it cheaper. Import cost is not
+something to optimise by uninstalling backends: that is what let a real bug diverge between
+local and CI.
 
 ## Project Structure
 
@@ -400,16 +408,26 @@ bayesmm --version
 
 | Environment | Purpose | Create with |
 |-------------|---------|-------------|
-| `py314_bayesmm` | Main dev (Python 3.14) | `conda env create -f environment.yml` |
-| `py312_bayesmm_pymc` | PyMC + ArviZ | `conda env create -f environment-pymc.yml` |
-| `py312_bayesmm_sbi` | SBI + Torch | `conda env create -f environment-sbi.yml` |
-| `py312_bayesmm_biomodels` | libRoadRunner + tellurium (Tutorial 2) | `conda env create -f environment-biomodels.yml` |
-| `py312_bayesmm_all` | Both backends — for working through the tutorials (not T2: libroadrunner is PyPI-only and stays in its own env) | `conda env create -f environment-all.yml` |
+| `py314_bayesmm` | **The default.** Python 3.14, framework + tutorials + dev tooling + **both backends** | `conda env create -f environment.yml` |
+| `py312_bayesmm_pymc` | Fallback / CI mirror: PyMC + ArviZ only, Python 3.12 | `conda env create -f environment-pymc.yml` |
+| `py312_bayesmm_sbi` | Fallback / CI mirror: SBI + Torch only, Python 3.12 | `conda env create -f environment-sbi.yml` |
+| `py312_bayesmm_biomodels` | Tutorial 2 only: libRoadRunner + tellurium | `conda env create -f environment-biomodels.yml` |
+
+**Why the default carries both backends.** `CI`'s fast job installs `.[pymc,sbi]` and runs
+the whole `not slow` suite against it. A backend-free dev env therefore ran a *different*
+suite from CI — optional-backend tests skipped locally and executed in CI. That gap hid a
+real bug: `sample_joint_to_store` wrote registry entries with no `backend` key, which
+`meta list` and `test_metamodel_sampling_numpyro` both read. Reproducing it required a
+joint sample, which required a fitted surrogate, which required a backend the default env
+did not have. Verified 2026-08-11 that pymc 5.28.5, sbi 0.26.1 and torch 2.13.0 coexist on
+Python 3.14 (`pip check` clean).
 
 Keep the single-backend envs single-backend: they reproduce CI's per-backend jobs, and an
 `sbi` env that quietly contained PyMC is what once hid Tutorial 6's missing PyMC guard.
-`py312_bayesmm_all` exists because no env had both, and T6's Step 4 (GP vs NPE on the same
-query points) needs both — it printed `Step 4 SKIPPED` in every environment we shipped.
+They also stay on 3.12, which keeps the `requires-python` floor exercised while the default
+env tests the ceiling. `libroadrunner` stays out of the default env because it is PyPI-only
+and the most platform-fragile dependency here — a failed install should cost one tutorial,
+not all of them.
 
 `py314_bayesmm` is the env the `githooks/` hooks fall back to by name, and the
 only one carrying `pytest`, `ruff` and `cmake`.

@@ -442,7 +442,19 @@ def sample_joint_to_store(
             registry = _json.loads(META_SAMPLE_REGISTRY_PATH.read_text(encoding="utf-8"))
         registry[sample_id] = {
             "name": ir.name,
+            "ir_name": ir.name,
+            # `backend` must be present on EVERY entry. `_sample_core` writes it, this
+            # path did not, so a registry holding both kinds broke any reader that
+            # iterated it — `bayesmm meta list` and the numpyro test both do
+            # `entry["backend"]` and got a KeyError the moment a joint run existed.
+            # The bug was invisible in an environment with no surrogate backend
+            # installed, because then no joint run could ever be stored.
+            "backend": compiled.backend,
             "method": diagnostics["method"],
+            "draws": draws,
+            "tune": tune,
+            "chains": chains,
+            "seed": seed,
             "inference_data_path": str(inference_path),
             "samples_dataset_path": str(dataset_path),
             "created_at": datetime.now(UTC).isoformat(),

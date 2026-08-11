@@ -1,9 +1,37 @@
-# Main development environment (see CLAUDE.md "Conda Environments during
-# development"). The two surrogate backends live in their own files —
-# environment-pymc.yml and environment-sbi.yml — because pinning PyMC, SBI and
-# PyTorch together in one solve is what forced the split in the first place.
+# The default development environment — use this one unless you have a reason not to.
 #
 #   conda env create -f environment.yml && conda activate py314_bayesmm
+#
+# It carries the framework, the tutorial stack, the dev tooling, **and both surrogate
+# backends**. That last part is deliberate and was not always true, so it is worth
+# explaining.
+#
+# The backends used to live only in environment-pymc.yml / environment-sbi.yml, on the
+# theory that solving PyMC, SBI and PyTorch together was fragile. That is no longer the
+# case — conda-forge now ships py314 builds of pymc, pytensor and pytorch, and sbi
+# installs cleanly on top by pip (verified: `pip check` reports no broken requirements).
+#
+# Keeping them out had a cost that outweighed the tidiness. **CI's fast job installs
+# `.[pymc,sbi]` and runs the whole "not slow" suite against it**, so a backend-free dev
+# environment does not reproduce CI: locally those tests skip, in CI they run. That gap
+# hid a real bug — `sample_joint_to_store` wrote registry entries with no `backend` key,
+# which `bayesmm meta list` and `test_metamodel_sampling_numpyro` both read. It could
+# only fail once a joint sample existed, which required a backend, which the default env
+# did not have. It was invisible locally and would have been caught on the first run here.
+#
+# What that costs you: `pytest -m "not slow"` takes ~80s in this env rather than ~7s,
+# almost all of it importing pymc/pytensor/torch rather than running tests. That is the
+# same ~80s CI has always paid. See CLAUDE.md's note on the fast-suite budget.
+#
+# The single-backend environments still exist, for two reasons: they reproduce CI's
+# per-backend jobs (an "sbi" env that quietly contained PyMC is what once hid a missing
+# guard in Tutorial 6), and they are the fallback if one of the two is hard to install on
+# your platform. They are on Python 3.12, which also keeps the `requires-python = ">=3.12"`
+# floor exercised while this env tests the ceiling.
+#
+# Tutorial 2 additionally needs environment-biomodels.yml — libroadrunner and tellurium
+# are PyPI-only and the most platform-sensitive dependency in the project, so folding them
+# in here would mean a failed install costs you every tutorial instead of one.
 name: py314_bayesmm
 channels:
   - conda-forge
@@ -36,5 +64,13 @@ dependencies:
   # from conda — the compiler must be the system Apple clang, since the KS
   # model needs Objective-C++ and `-framework Metal`.
   - cmake
+  # Both surrogate backends. Ranges track pyproject rather than exact pins, so this
+  # env installs what CI and users actually get. The `<0.27` bound on sbi comes from
+  # pyproject: on 0.27.0 the NPE trainer stops converging within its default 100
+  # epochs, and `filterwarnings = error` turns that warning into hard failures.
+  - pymc>=5,<6
+  - arviz>=0.17,<1
+  - pytorch>=2,<3
   - pip:
+      - sbi>=0.22,<0.27
       - -e .

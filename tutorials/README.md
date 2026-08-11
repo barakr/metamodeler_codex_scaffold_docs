@@ -43,27 +43,27 @@ where you recover a hidden parameter from a measurement two models away.
 
 ## Environments
 
-Backends are **per-tutorial, not prerequisites** — you can start immediately and
-install as needed. The main env deliberately ships without them.
+**Create one environment and you can do eleven of the twelve notebooks.**
 
 | Env | Covers | Create with |
 |---|---|---|
-| **`py312_bayesmm_all`** | **T1, T3–T9 including 7a/7b/7c — the one to use if you are working through the series** | `conda env create -f environment-all.yml` |
-| `py314_bayesmm` | T0, T1, T3, T4 (+ all others in skip mode) | `conda env create -f environment.yml` |
-| `py312_bayesmm_pymc` | T5, 7b, 7c, T8, T9 | `conda env create -f environment-pymc.yml` |
-| `py312_bayesmm_sbi` | T6 | `conda env create -f environment-sbi.yml` |
-| `py312_bayesmm_biomodels` | T2 | `conda env create -f environment-biomodels.yml` |
+| **`py314_bayesmm`** | **everything except T2** — both surrogate backends included | `conda env create -f environment.yml` |
+| `py312_bayesmm_biomodels` | T2 only | `conda env create -f environment-biomodels.yml` |
+| `py312_bayesmm_pymc` | fallback, if SBI won't install for you | `conda env create -f environment-pymc.yml` |
+| `py312_bayesmm_sbi` | fallback, if PyMC won't install for you | `conda env create -f environment-sbi.yml` |
 
-**Why `py312_bayesmm_all` exists.** The single-backend envs mirror CI's per-backend jobs,
-and keeping them single-backend is deliberate — an "sbi" env that secretly contained PyMC
-is what once hid a missing guard in T6. But no environment had *both*, and **T6's Step 4
-needs both**: it compares the PyMC GP against the SBI neural posterior on the same four
-query points. In every env shipped before, that cell printed `Step 4 SKIPPED`. It is the
-one place in the series where you can see the two surrogate families side by side, so it
-is worth having the env that runs it.
+The default environment carries both backends, so T5, T6 and 7b/7c work out of the box —
+including **T6's Step 4**, which compares the two surrogates on the same query points and is
+the one place in the series where you see them side by side. It used to print
+`Step 4 SKIPPED` for everybody, because no shipped environment had both.
 
-Tutorial 2's simulator deps are PyPI-only (not on conda-forge), which is why they
-get their own env rather than weighing down the main one.
+Tutorial 2 is the exception. Its simulator (`libroadrunner`) is published only on PyPI and
+is the most platform-sensitive dependency in the project, so it stays in its own
+environment: a failed install there costs you one notebook rather than all of them.
+
+The two single-backend environments are kept for people whose platform fights one of the
+backends, and because they reproduce CI's per-backend jobs — an "SBI" environment that
+quietly also contained PyMC is what once hid a missing guard in T6.
 
 Check what your kernel has with `bayesmm doctor`; `bayesmm setup` prints
 OS-correct install commands.

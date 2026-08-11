@@ -1,5 +1,57 @@
 # Status: Metamodeling Automation Framework
 
+## The default environment now carries both surrogate backends (2026-08-11)
+
+`environment.yml` (`py314_bayesmm`) gains pymc, arviz, pytorch and sbi;
+`environment-all.yml` is deleted. Three environments remain: the default, two
+single-backend fallbacks, and the Tutorial-2-only biomodels env.
+
+**Why, and it is not tidiness.** `CI`'s fast job installs `.[pymc,sbi]` and runs the whole
+`not slow` suite against it. A backend-free development environment therefore ran a
+*different suite* from CI — optional-backend tests skipped locally and executed in CI. That
+gap hid a real bug, found within minutes of putting the backends in:
+`sample_joint_to_store` wrote registry entries with **no `backend` key**, while
+`bayesmm meta list` and `test_metamodel_sampling_numpyro` both index `entry["backend"]`.
+Reproducing it needed a joint sample → a fitted surrogate → an optional backend, which the
+default env did not have. Fixed, and pinned by `tests/test_meta_sample_registry_schema.py`,
+which asserts *schema agreement between the two writers* rather than one key, and which was
+checked by removing the fix and confirming it fails.
+
+**The old objection no longer holds.** The env files claimed "pinning PyMC, SBI and PyTorch
+together in one solve is fragile". Verified false today: conda-forge ships py314 builds of
+pymc 5.28.5, pytensor 2.38.3 and pytorch 2.13.0, and sbi 0.26.1 installs on top by pip with
+`pip check` clean. **Python 3.14 is kept** — no downgrade was needed, which was the main
+risk going in.
+
+**One trap worth recording**, because it cost an environment. Installing the backends
+*incrementally* into the existing env produced `OMP: Error #15` — pip pulled PyTorch from
+PyPI (bundling its own `libomp`) alongside conda's, giving three OpenMP runtimes. The
+recipe avoids it by taking `pytorch` from conda-forge *before* pip sees `sbi`, so pip finds
+torch already satisfied. If you hit this, rebuild rather than patch:
+`conda env remove -n py314_bayesmm && conda env create -f environment.yml`.
+
+**What it costs.** With both backends installed the `not slow` suite does ~80s of work
+rather than ~7s, nearly all of it `import pymc` / `import torch` rather than test bodies —
+the same cost CI has always paid. CLAUDE.md's budget line now states the rule as
+*test-time*, not wall-clock, and says why uninstalling backends is the wrong way to make
+the number smaller.
+
+*(Measured today at 19 minutes wall for 64s of CPU — that is three Claude sessions sharing
+one machine, load average ~15, contending on PyTensor's compile lock. Not a property of
+the suite.)*
+
+**Kept deliberately:** the single-backend envs, on Python 3.12. They reproduce CI's
+per-backend jobs — an "sbi" env quietly containing PyMC is what once hid Tutorial 6's
+missing guard — they are the fallback when one backend will not install, and their 3.12
+keeps the `requires-python` floor exercised while the default tests the ceiling.
+`libroadrunner` stays out: PyPI-only and the most platform-fragile dependency here, so a
+failed install should cost one tutorial rather than all of them.
+
+Docs updated in step: `README.md`, `CLAUDE.md`, `tutorials/README.md` and ten notebooks no
+longer reference the retired env. Verified after the rebuild: `ruff format --check` and
+`ruff check` clean on 111 files under ruff 0.16.2; fast suite green.
+
+
 ## Terminology pass over the tutorials — five glosses, and a DOE clarification (2026-08-11)
 
 A deliberately small pass: find terms a reader meets before anything defines them, and gloss
