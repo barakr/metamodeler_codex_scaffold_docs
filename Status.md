@@ -1,5 +1,68 @@
 # Status: Metamodeling Automation Framework
 
+## Conditioning: `observed` makes the question askable at all (2026-08-11)
+
+Raised by the user as a design critique: it is awkward that the metamodel layer hand-rolls
+its own sampler instead of using a probabilistic-programming library, and — the sharper
+half — *wouldn't that limit asking probabilistic questions about any variable of one
+surrogate conditioned on any variable of another?*
+
+Investigated before answering. The critique is right, and the sampler turned out to be the
+**smaller** half of the problem:
+
+**There was no `observed` anywhere.** Not in `MetaModelSpec`, not in the IR. The layer
+could only ever draw the *whole joint*. "Given that I measured y, what does that imply
+about a and b?" was not expressible — the only workaround being a razor-tight prior on the
+measured variable, which is undocumented and actively bad: it is precisely the ridge
+geometry that makes a coordinate-wise random walk freeze (see the mixing-diagnostic entry).
+
+Measured, on `y` observed at 4.0 with a fitted `pymc_gp` surrogate asserting `y = a + b`:
+
+| route | posterior a | ESS efficiency | diagnostics |
+|---|---|---|---|
+| tight-prior workaround | 1.783 ± 0.470 | 4.6% | accept_rate only |
+| **`observed` (this change)** | 1.751 ± 0.475 | 5% | + records what was conditioned on |
+| PyMC + NUTS prototype | 1.794 ± 0.478 | **29%** | + r̂ = 1.0027, divergences |
+
+All three agree on the answer, which is reassuring about the hand-rolled sampler's
+correctness. Note that `observed` alone does **not** fix efficiency here — the bottleneck
+is the `a`/`b` trade-off along `a + b = 4`, not the `y` dimension. That is what the NUTS
+path is for, and it is why this landed as stage 1 of 2 rather than as one change.
+
+**What `observed` does:** clamps the variable — never drawn, never proposed, held at its
+value while every factor mentioning it is evaluated there. It leaves the sample space
+entirely, so its prior term becomes a constant that cannot affect any acceptance ratio,
+which is the honest meaning of "I measured this".
+
+- `joint`: real conditioning; information reaches every connected variable, both directions.
+- `propagate`: forward only, because propagation never looks upstream. Stated in the code
+  and the docs rather than left for a reader to discover.
+- Observing the target of a `deterministic` coupling is **refused** by the builder, naming
+  the variable and the fix. That target is computed from its source, so a second asserted
+  value is a contradiction — and silently letting one win would return healthy-looking
+  draws for a model that cannot be satisfied.
+- Both paths record `observed` in `inference_data.json`: the same spec with and without an
+  observation answers two different questions and lands in the same store.
+
+**Verified.** `tests/test_metamodel_conditioning.py` checks the conditioned posterior
+against the **closed form** (normal priors + linear-Gaussian coupling give an analytic
+answer), that conditioning actually moves and tightens the free variable — a guard against
+`observed` being silently ignored, which would otherwise still produce plausible numbers —
+that the deterministic conflict is refused, and that specs and stored IRs written before
+this field still load. End to end on the real TCR metamodel: observing
+`contact_fraction = 0.30` clamps it (sd 0) and the deterministic link reproduces
+`cd45_boundary_density = 588.81 × 0.30 + 277.30 = 453.94` to 1e-13, while the
+surrogate-informed variables stay free.
+
+**Next (stage 2):** a PyMC-native `--method nuts` for metamodels whose surrogates are all
+`pymc_gp` — that backend is Bayesian linear regression, so its predictive density is
+directly expressible as a PyTensor graph and NUTS applies. The random-walk path stays as
+the backend-neutral fallback for black-box surrogates such as `sbi_npe`, whose torch
+normalizing flow would need a custom PyTensor `Op` to expose gradients. All four TCR
+surrogates are `pymc_gp`, so that project would benefit immediately — it currently has
+three variables with ESS < 20.
+
+
 ## Tutorial 7 rewritten to teach coupling as probability (2026-08-11)
 
 Three problems, all reported by the user reading it as a newcomer would.

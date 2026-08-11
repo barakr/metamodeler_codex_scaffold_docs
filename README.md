@@ -289,7 +289,37 @@ Two practical notes:
   per call against ~0.2 ms for `pymc_gp`, so an NPE-backed joint sample is roughly
   100x more expensive per step. Budget accordingly, and prefer fewer, longer chains.
 
-`joint` needs real fitted surrogates: run `bayesmm surrogate fit` first. If an artifact
+`joint` needs real fitted surrogates: run `bayesmm surrogate fit` first.
+
+## Conditioning on what you measured (`observed`)
+
+A metamodel is usually built to answer *"given that I measured this, what does it imply
+about everything else?"* Put the measurement in the spec:
+
+```json
+{
+  "observed": {"contact_fraction": 0.30}
+}
+```
+
+An observed variable is **clamped**: never drawn, never proposed, held at its value while
+every factor that mentions it is evaluated there. It leaves the sample space, so the
+sampler works in one fewer dimension.
+
+- Under `--method joint` this is real conditioning — information flows to *every* variable
+  connected to the observed one, upstream and downstream.
+- Under `--method propagate` it only flows downstream, because propagation never looks
+  upstream. That is a property of the method, not a bug, and both paths record `observed`
+  in `inference_data.json` so a stored result says what it was conditioned on.
+
+Observing the target of a `deterministic` coupling is refused: that variable is computed
+from its source, so asserting a second value for it is a contradiction the sampler would
+otherwise hide behind healthy-looking draws.
+
+Before this existed the only way to fake an observation was a very tight prior. Avoid it —
+it puts the posterior on a thin ridge, which is exactly the geometry the gradient-free
+sampler cannot follow.
+ If an artifact
 is a placeholder without a `backend_payload`, the command says so and names the fix
 rather than silently sampling something meaningless.
 

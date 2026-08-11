@@ -122,6 +122,13 @@ submodules. Each is a separate repository with its own lifecycle.
   Gradient-free because a fitted surrogate's `log_prob` is a black box; expressing it
   as a PyTensor graph is what would unlock NUTS.
 
+**Conditioning** (`observed` in `MetaModelSpec`): `{"observed": {"y": 4.0}}` clamps a
+variable — never drawn, never proposed, held at its value while every factor mentioning it
+is evaluated there. Under `joint` this is real conditioning (information reaches every
+connected variable); under `propagate` it only flows downstream. Observing a
+`deterministic` coupling's target is refused by the builder, since that value is computed.
+Both paths record `observed` in `inference_data.json`.
+
 `inference_data.json` records `method` for both paths, so a stored dataset says how it
 was made. Correctness of `joint` is pinned against a closed-form Gaussian in
 `tests/test_joint_sampling.py`, and against both surrogate backends in

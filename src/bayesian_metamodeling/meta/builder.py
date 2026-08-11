@@ -84,4 +84,32 @@ def build_ir_from_metamodel_spec(spec: MetaModelSpec) -> MetamodelIR:
             )
         )
 
-    return MetamodelIR(name=spec.name, variables=list(variable_map.values()), factors=factors)
+    observed = dict(spec.observed)
+    for name in observed:
+        variable_map.setdefault(name, VariableIR(name=name))
+
+    # A deterministic coupling COMPUTES its target from its source. Observing that same
+    # target asserts a second, independent value for it. One of the two must lose, and
+    # silently picking either would be worse than refusing: the sampler would report
+    # perfectly healthy draws for a model that cannot be satisfied.
+    computed = {
+        factor.target
+        for factor in factors
+        if isinstance(factor, CouplingFactorIR)
+        and factor.coupling_type == "deterministic_transform"
+    }
+    conflict = sorted(computed & set(observed))
+    if conflict:
+        raise ValueError(
+            f"cannot observe {conflict}: each is the target of a deterministic coupling, so "
+            "its value is computed from its source rather than free to be set. Observe the "
+            "coupling's SOURCE instead, or make the coupling a gaussian_link so the target "
+            "has room to disagree with what you measured."
+        )
+
+    return MetamodelIR(
+        name=spec.name,
+        variables=list(variable_map.values()),
+        factors=factors,
+        observed=observed,
+    )

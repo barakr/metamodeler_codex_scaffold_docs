@@ -563,6 +563,16 @@ def _meta_sample_command(
             f"Joint sampling: {len(surrogates)} surrogate(s) conditioned on, "
             f"accept_rate={artifact['accept_rate']:.2f}"
         )
+        # Say what was held fixed. Two runs of the same spec, one conditioned and one not,
+        # answer different questions and land in the same store — the reader needs to be
+        # told which they are looking at without opening the artifact.
+        _obs = ir.observed or {}
+        if _obs:
+            print(
+                "  conditioned on: "
+                + ", ".join(f"{k}={v:g}" for k, v in sorted(_obs.items()))
+                + f"  ({len(_obs)} variable(s) held fixed, not sampled)"
+            )
         # A healthy accept_rate does not mean the chain went anywhere. With a sharp
         # surrogate likelihood the posterior sits on a thin ridge, tuning shrinks every
         # proposal to match, and the sampler accepts plenty of microscopic moves while

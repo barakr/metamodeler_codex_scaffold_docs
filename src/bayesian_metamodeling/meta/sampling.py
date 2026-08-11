@@ -97,6 +97,36 @@ def _sample_core(
                 0.0, noise_scale, size=(chains, draws)
             )
 
+    # Observed variables are known, so they are held at their value rather than drawn.
+    #
+    # Applied AFTER the couplings on purpose: a coupling would otherwise overwrite the
+    # very quantity you said you had measured. Note what this path can and cannot do —
+    # clamping propagates forward (anything downstream of an observed variable now flows
+    # from the measured value) but nothing flows backwards, because propagation never
+    # looks upstream. Conditioning in the inferential sense needs `--method joint`.
+    observed = {k: float(v) for k, v in (ir.observed or {}).items()}
+    for name, value in observed.items():
+        if name in samples:
+            samples[name] = np.full((chains, draws), value, dtype=float)
+    for factor in ir.factors:
+        if (
+            isinstance(factor, CouplingFactorIR)
+            and factor.source in observed
+            and factor.target not in observed
+        ):
+            source = samples[factor.source]
+            if factor.transform.get("kind") == "affine":
+                alpha = float(factor.transform.get("alpha", 1.0))
+                beta = float(factor.transform.get("beta", 0.0))
+                transformed = alpha * source + beta
+            else:
+                transformed = source
+            if factor.coupling_type == "deterministic_transform":
+                samples[factor.target] = transformed
+            else:
+                sigma = float(factor.sigma or DEFAULT_COUPLING_SIGMA)
+                samples[factor.target] = transformed + rng.normal(0.0, sigma, size=(chains, draws))
+
     sample_id = uuid4().hex
     out_dir = Path("tmp/metamodel_samples") / sample_id
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -125,6 +155,9 @@ def _sample_core(
         # the draws are forward propagation, not conditioning.
         "method": "prior_propagation",
         "surrogates_evaluated": False,
+        # Same reason the joint path records it: the identical model with and without an
+        # observation answers two different questions, and the file must say which.
+        "observed": {k: float(v) for k, v in (ir.observed or {}).items()},
         "created_at": datetime.now(UTC).isoformat(),
     }
     inference_path = out_dir / "inference_data.json"

@@ -216,12 +216,17 @@ def sample_joint(
     surrogates = surrogates or {}
     derived = derived_variables(ir)
     names = sorted(var.name for var in ir.variables)
-    free = [n for n in names if n not in derived]
+    observed = {k: float(v) for k, v in (ir.observed or {}).items()}
+    # Observed variables are clamped, not sampled: they leave the sample space entirely.
+    # Their prior term, if they have one, is then a constant and cannot affect any
+    # acceptance ratio — which is the honest meaning of "I measured this".
+    free = [n for n in names if n not in derived and n not in observed]
     moments = _prior_moments(ir)
 
     def complete(values: dict[str, float]) -> dict[str, float]:
-        """Fill deterministic targets from their sources."""
+        """Fill deterministic targets from their sources, and pin observed values."""
         full = dict(values)
+        full.update(observed)
         # Repeat so a chain of deterministic links resolves in order.
         for _ in range(len(derived) or 1):
             for target, factor in derived.items():
@@ -302,6 +307,10 @@ def sample_joint(
         # Variables the chain failed to explore. See `_MIN_ESS` for why this is
         # reported separately from `accept_rate`.
         "poorly_mixed": stuck,
+        # What was conditioned on. A stored result that does not say this cannot be
+        # interpreted: the same model with and without an observation are different
+        # questions with different answers.
+        "observed": dict(observed),
     }
     return out, diagnostics
 

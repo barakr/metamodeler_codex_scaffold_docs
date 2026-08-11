@@ -55,6 +55,10 @@ class MetamodelIR(BaseModel):
     name: str
     variables: list[VariableIR]
     factors: list[PriorFactorIR | CouplingFactorIR | SurrogateLikelihoodFactorIR]
+    # Clamped variables: name -> known value. Not a factor, because it does not
+    # contribute a term to the density — it removes a dimension from the sample space.
+    # Defaulted so IR files written before conditioning existed still load.
+    observed: dict[str, float] = Field(default_factory=dict)
 
 
 def ir_to_json_dict(ir: MetamodelIR) -> dict[str, Any]:
