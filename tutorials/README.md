@@ -1,6 +1,6 @@
 # Tutorials — a self-contained mini-course
 
-Ten notebooks (plus one optional companion) that take you from a 9-point toy sweep to a joint Bayesian metamodel
+Twelve notebooks that take you from a 9-point toy sweep to a joint Bayesian metamodel
 over coupled models. They are designed to be worked **in order**: each one answers a
 question the previous one raised, and several plant a question answered two
 tutorials later.
@@ -15,7 +15,7 @@ Every tutorial is a zoom-in on one arrow of the same pipeline:
 
 ```
 Spec  →  DOE plan  →  Sweep  →  sweep_rows.csv  →  Surrogate  →  Metamodel
- T3        T4         T1/T2        T1              T5/T6        T7/T7b/T8
+ T3        T4         T1/T2        T1              T5/T6       7a/7b/7c/T8
                                                                     ↓
                                                         T9 composes all of it
 ```
@@ -29,16 +29,17 @@ Spec  →  DOE plan  →  Sweep  →  sweep_rows.csv  →  Surrogate  →  Metam
 | 4 | How do I choose where to sample? | Pick `grid` vs `sobol` deliberately | — |
 | 5 | How do I replace an expensive model with a cheap one? | Fit a GP; read predictive uncertainty | pymc |
 | 6 | Is the GP the only option? | Swap backends behind one contract | sbi |
-| 7 | How do two models constrain each other? | Couple two surrogates; read a coupling as probability | — (Steps 4-5 want pymc) |
-| 7b | Once coupled, how do I *ask* things of it? | Condition on a measurement; infer backwards through a chain | pymc |
+| 7a | What does it *mean* to couple two models? | Read a coupling as probability; tell propagation from inference | — |
+| 7b | How is the coupled joint sampled, and can I trust it? | Sample it; check a sampler against pen and paper; read ESS/r-hat | pymc (Steps 3-6) |
+| 7c | What can I ask it, once coupled? | Condition on a measurement; infer across model boundaries; read a ridge | pymc |
 | 8 | Does it generalise past two? | Couple three | pymc |
 | 9 | Can I do it myself? | Build a pipeline unaided | pymc |
 
-**7b is optional** and reads best straight after 7. It is the one place in the series where
-PyMC does the sampling rather than just the fitting: it shows that `--method nuts` samples
-the same distribution as T7's random walk, then uses it for the question T7 cannot express
-— *"I measured this; what does it imply about that?"* — including recovering an upstream
-input from a measurement two models downstream.
+**Module 7 is three notebooks, not one.** Coupling is the concept the framework is named
+for, and one 31-minute notebook was three questions wearing a trench coat. Each part is now
+one sitting: **7a** needs no backend at all, so everyone can do the concept; **7b** and
+**7c** need PyMC. 7c is where PyMC does the *sampling* rather than just the fitting, and
+where you recover a hidden parameter from a measurement two models away.
 
 ## Environments
 
@@ -47,9 +48,9 @@ install as needed. The main env deliberately ships without them.
 
 | Env | Covers | Create with |
 |---|---|---|
-| **`py312_bayesmm_all`** | **T1, T3–T9 (and T7b) — the one to use if you are working through the series** | `conda env create -f environment-all.yml` |
+| **`py312_bayesmm_all`** | **T1, T3–T9 including 7a/7b/7c — the one to use if you are working through the series** | `conda env create -f environment-all.yml` |
 | `py314_bayesmm` | T0, T1, T3, T4 (+ all others in skip mode) | `conda env create -f environment.yml` |
-| `py312_bayesmm_pymc` | T5, T7, T8, T9 | `conda env create -f environment-pymc.yml` |
+| `py312_bayesmm_pymc` | T5, 7b, 7c, T8, T9 | `conda env create -f environment-pymc.yml` |
 | `py312_bayesmm_sbi` | T6 | `conda env create -f environment-sbi.yml` |
 | `py312_bayesmm_biomodels` | T2 | `conda env create -f environment-biomodels.yml` |
 

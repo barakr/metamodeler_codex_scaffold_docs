@@ -1,5 +1,72 @@
 # Status: Metamodeling Automation Framework
 
+## Module 7 split into 7a/7b/7c; series scope stated honestly (2026-08-11)
+
+Four decisions taken with the user, then executed.
+
+**1. Module 7 is three notebooks.** One 31-minute Tutorial 7 was three questions wearing a
+trench coat. Now:
+
+| | Question | Backend | prose |
+|---|---|---|---|
+| **7a** | What *is* a coupling? (probability, the graph, propagation) | none | ~24 min |
+| **7b** | How is the joint sampled, and can I trust the sampler? | PyMC from Step 3 | ~14 min |
+| **7c** | What can I ask it? (conditioning, the paper's query, the ridge) | PyMC (SBI optional) | ~19 min |
+
+7a keeping **no backend requirement** is the point of the split: coupling is the concept the
+framework is named for, and every student can now reach it. The fitted-surrogate and
+noise-trap material that had been bolted onto Tutorial 7 moved to 7b, where it belongs.
+
+**2. SBI in 7c is now a real fit, two-tier.** The backend-refusal demonstration used a
+stand-in class that raises `NotImplementedError`. It now fits an actual `sbi_npe` surrogate
+when sbi is present and **prints which tier you got**, because a reader whose output differs
+from a colleague's should be told why rather than left guessing. Verified: the run reports
+`backend refusal checked with real sbi_npe`.
+
+**3. Environments: no change, and the reason is worth recording.** `environment-all.yml`
+(`py312_bayesmm_all`) already carries pymc 5.26.1 + sbi 0.26.1 + torch 2.13.0 with no
+conflicts, and `CI` has installed `.[pymc,sbi]` together on every push for some time. The
+history is the opposite of the folklore: sbi <0.26 listed **pymc as a hard dependency**, so
+the two were forced together, never incompatible. The single-backend envs stay because they
+mirror CI's per-backend jobs and their value is in what they lack.
+
+`libroadrunner`/`tellurium` deliberately stay out of the all env: PyPI-only, the most
+platform-fragile dependency here, and folding them in would mean a student who cannot build
+roadrunner loses *every* tutorial instead of one. T2 now says this in plain language, with
+two concrete options and a "do not spend an afternoon on it" note.
+
+**4. KS reconnection deferred**, as agreed. 7c Step 4 demonstrates the principle both ways —
+its own three-model chain is connected and recovers a planted truth, while the real TCR
+metamodel is checked mechanically and reports `kinetic_segregation` UNREACHABLE. The refit
+remains the user's call.
+
+### The honesty the series was missing
+
+`"principle"` appeared **zero times** in Tutorial 0. The curriculum never said what it is and
+is not. Added:
+
+- **T0, "What this series is — and what it is not"**: a course in the principles, taught on
+  toys small enough to check against closed-form answers; explicitly *not* a reproduction of
+  the paper. A table maps each thing the paper does to the toy that teaches its shape, and a
+  final caveat states plainly that the toys are mostly linear and real systems are not.
+- **7c, "Honestly: how this differs from the paper"**: what transfers (the principles) versus
+  what does not (the data, the models, the numbers, the finding), and why a toy is the right
+  teaching tool — in Step 2 the truth is known, so "did the inference work?" has an answer,
+  which is how you earn the right to read a ridge where it does not.
+
+### Verified
+
+All **12** notebooks execute clean in `py312_bayesmm_all` **and** in the backend-less
+`py314_bayesmm`; T2 additionally verified for real in `py312_bayesmm_biomodels`. Lint and the
+fast suite are clean; every cell in every notebook retains its nbformat id; all internal
+notebook cross-references resolve.
+
+One assertion corrected while building 7b: I had claimed joint sampling narrows a coupling's
+source by >10%. The closed form says 0.500 → 0.469 at that σ — a 6% effect. The test now
+asserts the *direction* plus agreement with the closed form, which is the real distinction
+from propagation, rather than a property of those particular numbers.
+
+
 ## Tutorial 7b rebuilt around the paper's actual query (2026-08-11)
 
 Prompted by the question: *can I take any variable in one model and conditionally infer it

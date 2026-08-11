@@ -70,10 +70,13 @@ EXPECTED_DIAGNOSTIC_MARKERS = {
 # assert it appears in some cell's output to confirm the assertion cell
 # actually ran (rather than being skipped, deleted, or silently failing).
 SELFCHECK_BEACONS = {f"Tutorial_{i}.ipynb": f"[T{i} self-check OK]" for i in range(10)}
-# Optional companion notebooks do not fit the Tutorial_<N> pattern, and an unregistered
-# notebook makes this test `pytest.fail` rather than skip — deliberately, so a new tutorial
-# cannot slip in unchecked. Register them here.
-SELFCHECK_BEACONS["Tutorial_7b.ipynb"] = "[T7b self-check OK]"
+# Module 7 is three notebooks rather than one — 7a (what a coupling is), 7b (sampling the
+# joint), 7c (asking questions of it) — because one 31-minute notebook was three questions
+# wearing a trench coat. An unregistered notebook makes this test `pytest.fail` rather than
+# skip, deliberately, so a new tutorial cannot slip in unchecked.
+del SELFCHECK_BEACONS["Tutorial_7.ipynb"]
+for _part in ("a", "b", "c"):
+    SELFCHECK_BEACONS[f"Tutorial_7{_part}.ipynb"] = f"[T7{_part} self-check OK]"
 
 
 def _notebook_paths() -> list[Path]:

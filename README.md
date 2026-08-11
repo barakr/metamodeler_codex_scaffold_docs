@@ -1,12 +1,42 @@
 # Metamodeler
 
-Metamodeler is a CLI-first framework for automated metamodeling:
-- run heterogeneous source models from one typed spec,
-- generate canonical datasets across DOE input plans,
-- preserve full run provenance and logs,
-- prepare clean inputs for surrogate and joint metamodel stages.
+Metamodeler is a command-line framework for **Bayesian metamodeling**: taking several
+independently built models of the same system, declaring which quantities they share,
+and letting each model's *confidence* — not just its point estimate — decide how much
+it has to move. Concretely, it:
+
+- runs heterogeneous **source models** from one typed JSON **spec**,
+- executes each across a planned set of input points (a **design**), collecting the
+  results into one canonical table per **sweep**,
+- preserves full **provenance** for every run,
+- fits probabilistic **surrogates** to those results, and samples the **metamodel**
+  that **couples** them.
+
+Terms in bold are defined in the next section. The method is Raveh et al., *Bayesian
+metamodeling of complex biological systems across varying representations*, PNAS 2021
+([doi:10.1073/pnas.2104559118](https://doi.org/10.1073/pnas.2104559118)).
 
 This repository is currently in planning/scaffold phase. The code implementation is intentionally staged.
+
+## Terms
+
+Compact by design. `tutorials/Tutorial_0.ipynb` carries the full glossary, with the
+reasoning behind each definition rather than just the definition.
+
+| Term | Meaning |
+|---|---|
+| **Source model** | An existing simulator you want to couple — a C++ program, a published reaction network, a Python script. Metamodeler runs it; it does not replace it. |
+| **Spec** | One typed JSON file describing a single model: identity, input/output schema, adapter, runner, design, storage. Checked by `bayesmm validate`. |
+| **Design** | The set of input points at which a model will be run — the spec's `design` block. Two strategies: `grid` (every combination of the listed levels) and `sobol` (a deterministic space-filling sequence). Statistics calls such a plan a *design of experiments*, abbreviated DOE; you will still see that acronym in the older documents here. |
+| **Design point** | One entry in that plan: a concrete value for every input. |
+| **Sweep** | One execution of a model across all of its design points. |
+| **Canonical** | Written in the single format every downstream stage reads, whichever model, adapter or execution mode produced it. `sweep_rows.csv` is the canonical handoff from runs to surrogates. |
+| **Provenance** | The record of how a number came to exist: seed, digest of the spec, digest of the model artifact, and the run's stdout/stderr — enough to re-derive it or to refute it. |
+| **Adapter** | The code that turns a design point into a process invocation, and the process's output files back into numbers. |
+| **Surrogate** | A fast *probabilistic* model fit to a sweep's outputs, letting you predict at new inputs without re-running the simulator. Probabilistic rather than merely fast, because the metamodel conditions on a likelihood and a point predictor has none to offer. |
+| **Coupling** | A scientific claim, written into a spec, that a variable in model A and a variable in model B are the same physical quantity: `deterministic` for equal by definition, `gaussian_link` with width σ for "should agree to within σ". |
+| **Metamodel** | The composed object wiring several surrogates together through couplings. Sampling it is what `bayesmm meta sample` does. |
+| **Propagation vs. inference** | Two different questions. *Propagation* pushes a value through a coupling one way; *inference* forces the coupled models to agree, and both ends move. `meta sample` propagates by default — see [Sampling method](#sampling-method---method). |
 
 ## Documentation map
 All paths are relative to the repo root.

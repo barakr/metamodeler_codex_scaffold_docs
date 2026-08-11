@@ -37,7 +37,7 @@ src/bayesian_metamodeling/
 
 tests/              # Fast + slow + optional_backend test suites
 examples/           # Runnable specs and toy models
-tutorials/          # Jupyter notebook curriculum (Tutorial_0 through Tutorial_9)
+tutorials/          # Jupyter notebook curriculum (Tutorial_0..9; module 7 is 7a/7b/7c)
 githooks/           # pre-commit, pre-push, commit-msg hooks
 projects/           # Independent research projects (Git submodules)
 ```
