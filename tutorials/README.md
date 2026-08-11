@@ -30,7 +30,7 @@ Spec  →  DOE plan  →  Sweep  →  sweep_rows.csv  →  Surrogate  →  Metam
 | 5 | How do I replace an expensive model with a cheap one? | Fit a GP; read predictive uncertainty | pymc |
 | 6 | Is the GP the only option? | Swap backends behind one contract | sbi |
 | 7a | What does it *mean* to couple two models? | Read a coupling as probability; tell propagation from inference | — |
-| 7b | How is the coupled joint sampled, and can I trust it? | Sample it; check a sampler against pen and paper; read ESS/r-hat | pymc (Steps 3-6) |
+| 7b | How is the coupled joint sampled, and can I trust it? | Sample it; check a sampler against pen and paper; read the two diagnostics that say whether to believe a run — effective sample size and r-hat | pymc (Steps 3-6) |
 | 7c | What can I ask it, once coupled? | Condition on a measurement; infer across model boundaries; read a ridge | pymc |
 | 8 | Does it generalise past two? | Couple three | pymc |
 | 9 | Can I do it myself? | Build a pipeline unaided | pymc |

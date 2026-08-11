@@ -1,5 +1,58 @@
 # Status: Metamodeling Automation Framework
 
+## Terminology pass over the tutorials — five glosses, and a DOE clarification (2026-08-11)
+
+A deliberately small pass: find terms a reader meets before anything defines them, and gloss
+each at that point. Everything else left alone. Verified each claimed gap by scanning
+*markdown only* in reading order — a definition living in a `print()` does not reach someone
+reading the prose.
+
+**Changed (five edits, all markdown):**
+
+- **T0 — DOE.** The glossary defined the acronym but not the tradition. Added two clauses:
+  the spec field and module are called `design` (so grepping the source for "doe" returns
+  nothing, which was confusing), and — the substantive part — that classical design of
+  experiments is about *physical* experiments where measurement noise is averaged out by
+  replication, randomisation and blocking. **None of that applies to a deterministic
+  simulator**: replicating a design point returns the same number. What matters instead is
+  coverage, which is what T4 measures. This is a rigour fix, not just vocabulary: the series
+  practises design *for computer experiments* (Sobol, discrepancy) while borrowing a name
+  from a field whose other pillars it correctly omits, and it never said so.
+- **T0 — NUTS** spelled out once as the No-U-Turn Sampler at its introduction.
+- **T0 — dropped a stray "IR"** from a parenthetical rather than defining it there; the
+  sentence reads better without the jargon, and 7a defines the term properly where it earns
+  its place.
+- **T2 — SBML** expanded once: Systems Biology Markup Language, the standard XML format
+  kinetic models are published in, plus what BioModels is. It appeared 39 times in T2 and was
+  never expanded anywhere in the series.
+- **T6 — SBI** expanded once as simulation-based inference. Used **59 times** in its own
+  title tutorial without ever being spelled out.
+- **7b — r-hat and divergences.** Their only explanation lived inside a `print()` string, so
+  a reader following the prose never met it. Now defined in markdown, framed as alarms rather
+  than scores, with the point that a random walk can raise neither.
+- **tutorials/README.md** — the index table promised "read ESS/r-hat" before either exists;
+  replaced with the plain-English phrasing.
+
+**Checked and deliberately left alone:**
+
+- **DOE across the tutorials (~110 occurrences).** Kept. T0 defines it before first use, T1
+  genuinely teaches the design-of-experiments framing (full factorial, why three levels), and
+  converting would delete a concept T1 exists to teach.
+- **IR in 7a and T8** — defined in 7a, used downstream. **PPL in 7a** — defined in place.
+  **NPE** — expanded in T0's glossary, upstream of T6. **ESS in 7b** — defined at first
+  substantive use. No change needed for any of them.
+- **T0's self-check cell** — untouched. No wording change invalidated any of its assertions.
+- **The root `.md` files** — read for consistency, nothing wrong found, not rewritten.
+
+**Verification note worth recording.** The suggested gate
+`REQUIRE_TUTORIAL_BACKENDS=1 pytest -m slow tests/test_tutorial_integration.py` **cannot pass
+in `py312_bayesmm_all`**, because that environment deliberately excludes libroadrunner and T2
+then takes its preflight-skip path — which is exactly what the flag exists to catch. Strict
+coverage therefore needs a split: everything but T2 in `py312_bayesmm_all` (11/11), and T2 in
+`py312_bayesmm_biomodels` (1/1). Both green. Only `Deep CI`'s `full` job, which installs the
+biomodels extra too, can run the single-command version.
+
+
 > **Vocabulary.** Framework nouns (spec, design, sweep, surrogate, coupling, metamodel) and
 > acronyms (DOE, IR, PPL, NPE, ESS) are defined in [README.md](README.md#terms) and, for the
 > sampling diagnostics, in the README's [Sampling method](README.md#sampling-method---method)
