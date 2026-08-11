@@ -220,7 +220,7 @@ another. Read the name to know what broke.
 | `Interface CI` | this | framework and submodule specs no longer fit | every push |
 | `Deep CI` | this | the slow suite or a tutorial is broken | nightly + relevant pushes, 4-env matrix |
 | `Submodule notebooks CI` | this | notebooks 01-04 broke against the compiled KS model | weekly + gitlink moves |
-| `KS model CI` | tcr_signaling | the KS model is broken | every push, macOS + Linux |
+| `KS model CI` | tcr_signaling | the KS model is broken | every push + daily, macOS + Linux + Windows |
 
 `Submodule notebooks CI` is the only job that both checks out the submodule and
 builds its native model — `notebooks/01-04` drive `ks_gpu` by subprocess, so
