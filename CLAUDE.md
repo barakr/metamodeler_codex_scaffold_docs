@@ -154,11 +154,78 @@ was made. Correctness of `joint` is pinned against a closed-form Gaussian in
 8. **Typed contracts first** — Pydantic v2 with `extra="forbid"`, explicit return types, `from __future__ import annotations`
 9. **No destructive shell commands** — never run recursive deletes, force pushes, or history rewrites without explicit user approval; record in Status.md
 10. **Tests with every change** — any non-trivial change must add or update tests
-11. **Commit regularly** — make git commits at logical milestones (feature complete, bug fix verified, refactor done). Do not accumulate large uncommitted changesets
+11. **Commit regularly** — make git commits at logical milestones (feature complete, bug
+    fix verified, refactor done). Do not accumulate large uncommitted changesets. Work
+    that ends a turn uncommitted is a **reportable failure**, not a loose end: see
+    *Uncommitted work is a reportable failure* below for the gate, the cases where
+    stopping to ask is correct, and the required one-line notice
 12. **A gate that can skip must be able to fail for skipping** — any suite that
     degrades when a dependency is absent needs a mode where that degradation is
     an error. Otherwise "green" means "nothing ran" and nobody can tell. See
     *Guarding against silent no-ops* below for the mechanisms already available
+
+## Uncommitted work is a reportable failure
+
+Rule 11 says commit at logical milestones. This section is about what happens when you
+don't — because the damaging failure is not "the commit is missing", it is **"the commit
+is missing and nobody said so."**
+
+Uncommitted work is invisible work. A clean tree is the only honest signal that a change
+landed. A dirty tree at the end of a turn means the user has to reconstruct their repo's
+state from prose — and if that prose is a long report, they will miss it. This has to be
+loud precisely because everything around it is verbose.
+
+### Commit when the gate is green
+
+Four checks, in order:
+
+1. `make fmt` and `make lint` clean
+2. `make fast` green — docs-only changes included; it is under 30 seconds, so there is no
+   change small enough to justify skipping it
+3. `Status.md` updated if `src/` or `examples/` changed (rule 5)
+4. The change is one logical unit (rule 1) — if it isn't, split it into several commits
+
+All four green, on a branch, within the scope the user asked for: **commit, without
+asking.** A commit that satisfies the gate is already authorized by these rules; asking
+again spends a user round-trip on a question they have already answered.
+
+### Stop and ask instead when
+
+Caution is the other half of this rule — a wrong commit is its own harm, and these cases
+are not close calls:
+
+- the gate is red, and the fix is either not obvious or not yours to make
+- the work would land on `develop`/`main` when it deserves a branch
+- your edits are tangled with unrelated changes already in the tree that you did not make
+  — committing them attributes someone else's work to your message
+- it requires a push, a force-push, a history rewrite, or a submodule pointer bump
+  (rule 9 — never automatic)
+- the user is actively editing or reviewing the same files
+
+In every one of these, you still owe the notice below. "I correctly declined to commit"
+and "I silently left the tree dirty" look identical to the user unless you say which.
+
+### The notice goes first, not in a footnote
+
+When a turn ends with uncommitted changes, the **first line** of the response says so,
+before any summary of what was done:
+
+> ⚠️ **Uncommitted** — 6 files changed, nothing committed: `make fast` fails on
+> `test_joint_sampling` and I could not tell whether the fixture or the assertion is wrong.
+
+Not a bullet under "Notes". Not the closing paragraph. Not "I also noticed…". The first
+line. The report below it can be as long as the work demands; the state of the user's
+repository is not something they should have to read to the end to discover.
+
+The converse is also required: when you **did** commit, name the commit and its hash, so
+that "clean tree" never has to be inferred.
+
+### If the tree goes clean without you
+
+A commit you did not make can appear mid-session — the user committing from another
+terminal, or a parallel agent session in the same checkout. So `git status` reporting a
+clean tree proves *someone* committed, not that *you* did. Check `git log` before claiming
+either outcome, and report which commit carried your work, by hash and author.
 
 ## Coding Conventions
 
@@ -347,3 +414,5 @@ only one carrying `pytest`, `ruff` and `cmake`.
 - Fast tests pass (`make fast`)
 - Status.md updated with decisions
 - No dead code, no temporary artifacts outside `tmp/`
+- **Committed** — or the first line of the response says it isn't, and why
+  (see *Uncommitted work is a reportable failure*)

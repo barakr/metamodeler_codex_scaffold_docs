@@ -54,6 +54,33 @@ artifacts that had been glued onto the end of the `observed` section.
 Not touched: `tutorials/`. Tutorial 0's glossary already defines DOE before any tutorial
 uses it, so the series already follows the convention.
 
+## Uncommitted work is now a reportable failure (2026-08-11)
+
+Rule 11 already said "commit regularly". It did not say what to do when you don't, and the
+gap showed: a turn could end with a dirty tree and the user would only learn it from a
+sentence buried in a long report — if at all.
+
+New `CLAUDE.md` section, *Uncommitted work is a reportable failure*, with three parts:
+
+- **A green-gate definition** (`fmt`/`lint`/`fast`/Status.md/one-logical-unit) that
+  *authorizes* committing without asking. Asking permission for a commit the rules already
+  sanction costs a round-trip on a question the user has answered in advance.
+- **An explicit stop-and-ask list** — red gate, work belonging on a branch, a tree entangled
+  with edits you did not make, anything needing a push or history rewrite (rule 9), files the
+  user is mid-review on. Caution is half the rule: a wrong commit is its own harm. Crucially,
+  the notice is owed in these cases *too* — "I correctly declined to commit" and "I silently
+  left the tree dirty" look identical to a reader otherwise.
+- **A placement requirement**: the notice is the **first line** of the response, not a
+  bullet under Notes and not the closing paragraph. The rule has to be about placement,
+  because the failure being prevented is a true statement nobody reads.
+
+Also added, from something that happened during this very session: a commit appeared in the
+tree that this agent did not make (`c75001a`, authored from another window while the edits
+were in flight). So a clean `git status` proves *someone* committed, not that *you* did —
+check `git log` and report which commit carried the work, by hash and author.
+
+`Definition of Done` gains a matching line.
+
 ## Module 7 split into 7a/7b/7c; series scope stated honestly (2026-08-11)
 
 Four decisions taken with the user, then executed.
