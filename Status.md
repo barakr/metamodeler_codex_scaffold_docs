@@ -203,6 +203,26 @@ Three things went wrong, ordered by lesson value:
 
 ## Decision Log
 
+### 2026-08-09: Commit `environment-all.yml`; correct two stale references
+
+Loose-end sweep before handing the tutorials to a reader.
+
+- **`environment-all.yml` was untracked while three committed documents told readers to
+  use it** — `README.md` calls it "the one to use to work through the tutorials",
+  `CLAUDE.md`'s env table lists it, and `tutorials/README.md` puts it first. Anyone
+  cloning the repo and following the documented setup hit a missing file. Committed;
+  `conda env create --dry-run` resolves it cleanly.
+- **`README.md`'s documentation map still pointed at `AGENTS.md`**, which was folded into
+  `CLAUDE.md` in 2dffa30. Repointed. (`PROMPT_TO_CODEX.md` also references it, but that
+  file is a historical prompt pack rather than a live map, so it is left alone.)
+- **`tests/test_submodule_notebooks.py` carried two comments that had gone stale.** Its
+  docstring said the execution tests "are not in CI" — `.github/workflows/notebooks.yml`
+  runs them weekly — and the timeout rationale quoted a "79 DOE points / ~30 min" sweep
+  from before 02 gained its `TEACHING_SCALE` default. Both corrected; the generous
+  timeout is kept, with the real reason stated (flipping TEACHING_SCALE off is supported
+  and runs for hours).
+
+
 ### 2026-08-07: pre-commit formatted in place, so it shipped unformatted commits
 
 The hook ran `ruff format .` — in place, after staging. So it rewrote files the

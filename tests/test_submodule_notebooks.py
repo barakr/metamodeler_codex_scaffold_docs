@@ -10,13 +10,15 @@ Split deliberately:
 * The **static** checks are fast and backend-free, so they run in Interface CI on every
   push. They catch the failure modes that actually occurred: a hardcoded absolute path,
   a stale module path, a missing self-check beacon.
-* The **execution** tests are marked `slow` and are not in CI. `02` needs PyMC and `03`
-  samples a posterior; pulling those backends into the Interface job would make a job
-  that is intentionally fast and pin-independent both slow and pin-coupled. Run them
-  with `make slow`, or `pytest -m slow tests/test_submodule_notebooks.py`.
+* The **execution** tests are marked `slow` and stay out of *Interface CI*: `02` and `03`
+  need PyMC, and pulling a backend into a job that is deliberately fast and
+  pin-independent would cost it both properties. They are not unwatched, though —
+  `.github/workflows/notebooks.yml` runs them on its own weekly schedule, which is where
+  the real execution signal comes from. Locally: `make slow`, or
+  `pytest -m slow tests/test_submodule_notebooks.py`.
 
-This mirrors how the framework's own tutorials are treated (`test_tutorial_integration.py`
-is `slow` and excluded from CI, with `test_tutorial_portability.py` fast).
+This mirrors how the framework's own tutorials are split (`test_tutorial_portability.py`
+fast, `test_tutorial_integration.py` slow).
 """
 
 from __future__ import annotations
@@ -166,11 +168,12 @@ def test_notebook_executes_and_self_check_passes(name: str, tmp_path):
     nb = nbformat.read(nb_path, as_version=4)
     nbclient.NotebookClient(
         nb,
-        # 02_fit_surrogates sweeps every model.*.json — 79 DOE points, 56 of them
-        # the KS production spec — which is ~30 min of real simulation, and 03
-        # samples the metamodel with 2000 draws. These are reproduce-the-science
-        # notebooks, not smoke tests; 1800s timed out mid-sweep in CI. The weekly
-        # job budgets 90 minutes for the lot.
+        # Generous on purpose. 02 sweeps every model.*.json and 03 samples the
+        # metamodel, so these are reproduce-the-science notebooks rather than smoke
+        # tests, and 1800s once timed out mid-sweep in CI. 02 now defaults to a
+        # reduced TEACHING_SCALE, which makes the usual run far quicker — but the
+        # ceiling stays high because flipping that switch to False is a documented,
+        # supported thing to do, and the production design runs for hours.
         timeout=3600,
         kernel_name="python3",
         resources={"metadata": {"path": str(_NB_DIR)}},

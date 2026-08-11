@@ -18,7 +18,7 @@ All paths are relative to the repo root.
 - Tutorial folder index: `tutorials/README.md`
 - Project execution status and decisions: `Status.md`
 - Prompt workflow for Codex: `PROMPT_TO_CODEX.md`
-- Agent operating constraints: `AGENTS.md`
+- Agent operating constraints: `CLAUDE.md`
 
 ## Planned CLI flow (v1)
 1) `bayesmm validate spec.json`
@@ -65,6 +65,13 @@ own environments, because pinning PyMC, SBI and PyTorch in one solve is fragile:
 | `environment.yml` | `py314_bayesmm` | main dev: build, test, tutorials |
 | `environment-pymc.yml` | `py312_bayesmm_pymc` | PyMC GP surrogates |
 | `environment-sbi.yml` | `py312_bayesmm_sbi` | SBI NPE surrogates |
+| `environment-all.yml` | `py312_bayesmm_all` | **both backends — use this to work through the tutorials** |
+
+The single-backend envs are deliberately single-backend: they mirror CI's per-backend
+jobs, and their value is in what they *don't* have. But several tutorial steps need both
+at once — Tutorial 6's Step 4 compares the GP surrogate against the neural posterior on
+the same query points, and that is the cell where you can actually see what each buys
+you. If you are learning rather than testing, create `py312_bayesmm_all`.
 
 **pip + venv**:
 ```

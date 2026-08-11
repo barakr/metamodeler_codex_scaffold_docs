@@ -308,9 +308,15 @@ bayesmm --version
 | Environment | Purpose | Create with |
 |-------------|---------|-------------|
 | `py314_bayesmm` | Main dev (Python 3.14) | `conda env create -f environment.yml` |
-| `py312_bayesmm_pymc` | PyMC 5.27.1 + ArviZ | `conda env create -f environment-pymc.yml` |
-| `py312_bayesmm_sbi` | SBI 0.23.3 + Torch 2.10.0 | `conda env create -f environment-sbi.yml` |
+| `py312_bayesmm_pymc` | PyMC + ArviZ | `conda env create -f environment-pymc.yml` |
+| `py312_bayesmm_sbi` | SBI + Torch | `conda env create -f environment-sbi.yml` |
 | `py312_bayesmm_biomodels` | libRoadRunner + tellurium (Tutorial 2) | `conda env create -f environment-biomodels.yml` |
+| `py312_bayesmm_all` | Both backends — for working through the tutorials | `conda env create -f environment-all.yml` |
+
+Keep the single-backend envs single-backend: they reproduce CI's per-backend jobs, and an
+`sbi` env that quietly contained PyMC is what once hid Tutorial 6's missing PyMC guard.
+`py312_bayesmm_all` exists because no env had both, and T6's Step 4 (GP vs NPE on the same
+query points) needs both — it printed `Step 4 SKIPPED` in every environment we shipped.
 
 `py314_bayesmm` is the env the `githooks/` hooks fall back to by name, and the
 only one carrying `pytest`, `ruff` and `cmake`.

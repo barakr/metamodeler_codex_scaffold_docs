@@ -1,0 +1,58 @@
+# Everything env — the one to use if you are WORKING THROUGH THE TUTORIALS.
+#
+#   conda env create -f environment-all.yml && conda activate py312_bayesmm_all
+#
+# Why this exists, when environment-pymc.yml and environment-sbi.yml already do:
+#
+# Those two are deliberately single-backend, and that is worth keeping — the sbi
+# env's own comment explains that an sbi env which secretly contained PyMC is
+# what hid Tutorial 6's missing PyMC guard until CI caught it. They mirror CI's
+# per-backend jobs, and their value is in what they DON'T have.
+#
+# But that left a gap for the reader. No documented environment had both
+# backends, and several tutorial steps need both at once:
+#
+#   - Tutorial 6 Step 4 compares the PyMC GP surrogate against the SBI neural
+#     posterior on the same four query points. It is the cell where a student
+#     can actually SEE what a density estimator buys and costs versus a GP, and
+#     it printed "Step 4 SKIPPED" in every environment we shipped.
+#   - Tutorial 9's capstone lets you pick either backend.
+#
+# So a student following the documented setup could not run the comparison that
+# the tutorial is built around. This env fixes that, and changes nothing about
+# the other two.
+#
+# The combination is not speculative: Deep CI's `full` job installs
+# `.[pymc,sbi,tutorials,biomodels]` together and runs the whole tutorial suite.
+#
+# The `<0.27` bound on sbi comes from pyproject: on 0.27.0 the NPE trainer stops
+# converging within its default 100 epochs, and `filterwarnings = error` turns
+# that warning into hard failures.
+name: py312_bayesmm_all
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - python_abi=3.12.*=*_cp312
+  - pip
+  - pydantic>=2,<3
+  - requests>=2,<3
+  - scipy>=1.11,<2
+  - numpy
+  - matplotlib
+  - pytest
+  # Notebook execution, so the tutorials can be verified IN this env (rule 12:
+  # without nbclient, `pytest -m slow tests/test_tutorial_integration.py`
+  # importorskips and reports green having run nothing).
+  - jupyter
+  - nbclient>=0.8
+  - nbconvert>=7
+  - ipykernel
+  # Both backends. Ranges track pyproject rather than exact pins, so this env
+  # installs what CI and users actually get.
+  - pymc>=5,<6
+  - arviz>=0.17,<1
+  - pytorch>=2,<3
+  - pip:
+      - sbi>=0.22,<0.27
+      - -e .
