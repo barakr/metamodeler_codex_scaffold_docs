@@ -20,7 +20,7 @@
       "source": "y",
       "target": "C",
       "transform": { "kind": "identity" },
-      "sigma": 0.2
+      "sigma": 0.6
     },
     {
       "kind": "deterministic",
@@ -33,7 +33,7 @@
       "source": "z",
       "target": "w",
       "transform": { "kind": "identity" },
-      "sigma": 0.25
+      "sigma": 0.8
     }
   ],
   "priors": [

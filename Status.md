@@ -1,5 +1,83 @@
 # Status: Metamodeling Automation Framework
 
+## Full pedagogical audit and repair of the tutorial series (2026-08-11)
+
+Ten independent reviewers, one per notebook, then a per-notebook repair pass, then my own
+verification. **49 high-severity findings**, 19 of them `science-wrong`; T4 and T5 came back
+rated *broken*. What follows is what was actually wrong, not what was tidied.
+
+### The defect that produced ~15 of the findings
+
+`pymc_gp` is Bayesian linear regression (see the separate entry below). T5, T6 and T9 all
+reasoned from Gaussian-process behaviour — reversion to the prior mean off the data, error
+bars that widen to warn you — which is the *opposite* of what this backend does. Students
+were being handed a mental model that would mislead them on their own data. All three
+notebooks now name the trap and **measure** the behaviour instead of asserting it.
+
+T5 goes further and fits the toy's `product` channel, where a linear surrogate is genuinely
+wrong: MAE 0.419, predictions as low as −1.001 for a quantity that is never negative, and a
+reported width of 0.670 that does not cover the error. That is the lesson worth having —
+*a linear surrogate on a nonlinear system is confidently wrong*, which is more dangerous
+than a GP that widens and warns.
+
+### Things that had never run at all
+
+- **T6's Step 4** — the GP-vs-NPE comparison, the one cell where the two surrogate families
+  appear side by side — printed `Step 4 SKIPPED` in *every environment we shipped*, because
+  no documented env had both backends. Its skip message also told the reader to install SBI
+  when SBI was present and PyMC was missing. New `environment-all.yml` (`py312_bayesmm_all`)
+  fixes the first; the branch now names the backend that is actually absent.
+- **T4's Sobol panel** — the right half of its central figure — had never rendered. Cell 10
+  read `tmp/tutorials/toy_store_sobol/runs/`, which does not exist (the framework writes
+  centralized sweeps). The self-check passed anyway.
+- **The framework's own central arrow.** No notebook in the series had ever fed a *fitted*
+  surrogate into a metamodel: every coupled spec references `dummy_A/B/C` placeholders with
+  no `backend_payload`. T7 now demonstrates both halves — `--method joint` refusing the
+  placeholders (asserted exit 1), and then succeeding on a surrogate the notebook fits
+  itself. Priors put `a + b` near 2 and `y` near 4; the surrogate says `y = a + b`; the
+  joint brings them together at `a`≈1.65, `b`≈1.82, `y`≈3.69, with `a` and `b` narrowing.
+  Both ends move, which is the whole difference from `propagate`.
+
+### Concepts the series never taught
+
+- **"prior" appeared zero times in T0–T4**, and "likelihood" zero times in T0–T5, while T0
+  used "posterior" seven times and defined "joint posterior" in its glossary. T0 now defines
+  prior / likelihood / posterior before anything depends on them, and carries DOIs for the
+  two source papers (previously cited by author name only).
+- **`--method` appeared in no notebook's code.** All four `meta sample` calls ran the default
+  `propagate` while six passages called the output a "joint posterior". `--method` is now in
+  7 of 10 notebooks' prose and executed in T0, T7, T8, T9.
+- **T2's sweep was scientifically inert**: `k_on` has elasticity 1.7e-05 on this model — the
+  heatmap varied by ~0.01% of its own colour bar. It now also sweeps `k_p`, elasticity
+  **+5.73**, and the `k_on` units are corrected (the SBML declares `unit_0 = 1/s` over
+  molecule counts, not `1/(M·s)`).
+- **T8's effect was below its own noise floor**: coupling sigmas 0.2/0.25 moved `std(w)` from
+  1.027 to 1.059, smaller than Monte Carlo error at 400 draws. Raised to 0.6/0.8 so the
+  quadrature lesson is visible rather than asserted.
+
+### Self-checks
+
+Previously several were tautologies — T3's re-read a value the cell above had just written;
+T1's would pass on a notebook that did nothing. They now carry 4–16 assertions each, and the
+rule applied throughout was: *it must fail on a notebook that ran but taught nothing*.
+
+### Verification
+
+- All 10 notebooks execute clean in `py312_bayesmm_all`; T2 verified separately in
+  `py312_bayesmm_biomodels` (11/11 points, both sweeps).
+- Both backends exercised for real, not in skip mode: T5 `pymc_gp` MAE 0.00000, T6 `sbi_npe`
+  MAE 0.02460, and T6's comparison cell now prints both.
+- T0 additionally executed in the backend-less `py314_bayesmm`, where its readiness table
+  correctly flips to `[MISSING]` — proving the verdict is a live probe, not hardcoded.
+- `ruff format --check` + `ruff check` clean; fast suite green; every cell in all 10
+  notebooks retains its nbformat `id`.
+
+### Caveat worth keeping in view
+
+The prose grew substantially (T5 7.7k → 20k characters). The reviewers' own warning was
+"density is not depth", and a future pass should look for places where a shorter statement
+would land harder. Nothing was cut to make room; that trade has not been made yet.
+
 ## A joint chain that never moved reported `accept_rate=0.29` (2026-08-11)
 
 Found while wiring a *real* fitted surrogate into a metamodel — something no tutorial had

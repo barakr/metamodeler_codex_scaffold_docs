@@ -311,7 +311,7 @@ bayesmm --version
 | `py312_bayesmm_pymc` | PyMC + ArviZ | `conda env create -f environment-pymc.yml` |
 | `py312_bayesmm_sbi` | SBI + Torch | `conda env create -f environment-sbi.yml` |
 | `py312_bayesmm_biomodels` | libRoadRunner + tellurium (Tutorial 2) | `conda env create -f environment-biomodels.yml` |
-| `py312_bayesmm_all` | Both backends — for working through the tutorials | `conda env create -f environment-all.yml` |
+| `py312_bayesmm_all` | Both backends — for working through the tutorials (not T2: libroadrunner is PyPI-only and stays in its own env) | `conda env create -f environment-all.yml` |
 
 Keep the single-backend envs single-backend: they reproduce CI's per-backend jobs, and an
 `sbi` env that quietly contained PyMC is what once hid Tutorial 6's missing PyMC guard.

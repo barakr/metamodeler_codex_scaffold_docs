@@ -22,7 +22,7 @@
       {
         "name": "k_on",
         "type": "float",
-        "units": "1/(M*s)",
+        "units": "per-molecule/s (SBML declares unit_0 = 1/s; species are molecule counts)",
         "support": [
           8e-05,
           0.00012
