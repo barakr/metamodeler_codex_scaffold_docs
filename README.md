@@ -65,7 +65,7 @@ own environments, because pinning PyMC, SBI and PyTorch in one solve is fragile:
 | `environment.yml` | `py314_bayesmm` | main dev: build, test, tutorials |
 | `environment-pymc.yml` | `py312_bayesmm_pymc` | PyMC GP surrogates |
 | `environment-sbi.yml` | `py312_bayesmm_sbi` | SBI NPE surrogates |
-| `environment-all.yml` | `py312_bayesmm_all` | **both backends — use this to work through the tutorials** |
+| `environment-all.yml` | `py312_bayesmm_all` | **both backends — use this to work through the tutorials** (T2 also needs `environment-biomodels.yml`) |
 
 The single-backend envs are deliberately single-backend: they mirror CI's per-backend
 jobs, and their value is in what they *don't* have. But several tutorial steps need both
@@ -200,16 +200,19 @@ unavailable or when launched without `mpirun`.
 ## Optional case study: `projects/tcr_signaling`
 The repo includes a real-world scientific reproduction (Neve-Oz, Sherman & Raveh
 2024, *Frontiers in Immunology*) as a git submodule under `projects/tcr_signaling`.
-It is **not** part of the cross-platform CI matrix because of a few constraints
-that don't apply to the rest of the package:
+It is **not** part of *this* repo's CI matrix — it has its own, so a submodule
+failure never reddens the framework's status — but it is fully cross-platform:
 
-- Native build: requires CMake + a C++ toolchain. The build script is a Makefile;
-  no Windows build script is provided.
+- Native build: requires CMake ≥ 3.20 + a C++ compiler. Built and tested on
+  **Windows (MSVC), macOS (Clang) and Linux (GCC)** by the submodule's `KS model
+  CI`, on every push and daily. Build with `cmake -S . -B build && cmake --build
+  build`; `make` is a Unix shorthand for the same thing. See the submodule's
+  [build prerequisites](projects/tcr_signaling/README.md#build-prerequisites-windows-macos-linux)
+  for the per-OS install commands.
 - GPU kernel: the kinetic-segregation GPU path uses Apple Metal and is therefore
-  macOS-only. CPU paths work everywhere.
-- Verified separately on macOS via the submodule's own pytest config; the parent
-  `pytest.ini` does NOT pick up the submodule (its custom `deterministic` marker
-  is only registered inside the submodule).
+  macOS-only. CPU paths work everywhere and produce the same physics.
+- The parent `pytest.ini` does NOT pick up the submodule (its custom
+  `deterministic` marker is only registered inside the submodule).
 - Treated as read-only by the parent repo's tooling — changes go through the
   submodule's own workflow.
 
