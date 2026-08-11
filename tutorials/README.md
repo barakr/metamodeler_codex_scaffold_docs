@@ -1,6 +1,6 @@
 # Tutorials — a self-contained mini-course
 
-Ten notebooks that take you from a 9-point toy sweep to a joint Bayesian metamodel
+Ten notebooks (plus one optional companion) that take you from a 9-point toy sweep to a joint Bayesian metamodel
 over coupled models. They are designed to be worked **in order**: each one answers a
 question the previous one raised, and several plant a question answered two
 tutorials later.
@@ -15,7 +15,7 @@ Every tutorial is a zoom-in on one arrow of the same pipeline:
 
 ```
 Spec  →  DOE plan  →  Sweep  →  sweep_rows.csv  →  Surrogate  →  Metamodel
- T3        T4         T1/T2        T1              T5/T6         T7/T8
+ T3        T4         T1/T2        T1              T5/T6        T7/T7b/T8
                                                                     ↓
                                                         T9 composes all of it
 ```
@@ -29,9 +29,16 @@ Spec  →  DOE plan  →  Sweep  →  sweep_rows.csv  →  Surrogate  →  Metam
 | 4 | How do I choose where to sample? | Pick `grid` vs `sobol` deliberately | — |
 | 5 | How do I replace an expensive model with a cheap one? | Fit a GP; read predictive uncertainty | pymc |
 | 6 | Is the GP the only option? | Swap backends behind one contract | sbi |
-| 7 | How do two models constrain each other? | Couple two surrogates | pymc |
+| 7 | How do two models constrain each other? | Couple two surrogates; read a coupling as probability | — (Steps 4-5 want pymc) |
+| 7b | Once coupled, how do I *ask* things of it? | Condition on a measurement; infer backwards through a chain | pymc |
 | 8 | Does it generalise past two? | Couple three | pymc |
 | 9 | Can I do it myself? | Build a pipeline unaided | pymc |
+
+**7b is optional** and reads best straight after 7. It is the one place in the series where
+PyMC does the sampling rather than just the fitting: it shows that `--method nuts` samples
+the same distribution as T7's random walk, then uses it for the question T7 cannot express
+— *"I measured this; what does it imply about that?"* — including recovering an upstream
+input from a measurement two models downstream.
 
 ## Environments
 
@@ -40,7 +47,7 @@ install as needed. The main env deliberately ships without them.
 
 | Env | Covers | Create with |
 |---|---|---|
-| **`py312_bayesmm_all`** | **T1, T3–T9 — the one to use if you are working through the series** | `conda env create -f environment-all.yml` |
+| **`py312_bayesmm_all`** | **T1, T3–T9 (and T7b) — the one to use if you are working through the series** | `conda env create -f environment-all.yml` |
 | `py314_bayesmm` | T0, T1, T3, T4 (+ all others in skip mode) | `conda env create -f environment.yml` |
 | `py312_bayesmm_pymc` | T5, T7, T8, T9 | `conda env create -f environment-pymc.yml` |
 | `py312_bayesmm_sbi` | T6 | `conda env create -f environment-sbi.yml` |
@@ -83,7 +90,7 @@ identically on Windows cmd, Windows PowerShell, macOS and Linux.
 
 ## Verifying the whole set
 
-`tests/test_tutorial_integration.py` executes all ten and checks each self-check
+`tests/test_tutorial_integration.py` executes all of them and checks each self-check
 beacon. It is marked `slow`, so it is excluded from the default suite:
 
 ```bash

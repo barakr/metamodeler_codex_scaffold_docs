@@ -1,5 +1,51 @@
 # Status: Metamodeling Automation Framework
 
+## Tutorial 7b: inference on a coupled model, with PyMC doing the sampling (2026-08-11, stage 3 of 3)
+
+Completes the conditioning work. T7 teaches what a coupling *is* and samples it with the
+gradient-free walk that works for any surrogate. 7b answers the question T7 leaves open —
+once the models are coupled, how do you *ask things of them* — and shows why a real
+probabilistic-programming library earns its place at this layer after all.
+
+Five steps, each verified against something independent rather than asserted:
+
+1. **Two samplers, one distribution.** NUTS, the T7 random walk, and the closed form, side
+   by side. Licence to use the faster one comes from it agreeing, not from it being faster.
+2. **What gradients buy.** 18% effective samples per draw against 2%, plus r-hat and
+   divergences — alarms a random walk cannot raise. Notes that r-hat needs ≥2 chains and
+   that the framework reports `None` rather than a NaN that would pass any check.
+3. **Conditioning.** `observed` clamps a measurement; `x` moves 0.891 → 2.091 against a
+   closed form of 2.092, and narrows. `y` held exactly, and absent from `free_variables`.
+4. **Backwards through two models** — the headline. Model A learned `y` from `x`, model B
+   learned `z` from `y`, both fitted independently. Measure `z = 2.2` and `x` lands at
+   1.961 ± 0.220 against an algebraic 2.00, seven times narrower than its prior. `x`
+   appears in neither the measurement nor model B. Under `propagate` this question is not
+   inefficient, it is unanswerable.
+5. **When the fast path refuses**, and that it says so.
+
+The generalisation the notebook states, which is the actual answer to "would hand-rolling
+limit the questions I can ask": any variable can be conditioned on any other as long as a
+path of factors connects them. You are not restricted to the direction the simulators
+happen to run in — and that, not speed, is the argument for building a joint model.
+
+**A bug this turned up in my own earlier work.** T7's fitted-surrogate step (added the same
+day) called `fit_backend_model` unguarded, so T7 *crashed* in the backend-less env while its
+prerequisites table claimed it needed nothing. Now: Steps 1-3 need no backend, Steps 4-5
+skip cleanly with a printed reason, and the table says exactly that. Verified in both envs.
+
+**And T0's drift guard caught me.** Its self-check asserts the exact set of `--method`
+choices, so adding `nuts` failed T0 — by design, since T0's glossary lists them. Guard and
+glossary both updated. This is the second time that guard has paid for itself.
+
+Registered in `tests/test_tutorial_integration.py` (`SELFCHECK_BEACONS`), which
+`pytest.fail`s on an unregistered notebook rather than skipping it — so a new tutorial
+cannot slip in unchecked. `tutorials/README.md` gains the row, and the T7/T8/T9 "Needs"
+column is corrected.
+
+**Verified:** all 11 notebooks pass in `py312_bayesmm_all` and in the backend-less
+`py314_bayesmm` (7b and T7's Steps 4-5 skipping cleanly there).
+
+
 ## `--method nuts`: the same joint, with gradients (2026-08-11, stage 2 of 2)
 
 Stage 2 of the conditioning work. `sample_joint` treats every surrogate as a black box —

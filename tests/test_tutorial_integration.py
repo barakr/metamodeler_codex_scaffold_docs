@@ -70,6 +70,10 @@ EXPECTED_DIAGNOSTIC_MARKERS = {
 # assert it appears in some cell's output to confirm the assertion cell
 # actually ran (rather than being skipped, deleted, or silently failing).
 SELFCHECK_BEACONS = {f"Tutorial_{i}.ipynb": f"[T{i} self-check OK]" for i in range(10)}
+# Optional companion notebooks do not fit the Tutorial_<N> pattern, and an unregistered
+# notebook makes this test `pytest.fail` rather than skip — deliberately, so a new tutorial
+# cannot slip in unchecked. Register them here.
+SELFCHECK_BEACONS["Tutorial_7b.ipynb"] = "[T7b self-check OK]"
 
 
 def _notebook_paths() -> list[Path]:
