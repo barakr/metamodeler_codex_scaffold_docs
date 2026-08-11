@@ -16,6 +16,23 @@ Primary governing files:
 3) Activate project hooks:
 - `git config core.hooksPath githooks`
 
+## Vocabulary used throughout this pack
+
+Framework nouns — spec, design, design point, sweep, canonical, provenance, adapter,
+surrogate, coupling, metamodel — are defined once in [README.md](README.md#terms).
+The acronyms below appear in the prompt text and are **not** expanded at each use,
+because the prompt blocks are meant to be pasted verbatim:
+
+- **DOE** — *design of experiments*: the set of input points a model is run at. The code
+  and specs call this the `design`; "DOE cardinality" means the number of design points.
+- **IR** — *intermediate representation*: the metamodel written as plain data (variables
+  and factors) in a form naming no particular sampling library, so one spec can target
+  more than one backend.
+- **PPL** — *probabilistic programming language*: the library that turns the IR into a
+  runnable model and samples it (`pymc` or `numpyro` here).
+- **NPE** — *neural posterior estimation*: the `sbi` package's density-estimator method,
+  behind the `sbi_npe` surrogate backend.
+
 ## Global instruction block (prepend to every major prompt)
 Use this block before task-specific requests:
 

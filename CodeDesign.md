@@ -1,9 +1,14 @@
 # Code Design: Metamodeling Framework (Pre-Prompt-1 Validation)
 
+> **Vocabulary.** The framework's nouns — spec, design, design point, sweep, canonical,
+> provenance, adapter, surrogate, coupling, metamodel — are defined once in
+> [README.md](README.md#terms). Acronyms are expanded here on first use.
+
 ## Purpose
 This document refines the implementation design before Prompt 1. It validates two concrete target workflows:
 1. Multi-model metamodeling with variable scans and coupling across three independent models (aligned with the Neve-Oz / Sherman / Raveh style use case).
-2. BioModels SBML execution from JSON spec, with outputs suitable for surrogate probability modeling.
+2. Execution of a published BioModels model — encoded in SBML (Systems Biology Markup
+   Language) — from a JSON spec, with outputs suitable for surrogate probability modeling.
 
 ## Design goals for this phase
 - Keep Prompt 1 focused on typed spec validation only.
@@ -15,7 +20,8 @@ This document refines the implementation design before Prompt 1. It validates tw
 
 ### A. Explicit spec family
 Introduce a small family of typed specs (validated in Prompt 1+):
-- `ModelSpec`: one executable source model + DOE + adapter mapping.
+- `ModelSpec`: one executable source model + design + adapter mapping. (The design is the
+  set of input points to run at — a *design of experiments*, DOE, in statistics.)
 - `SurrogateSpec`: how to train/evaluate a surrogate from one model run store.
 - `CouplingSpec`: coupling variables and constraints tying multiple surrogates.
 - `MetaModelSpec`: orchestrates multiple `SurrogateSpec` + one `CouplingSpec`.
@@ -118,27 +124,28 @@ Run logs:
 
 ### Problem being solved
 Tutorial 1 currently reconstructs sweep outputs by traversing per-point run folders.
-For DOE grids, this is inefficient and hard to analyze directly.
+For grid designs, this is inefficient and hard to analyze directly.
 
 ### Target behavior
-- A DOE sweep should emit one centralized table artifact for numeric results.
+- A sweep should emit one centralized table artifact for numeric results.
 - The same artifact contract must work for:
   - serial local execution,
   - local parallel execution,
-  - MPI-coordinated execution.
+  - MPI-coordinated execution (Message Passing Interface, the standard for multi-process
+    work on clusters).
 - Tutorial 1 should consume this table directly and render two heatmaps:
   - `sum = a + b`
   - `product = a * b`
 
 ### Proposed artifact contract
 - `sweep_rows.csv`:
-  - one row per DOE point
+  - one row per design point
   - deterministic `point_index` column
   - one column per input variable
   - flattened output columns (toy example: `y__0`, `y__1`)
   - status/error/timing columns
 - `sweep_manifest.json`:
-  - spec digest, seed, DOE cardinality, column schema, execution mode, completion status
+  - spec digest, seed, design size (number of points), column schema, execution mode, completion status
 - `sweep_logs.jsonl`:
   - one record per point with stdout/stderr references or payload snippets
 
@@ -175,7 +182,8 @@ This preserves the "no per-point output file/folder for numeric results" goal wh
   - sweep table schema and deterministic ordering
   - serial and local-parallel produce equivalent `sweep_rows.csv` content
   - tutorial toy parser builds two heatmap matrices from centralized CSV
-  - optional backend checks remain robust in mixed PyMC/SBI environments:
+  - optional backend checks remain robust in mixed PyMC / SBI (simulation-based inference)
+    environments:
     - exercise SBI paths when available,
     - treat PyMC compile/toolchain gaps as explicit runtime constraints (skip/fallback)
   - SBI training summary logs are emitted under `tmp/sbi-logs/` (not repo root)
@@ -192,7 +200,7 @@ This preserves the "no per-point output file/folder for numeric results" goal wh
 - Tutorials are delivered notebook-first in `tutorials/Tutorial_0.ipynb` to `tutorials/Tutorial_9.ipynb`.
 - Each tutorial carries two explicit aims:
   - package operation objective (CLI/spec/artifact action),
-  - light scientific/computational objective (e.g., DOE coverage, Bayesian posterior, SBI intuition).
+  - light scientific/computational objective (e.g., design coverage, Bayesian posterior, SBI intuition).
 - BioModels is intentionally early (Tutorial 2) so biological context precedes advanced surrogate/metamodel work.
 - Tutorials are decoupled by design:
   - standalone bootstrap commands are included,

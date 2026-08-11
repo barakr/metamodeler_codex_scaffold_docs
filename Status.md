@@ -1,5 +1,59 @@
 # Status: Metamodeling Automation Framework
 
+> **Vocabulary.** Framework nouns (spec, design, sweep, surrogate, coupling, metamodel) and
+> acronyms (DOE, IR, PPL, NPE, ESS) are defined in [README.md](README.md#terms) and, for the
+> sampling diagnostics, in the README's [Sampling method](README.md#sampling-method---method)
+> section. Entries below are a dated decision log and are **left as written** — rewriting past
+> entries to expand their acronyms would falsify the record of what was decided when.
+
+## Root docs define their terms on first use (2026-08-11)
+
+Prompted by a fair question from the user: *"what's DOE? Why use weird acronyms? It's a
+package for scientists."* The README used DOE eight times and expanded it zero times.
+
+The diagnosis is worth keeping, because it is not simply "the acronym is obscure". DOE is
+genuinely standard vocabulary — in **statistics and industrial engineering**. It is close
+to unknown in computational and systems biology, which is who this package is for. So the
+term is standard in a field adjacent to the audience, not in the audience. Two further
+strikes against it here:
+
+1. **It over-promises.** Classical design of experiments is about randomization, blocking,
+   replication and confounding — machinery for extracting inference from noisy *physical*
+   experiments. What this framework does is enumerate input points for a deterministic
+   simulator. Borrowing the name imports guarantees the code does not make.
+2. **The code never used it.** The spec field is `design`, the module is
+   `designs/planner.py`, the artifacts are `sweep_*`. `grep -rn doe src/` returns nothing.
+   A reader who met "DOE" in the docs and searched the source found zero hits.
+
+**Convention adopted, applied to every root doc:** define each term the first time it is
+used, as one would in a paper. Mechanically, that is two things — a `Terms` table in
+`README.md` (the single definition site, worded to agree with Tutorial 0's glossary rather
+than compete with it), and inline expansion of every acronym at first use: DOE, IR, PPL,
+NUTS, ESS, r-hat, divergences, NPE, SBI, GP, BNN, MPI, SBML, CI, KS, TCR, `LKJCholeskyCov`.
+Prose now says "design point"; DOE survives only where it is being defined.
+
+Two of those were worse than merely undefined and are now fixed: **ESS** appeared in a
+results table and was spelled out two sections *later*; and the environment table sold
+`pymc_gp` as "PyMC GP surrogates" when the backend is Bayesian linear regression — the
+README now says plainly that it is not a Gaussian process, and what that costs you on
+extrapolation.
+
+Per-document treatment, because one size did not fit:
+
+| Doc | Treatment | Why |
+|---|---|---|
+| `README.md` | full — `Terms` table + inline expansion | the definition site everything else points at |
+| `PRD.md`, `TechSpec.md`, `CodeDesign.md`, `TEST_PLAN.md` | pointer + inline expansion | linked from the doc map as things a reader should open |
+| `PROMPT_TO_CODEX.md` | pointer + a vocabulary block; prompt text untouched | its blocks are pasted verbatim into another agent's prompt; editing them would change instructions, not just prose |
+| `Status.md` | pointer only | a dated decision log. Rewriting past entries to expand their acronyms would falsify the record of what was decided when |
+
+Also fixed in `README.md` while there: a paragraph that restated the sweep-artifact list
+verbatim four lines after the first one, and an orphaned sentence about placeholder
+artifacts that had been glued onto the end of the `observed` section.
+
+Not touched: `tutorials/`. Tutorial 0's glossary already defines DOE before any tutorial
+uses it, so the series already follows the convention.
+
 ## Module 7 split into 7a/7b/7c; series scope stated honestly (2026-08-11)
 
 Four decisions taken with the user, then executed.

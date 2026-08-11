@@ -1,5 +1,9 @@
 # PRD: Metamodeling Automation Framework
 
+> **Vocabulary.** The framework's nouns — spec, design, design point, sweep, canonical,
+> provenance, adapter, surrogate, coupling, metamodel — are defined once in
+> [README.md](README.md#terms). Acronyms are expanded here on first use.
+
 ## Product vision
 Build a CLI-first framework for probabilistic metamodeling:
 1) Execute several independent source models across many input combinations.
@@ -34,22 +38,25 @@ Need a framework that can:
 - JSON-first `ModelSpec` for model execution.
 - Adapter plugin interface for model-specific I/O translation.
 - Local process runner.
-- DOE planning (`grid`, `sobol`) for input sweeps.
+- Design planning (`grid`, `sobol`) for input sweeps — choosing the set of input points
+  at which to run a model, what statistics calls a *design of experiments* (DOE).
 - Canonical run store with:
   - input/output artifacts,
   - full stdout/stderr logs,
   - seed and digest metadata,
   - deterministic cache keys.
-- Centralized sweep-result artifact for DOE execution:
+- Centralized sweep-result artifact for sweep execution:
   - one aggregated table per sweep (initial format: CSV),
   - no separate output file/folder per grid point for numeric results,
   - stable row identity (`point_index`) for reproducibility and joins.
 - Local sweep execution modes:
   - serial mode,
   - local parallel mode,
-  - MPI-coordinated mode with synchronized writes to one centralized sweep artifact.
+  - MPI-coordinated mode (Message Passing Interface, the standard for multi-process work
+    on clusters) with synchronized writes to one centralized sweep artifact.
 - CLI commands: validate, plan, run, runs list/show.
-- Two examples: toy CLI model and BioModels SBML spec stub.
+- Two examples: a toy command-line model, and a spec stub for a published model from the
+  BioModels database in SBML (Systems Biology Markup Language).
 - Notebook-first onboarding curriculum:
   - Tutorial 0 hub + Tutorial 1-9 progression.
   - Standalone and serial paths for new lab members.
@@ -64,12 +71,12 @@ Need a framework that can:
 
 ## Functional requirements
 - FR1: User can validate a spec before execution.
-- FR2: User can generate a deterministic DOE plan from a spec.
+- FR2: User can generate a deterministic design plan from a spec.
 - FR3: User can run a model sweep and persist canonical results.
 - FR4: User can replay the same run plan with exact provenance.
 - FR5: User can inspect run metadata and logs from CLI.
 - FR6: Adapter API is minimal and typed, with contract tests.
-- FR7: DOE sweep results are persisted in one centralized, tabular artifact per sweep (CSV in the first rollout).
+- FR7: Sweep results are persisted in one centralized, tabular artifact per sweep (CSV in the first rollout).
 - FR8: The same centralized output contract is used in serial, local parallel, and MPI execution modes.
 - FR9: Tutorial 1 demonstrates centralized sweep output by plotting both toy outputs (`sum`, `product`) as heatmaps.
 
@@ -115,11 +122,12 @@ Need a framework that can:
 
 ## Roadmap
 - Phase 0: scaffold + typed specs + hooks + basic tests.
-- Phase 1: DOE + local runner + canonical run store + toy end-to-end.
+- Phase 1: design planning + local runner + canonical run store + toy end-to-end.
 - Phase 1.5: Centralized sweep artifact + synchronized serial/parallel/MPI write path + Tutorial 1 heatmap upgrade.
 - Phase 2: BioModels adapter milestone + slow integration tests.
 - Phase 3: Surrogate training baseline (single-model).
 - Phase 4: Coupling spec and joint metamodel builder (multi-model).
 - Phase 5: Calibration diagnostics, docs hardening, and packaging polish.
 
-**Implementation note (2026-03)**: Phases 3-5 have been implemented through the Prompt 6-17 sequence. Surrogate backends (pymc_gp, sbi_npe), metamodel IR, coupling specs, and joint sampling are functional. The "Out of scope for v1" items refer to the original v1 planning baseline; the implementation has progressed beyond that scope. See Status.md for detailed implementation log.
+**Implementation note (2026-03)**: Phases 3-5 have been implemented through the Prompt 6-17 sequence. Surrogate backends (`pymc_gp`, `sbi_npe`), the metamodel IR (intermediate representation — the
+model as backend-neutral data, see README), coupling specs, and joint sampling are functional. The "Out of scope for v1" items refer to the original v1 planning baseline; the implementation has progressed beyond that scope. See Status.md for detailed implementation log.

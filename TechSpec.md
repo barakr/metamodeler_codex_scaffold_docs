@@ -1,5 +1,9 @@
 # Tech Spec: Metamodeling Automation Framework
 
+> **Vocabulary.** The framework's nouns — spec, design, design point, sweep, canonical,
+> provenance, adapter, surrogate, coupling, metamodel — are defined once in
+> [README.md](README.md#terms). Acronyms are expanded here on first use.
+
 ## Technical principles
 - Typed contracts first: JSON Schema + Pydantic v2 validation at boundaries.
 - Deterministic execution: explicit seeds, stable hashing, immutable run records.
@@ -12,7 +16,9 @@
 ## Architecture
 ### Layer 1: Spec and planning
 - `ModelSpec`: model artifact, runner settings, I/O schema, design strategy, adapter mapping, reproducibility, storage target.
-- `DesignPlan`: concrete list of design points produced by DOE planner.
+- `DesignPlan`: concrete list of design points produced by the design planner. (Statistics
+  calls such a plan a *design of experiments*, abbreviated DOE — the term this document
+  and the code use is "design".)
 - Validation stack:
   - JSON schema for external contract.
   - Pydantic models for runtime contract.
@@ -28,7 +34,8 @@
   - bounded resources (where feasible),
   - stdout/stderr capture to artifacts.
 - Sweep orchestrator:
-  - dispatch DOE points in `serial`, `parallel_local`, or `mpi` mode,
+  - dispatch design points in `serial`, `parallel_local`, or `mpi` mode (MPI = Message
+    Passing Interface, the standard for multi-process work on clusters),
   - normalize each point result into one canonical row payload,
   - forward normalized rows to a synchronized centralized writer.
 - Runner environment support:
@@ -51,9 +58,9 @@
   - timestamps and status.
 - Centralized sweep artifact layout:
   - `sweep_manifest.json`:
-    - spec digest, seed, DOE size, output schema, execution mode, completion status.
+    - spec digest, seed, design size, output schema, execution mode, completion status.
   - `sweep_rows.csv`:
-    - one row per DOE point with deterministic `point_index`,
+    - one row per design point with deterministic `point_index`,
     - input columns and flattened output columns (example: `y__0`, `y__1`).
   - `sweep_logs.jsonl`:
     - per-point stdout/stderr references or inline payloads keyed by `point_index`.
@@ -72,14 +79,20 @@
 ### Layer 4: Surrogate and metamodel (post-v1 core)
 - v1 provides interfaces and placeholders only.
 - Initial strategy after v1:
-  - start with practical baselines (e.g., GP/BNN-compatible interfaces),
+  - start with practical baselines — interfaces compatible with a Gaussian process (GP) or
+    a Bayesian neural network (BNN),
   - add calibration diagnostics before advanced coupling.
-- Spec-to-IR mapping note: `MetamodelCouplingSpec.kind="deterministic"` is mapped to `CouplingFactorIR.coupling_type="deterministic_transform"` by the IR builder (`meta/builder.py`). The IR uses the more explicit name to distinguish from other deterministic operations.
+- Spec-to-IR mapping note. The **IR** (intermediate representation) is the metamodel written
+  as plain data — variables and factors — in a form naming no particular sampling library, so
+  one spec can run on more than one backend. `MetamodelCouplingSpec.kind="deterministic"` is
+  mapped to `CouplingFactorIR.coupling_type="deterministic_transform"` by the IR builder
+  (`meta/builder.py`); the IR uses the more explicit name to distinguish it from other
+  deterministic operations.
 
 ## v1 implementation scope
 - Implement:
   - `ModelSpec` parsing/validation.
-  - DOE planning (`grid`, `sobol`) with deterministic ordering.
+  - Design planning (`grid`, `sobol`) with deterministic ordering.
   - Adapter registry and base contracts.
   - Local process runner.
   - Run store + cache key utilities.
@@ -136,7 +149,8 @@
 - `tests/`
 - `githooks/`
 - `tmp/`
-  - `sbi-logs/` (SBI backend training summary/tensorboard logs)
+  - `sbi-logs/` (training summary/tensorboard logs from the `sbi` backend —
+    simulation-based inference, the package behind `sbi_npe`)
 
 ## Tutorial delivery design
 - Format: Jupyter notebooks only for tutorials (`.ipynb`).
@@ -157,7 +171,8 @@
 ## Design validation scenarios (pre-Prompt-1)
 - Scenario A: three independent models, each with its own surrogate, coupled via explicit coupling variables and constraints.
   - Design artifact: `examples/coupled/spec.three_model_coupling.json`
-- Scenario B: BioModels SBML source model execution from JSON spec, with outputs shaped for surrogate training.
+- Scenario B: execution of a published BioModels source model — encoded in SBML (Systems
+  Biology Markup Language) — from a JSON spec, with outputs shaped for surrogate training.
   - Design artifacts:
     - `examples/biomodels/spec.model1907260003.json`
     - `examples/biomodels/surrogate.model1907260003.json`
@@ -168,7 +183,9 @@ These scenarios define interface requirements for Prompt 1 (typed validation) wi
 
 ## Package strategy for later probabilistic modules
 Decision for implementation phases after v1:
-- Bayesian PPL backbone candidate: `PyMC` (modern replacement path from legacy `pymc3`).
+- Bayesian PPL backbone candidate — the probabilistic programming language (PPL) that turns
+  the IR into a runnable model and samples it: `PyMC` (modern replacement path from legacy
+  `pymc3`).
 - Optional deep probabilistic backend candidates: `PyTorch` ecosystem (`Pyro`/`NumPyro` deferred decision by benchmark).
 - Decision gate: add package only with:
   - clear interface boundary,
@@ -178,7 +195,7 @@ Decision for implementation phases after v1:
 ## Testing strategy
 - Fast suite (`not slow`) must stay under 30 seconds:
   - schema/model validation,
-  - DOE bounds and determinism,
+  - design bounds and determinism,
   - adapter contracts,
   - local runner smoke,
   - cache digest behavior,
