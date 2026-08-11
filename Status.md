@@ -1,5 +1,45 @@
 # Status: Metamodeling Automation Framework
 
+## `pymc_gp` is not a Gaussian process, and the tutorials were teaching that it was (2026-08-11)
+
+Found during a full pedagogical audit of the tutorial series. `_fit_pymc_bayesian_linear`
+builds `beta ~ Normal(0,2)`, `intercept ~ Normal(0,2)`, `mu = intercept + x @ beta` —
+Bayesian **linear regression**. There is no kernel, no covariance function, no `pm.gp`
+anywhere in the package. Nothing in `src/` said so, and the backend name says otherwise.
+
+Tutorials 5, 6 and 9 reasoned throughout from Gaussian-process properties: that
+predictions revert toward the prior mean away from the training data, and that error bars
+widen as you leave it. Measured, trained on `a, b ∈ [0,2]` predicting `a + b`:
+
+| query | mean | sd | truth |
+|---|---|---|---|
+| (1, 1) | 2.000 | 0.00000 | 2.0 |
+| (5, 5) | 10.000 | 0.00000 | 10.0 |
+| (20, 20) | 40.000 | 0.00000 | 40.0 |
+| (100, 100) | 200.000 | 0.00000 | 200.0 |
+
+Perfect, confident extrapolation fifty times outside the training box — the *opposite* of
+what the tutorials claimed, not merely an imprecise version of it. Students were being
+taught a mental model that would mislead them on their own data.
+
+The honest lesson is also the more useful one, and the tutorials now teach it: a linear
+surrogate on a **nonlinear** system is confidently wrong with near-zero error bars, which
+is more dangerous than a GP that widens and warns you. Judge fit from held-out error, never
+from predictive width alone.
+
+**Not renaming the backend.** `SurrogateSpec.backend` is a `Literal["pymc_gp", "sbi_npe",
+"numpyro_gp"]`, so a rename breaks every existing spec and every stored artifact. The name
+stays; the correction is carried in the module docstring, the fit function's docstring, and
+the tutorials. Worth revisiting if a compatibility alias is ever added — flagged for the
+user rather than decided here.
+
+**Pinned by** `tests/test_pymc_gp_is_linear_not_a_gp.py` (`slow`, `optional_backend`): the
+extrapolation behaviour at three points far outside the training box, plus a structural
+guard that no GP machinery (`pm.gp.`, `ExpQuad`, `Matern*`) has appeared in the package. If
+someone later swaps in a real GP — a reasonable thing to want — it fails, which is the
+signal to rewrite those tutorial passages in the same change rather than let them rot back
+into being wrong.
+
 ## Registry writes were silently lost under concurrency on Windows (2026-08-10)
 
 `test_locked_registry_concurrent_writes` went red on Windows only: four threads wrote

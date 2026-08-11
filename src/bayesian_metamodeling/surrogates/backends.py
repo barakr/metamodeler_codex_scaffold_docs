@@ -1,5 +1,36 @@
 """Surrogate backend implementations behind a neutral interface.
 
+`pymc_gp` is NOT a Gaussian process
+-----------------------------------
+The name is historical and it misleads. ``_fit_pymc_bayesian_linear`` builds
+
+    beta      ~ Normal(0, 2)          # (n_features, D)
+    intercept ~ Normal(0, 2)          # (D,)
+    mu        = intercept + x @ beta
+
+i.e. **Bayesian linear regression**. There is no kernel, no covariance function and
+no ``pm.gp`` anywhere in this package.
+
+This matters because GP intuition is exactly wrong here. A GP reverts toward its
+prior mean away from the training data, with predictive width growing as you leave
+it. This model does the opposite — trained on ``a, b in [0, 2]`` predicting ``a + b``
+it returns:
+
+    (1, 1)       -> mean 2.000    sd 0.00000
+    (5, 5)       -> mean 10.000   sd 0.00000
+    (20, 20)     -> mean 40.000   sd 0.00000
+    (100, 100)   -> mean 200.000  sd 0.00000
+
+Perfect confident extrapolation, fifty times outside the training box. That is the
+right answer for a genuinely linear function, and it is a trap for anything else: on
+a nonlinear system this surrogate will be confidently wrong with near-zero error
+bars, which is more dangerous than a GP that widens and warns you. Judge fit quality
+from held-out error, never from the predictive width alone.
+
+Renaming the backend would break every existing spec (`SurrogateSpec.backend` is a
+``Literal``) and every stored artifact, so the name stays and the docs carry the
+correction. `numpyro_gp` is likewise a name, not a promise.
+
 Multi-output design
 -------------------
 All posterior models store outputs as ``(N, D)`` where ``D = len(output_names)``.
@@ -663,6 +694,13 @@ def _fit_pymc_bayesian_linear(
     backend_config: dict[str, Any],
     seed: int,
 ) -> PymcPosteriorLinearModel:
+    """Fit Bayesian linear regression with PyMC — this is what `pymc_gp` actually is.
+
+    Despite the backend name there is no Gaussian process here: the mean is linear in
+    the inputs and the posterior is over ``beta``/``intercept``/``sigma``. See this
+    module's docstring for why the distinction changes how you should read the
+    predictive width.
+    """
     pm = _require_pymc()
     output_names = _resolve_output_names(output_names, output_name)
     y = _ensure_2d(y)
