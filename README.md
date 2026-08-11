@@ -57,25 +57,21 @@ All paths are relative to the repo root.
 4) `bayesmm runs list`
 5) `bayesmm runs show RUN_ID`
 
-## Centralized DOE Output
-`bayesmm run` persists DOE numeric results in one centralized sweep artifact per run:
-- `sweep_rows.csv`: one row per DOE point (`point_index`, inputs, flattened outputs, status/error/timing)
+## Centralized sweep output
+`bayesmm run` collects a whole sweep into one set of files, rather than one directory per point:
+- `sweep_rows.csv`: one row per design point (`point_index`, inputs, flattened outputs, status/error/timing)
 - `sweep_manifest.json`: sweep metadata, digests, and schema
 - `sweep_logs.jsonl`: per-point stdout/stderr payloads
 
-This is the canonical path for DOE sweep numeric results across:
+These three are the canonical form of a sweep's results, identical across all execution modes:
 - `runner.sweep_mode: "serial"`
 - `runner.sweep_mode: "parallel_local"`
-- `runner.sweep_mode: "mpi"` (single-writer on rank 0)
-
-`bayesmm run` now writes centralized DOE sweep artifacts (one table per sweep):
-- `sweep_rows.csv` (all grid/sobol points in one file),
-- `sweep_manifest.json`,
-- `sweep_logs.jsonl`.
+- `runner.sweep_mode: "mpi"` (single writer, on rank 0)
 
 ## Examples (spec stubs)
 - `examples/toy_program/spec.toy_program.json`: local CLI toy model.
-- `examples/biomodels/spec.biomodels.json`: BioModels SBML model by BioModels id.
+- `examples/biomodels/spec.biomodels.json`: a published model fetched by id from the
+  BioModels database, encoded in SBML (Systems Biology Markup Language).
 - `examples/surrogates/surrogate.toy.pymc_gp.json`: toy surrogate training spec.
 - `examples/metamodels/metamodel.simple.json`: coupled metamodel spec for sampling flow.
 
@@ -93,15 +89,27 @@ own environments, because pinning PyMC, SBI and PyTorch in one solve is fragile:
 | File | Environment | Use |
 |------|-------------|-----|
 | `environment.yml` | `py314_bayesmm` | main dev: build, test, tutorials |
-| `environment-pymc.yml` | `py312_bayesmm_pymc` | PyMC GP surrogates |
-| `environment-sbi.yml` | `py312_bayesmm_sbi` | SBI NPE surrogates |
+| `environment-pymc.yml` | `py312_bayesmm_pymc` | the `pymc_gp` surrogate backend |
+| `environment-sbi.yml` | `py312_bayesmm_sbi` | the `sbi_npe` surrogate backend |
 | `environment-all.yml` | `py312_bayesmm_all` | **both backends — use this to work through the tutorials** (T2 also needs `environment-biomodels.yml`) |
 
-The single-backend envs are deliberately single-backend: they mirror CI's per-backend
-jobs, and their value is in what they *don't* have. But several tutorial steps need both
-at once — Tutorial 6's Step 4 compares the GP surrogate against the neural posterior on
-the same query points, and that is the cell where you can actually see what each buys
-you. If you are learning rather than testing, create `py312_bayesmm_all`.
+The two backends, since their ids appear throughout:
+
+- **`pymc_gp`** — a Bayesian linear regression fit with PyMC. Despite the id, **it is not
+  a Gaussian process** (GP): no kernel, no covariance function. The name is historical and
+  renaming it would invalidate every stored artifact and spec. This matters practically —
+  a GP reverts toward its prior mean away from the training data, with error bars that
+  widen to warn you, whereas a linear model extrapolates its fitted plane forever with
+  narrow bands. Judge a fit by held-out error, never by predictive width alone.
+- **`sbi_npe`** — neural posterior estimation (NPE) from the `sbi` package
+  (simulation-based inference): a neural density estimator, genuinely flexible.
+
+The single-backend envs are deliberately single-backend: they mirror the per-backend jobs
+in continuous integration (CI, the checks GitHub runs on every push), and their value is
+in what they *don't* have. But several tutorial steps need both
+at once — Tutorial 6's Step 4 compares the two on the same query points, and that is the
+cell where you can actually see what each buys you. If you are learning rather than
+testing, create `py312_bayesmm_all`.
 
 **pip + venv**:
 ```
@@ -121,8 +129,11 @@ bayesmm setup         # interactive; or: bayesmm setup --non-interactive --backe
 ## Multi-output (joint) surrogates
 `SurrogateSpec` accepts multiple outputs (`outputs: ["y1", "y2", ...]`). Set
 `backend_config.output_correlation`:
-- `"diagonal"` (default): independent per-output models — fast.
-- `"full"`: joint covariance (PyMC: `LKJCholeskyCov` prior; SBI: a D-dim density estimator).
+- `"diagonal"` (default): one independent model per output — fast, but blind to any
+  correlation between the outputs.
+- `"full"`: one joint covariance across all D outputs, so correlations are modeled.
+  PyMC puts an `LKJCholeskyCov` prior on it (the standard prior over correlation
+  matrices); SBI fits a single D-dimensional density estimator instead.
 
 See `examples/surrogates/surrogate.toy.multi_output.json`.
 
@@ -158,10 +169,12 @@ The surrogate interface is backend-neutral, but some backends require optional d
 - `runner.execution_env` is optional and defaults to `{}`.
 - If set, supported keys are:
   - `conda_env`: run model commands via `conda run -n <conda_env> ...`.
-- `runner.sweep_mode` controls local execution strategy for DOE sweeps:
+- `runner.sweep_mode` controls how the design points of a sweep are executed locally:
   - `serial` (default)
   - `parallel_local` (uses `runner.workers`, defaults to `runner.resources.cpus`)
-  - `mpi` (requires `mpi4py` + MPI launcher; rank 0 writes centralized sweep files)
+  - `mpi` — MPI (Message Passing Interface), the standard for multi-process work on
+    clusters. Requires `mpi4py` and an MPI launcher; rank 0 (the first process) is the
+    only one that writes the centralized sweep files.
 - Example:
 ```json
 {
@@ -176,7 +189,7 @@ The surrogate interface is backend-neutral, but some backends require optional d
 ```
 
 ## Sweep Execution Modes
-- `runner.sweep_mode` controls how DOE points are executed:
+- `runner.sweep_mode` controls how design points are executed:
   - `serial` (default),
   - `parallel_local` (threaded local coordinator + single centralized writer),
   - `mpi` (rank 0 centralized writer).
@@ -234,8 +247,8 @@ It is **not** part of *this* repo's CI matrix — it has its own, so a submodule
 failure never reddens the framework's status — but it is fully cross-platform:
 
 - Native build: requires CMake ≥ 3.20 + a C++ compiler. Built and tested on
-  **Windows (MSVC), macOS (Clang) and Linux (GCC)** by the submodule's `KS model
-  CI`, on every push and daily. Build with `cmake -S . -B build && cmake --build
+  **Windows (MSVC), macOS (Clang) and Linux (GCC)** by the submodule's `KS model CI`
+  workflow (KS = kinetic segregation, the model it builds), on every push and daily. Build with `cmake -S . -B build && cmake --build
   build`; `make` is a Unix shorthand for the same thing. See the submodule's
   [build prerequisites](projects/tcr_signaling/README.md#build-prerequisites-windows-macos-linux)
   for the per-OS install commands.
@@ -267,8 +280,13 @@ through every later `git submodule update` and `git pull`.
 - Every run must store seed, spec digest, artifact digest, stdout, and stderr.
 - Any major decision or scope shift is recorded in `Status.md`.
 
-## Backend-Neutral IR
-Metamodeler now builds a backend-neutral metamodel IR before inference/runtime execution.
+## Backend-neutral intermediate representation (IR)
+Before running anything, Metamodeler compiles a metamodel spec into an **intermediate
+representation** (IR): the model written down as plain data — variables and *factors*
+(the terms multiplied together to form the joint probability) — in a form that names no
+particular sampling library. The IR is what gets handed to a backend, so the same spec
+can run on more than one.
+
 - Variables and factors are serialized in a backend-independent schema.
 - Coupling factors and surrogate-likelihood factors are represented uniformly.
 - Compiler boundary:
@@ -276,8 +294,9 @@ Metamodeler now builds a backend-neutral metamodel IR before inference/runtime e
   - `compile_metamodel(ir, backend=\"numpyro\")` is available.
 - `bayesmm meta build <metamodel.json>` validates spec input and writes an IR artifact to `tmp/metamodel_ir/`.
 
-## Backend Selection (`ppl_backend`)
-`MetaModelSpec` accepts:
+## Backend selection (`ppl_backend`)
+Which probabilistic programming language (PPL) — the library that turns the IR into a
+runnable model and samples it — should execute the metamodel. `MetaModelSpec` accepts:
 - `ppl_backend: "pymc"`
 - `ppl_backend: "numpyro"`
 
@@ -295,24 +314,33 @@ layer, so it is worth reading before interpreting any output.
 
 | | `propagate` (default) | `joint` |
 |---|---|---|
-| how draws are made | each variable from its prior, then coupled targets overwritten by `transform(source)` | Metropolis over the full joint log-density |
+| how draws are made | each variable from its prior, then coupled targets overwritten by `transform(source)` | random-walk Metropolis — propose a step, accept or reject it by the density ratio — over the full joint log-density |
 | surrogate likelihoods | **not evaluated** | evaluated — the surrogates are evidence |
 | a coupling informs | its **target** only | **both** ends |
 | honest name for the output | forward uncertainty propagation | posterior |
 
-There is a third value, `--method nuts`. It samples **the same density as `joint`**, with
-gradients instead of a random walk, by writing the model as a PyTensor graph. It applies
-only when every surrogate in the model is `pymc_gp` — that backend is linear regression, so
-its predictive density is symbolic — and falls back to `joint` with a printed reason
-otherwise. `sbi_npe` is a torch normalizing flow whose gradients would need a custom
-PyTensor `Op`, which is not written.
+There is a third value, `--method nuts` — the No-U-Turn Sampler, which follows the
+density's gradient instead of stepping at random, and is the default in most modern
+probabilistic programming languages for exactly that reason. It samples **the same
+density as `joint`**, obtained by writing the model as a PyTensor graph so that gradients
+exist. It applies only when every surrogate in the model is `pymc_gp` — that backend is
+linear regression, so its predictive density is symbolic — and falls back to `joint` with
+a printed reason otherwise. `sbi_npe` is a torch normalizing flow whose gradients would
+need a custom PyTensor `Op`, which is not written.
 
-Measured on the TCR metamodel (14 variables, 4 fitted surrogates):
+Measured on the T-cell receptor (TCR) metamodel (14 variables, 4 fitted surrogates):
 
 | method | worst-variable ESS | efficiency | diagnostics |
 |---|---|---|---|
 | `joint` | 10 / 1500 | 0.7% | accept_rate |
 | `nuts` | 1744 / 3000 | **58%** | r-hat 1.0036, 0 divergences |
+
+Reading that table: **ESS** is *effective sample size* — how many genuinely independent
+draws your correlated chain is worth, so 10 out of 1500 means the chain barely moved.
+**r-hat** compares variance between chains against variance within them; 1.0 is the ideal
+and anything above ~1.01 says the chains have not converged on the same answer. A
+**divergence** is the gradient sampler reporting that it lost the density's geometry —
+they are not noise, and a nonzero count invalidates the run rather than merely degrading it.
 
 Prefer `nuts` when it applies. Keep `joint` in mind as the backend-neutral fallback: it is
 the one verified against a closed-form Gaussian, and the only one that works when a
@@ -337,7 +365,9 @@ Two practical notes:
   per call against ~0.2 ms for `pymc_gp`, so an NPE-backed joint sample is roughly
   100x more expensive per step. Budget accordingly, and prefer fewer, longer chains.
 
-`joint` needs real fitted surrogates: run `bayesmm surrogate fit` first.
+`joint` needs real fitted surrogates: run `bayesmm surrogate fit` first. If an artifact
+is a placeholder without a `backend_payload`, the command says so and names the fix
+rather than silently sampling something meaningless.
 
 ## Conditioning on what you measured (`observed`)
 
@@ -367,9 +397,6 @@ otherwise hide behind healthy-looking draws.
 Before this existed the only way to fake an observation was a very tight prior. Avoid it —
 it puts the posterior on a thin ridge, which is exactly the geometry the gradient-free
 sampler cannot follow.
- If an artifact
-is a placeholder without a `backend_payload`, the command says so and names the fix
-rather than silently sampling something meaningless.
 
 ## End-to-End Quickstart
 ```bash
