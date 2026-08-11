@@ -270,6 +270,24 @@ layer, so it is worth reading before interpreting any output.
 | a coupling informs | its **target** only | **both** ends |
 | honest name for the output | forward uncertainty propagation | posterior |
 
+There is a third value, `--method nuts`. It samples **the same density as `joint`**, with
+gradients instead of a random walk, by writing the model as a PyTensor graph. It applies
+only when every surrogate in the model is `pymc_gp` — that backend is linear regression, so
+its predictive density is symbolic — and falls back to `joint` with a printed reason
+otherwise. `sbi_npe` is a torch normalizing flow whose gradients would need a custom
+PyTensor `Op`, which is not written.
+
+Measured on the TCR metamodel (14 variables, 4 fitted surrogates):
+
+| method | worst-variable ESS | efficiency | diagnostics |
+|---|---|---|---|
+| `joint` | 10 / 1500 | 0.7% | accept_rate |
+| `nuts` | 1744 / 3000 | **58%** | r-hat 1.0036, 0 divergences |
+
+Prefer `nuts` when it applies. Keep `joint` in mind as the backend-neutral fallback: it is
+the one verified against a closed-form Gaussian, and the only one that works when a
+surrogate really is a black box.
+
 ```bash
 bayesmm meta sample metamodel.json --draws 2000 --tune 1000 --seed 7 --method joint
 ```

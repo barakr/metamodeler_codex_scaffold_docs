@@ -1,5 +1,54 @@
 # Status: Metamodeling Automation Framework
 
+## `--method nuts`: the same joint, with gradients (2026-08-11, stage 2 of 2)
+
+Stage 2 of the conditioning work. `sample_joint` treats every surrogate as a black box —
+`log_prob` on a dict of floats — so it can only do a gradient-free random walk. That is
+correct and backend-neutral, and it is slow: on the TCR metamodel three variables had an
+effective sample size under 20.
+
+It does not have to be a black box for `pymc_gp`. That backend is Bayesian **linear**
+regression, so its predictive density is
+
+    mu[s,d] = x @ W[s,:,d] + bias[s,d]
+    log p(y|x) = logsumexp_s( sum_d Normal_logpdf(y[d]; mu[s,d], sigma[s,d]) ) - log S
+
+— an equally weighted mixture over the surrogate's S posterior draws, every operation
+differentiable. Written as a PyTensor graph, NUTS applies.
+
+**Measured on the real TCR metamodel** (14 variables, 4 fitted surrogates, same seed):
+
+| method | worst-variable ESS | efficiency | diagnostics |
+|---|---|---|---|
+| `joint` (random walk) | 10 / 1500 | 0.7% | accept_rate only |
+| `nuts` | 1744 / 3000 | **58%** | r-hat 1.0036, 0 divergences |
+
+The three poorly-mixed variables that the mixing diagnostic has been flagging are gone.
+Note also that this path carries the surrogate's **parameter posterior** into the metamodel
+(the full 500-draw mixture) rather than collapsing it to a predictive mean — which is
+arguably the point of having fitted a Bayesian surrogate at all.
+
+**Scope is deliberately narrow, and the fallback is loud.** It activates only when every
+surrogate is a diagonal `PymcPosteriorLinearModel`. `sbi_npe` is a torch normalizing flow:
+its gradients exist but reaching them from PyTensor needs a custom `Op`, not written. When
+the model is not expressible the CLI prints why and falls back to `joint` — a performance
+flag that silently gives you the slow path is a lie.
+
+`sample_joint` is **not** replaced. It stays the default for `--method joint`, the
+backend-neutral option, and the one verified against a closed-form Gaussian.
+
+**The risk this introduces** is that two implementations of one density drift apart: if the
+PyTensor graph and `evaluate_log_prob` ever disagree, both samplers keep running and both
+keep producing plausible numbers. `tests/test_nuts_sampling.py` guards it from both sides —
+against the closed form, and against `sample_joint` on the same model.
+
+One bug caught while building it, of exactly the shape rule 12 is about: r-hat is undefined
+for a single chain and arviz returns NaN. A mixing check written the obvious way
+(`r_hat > 1.01`) would then be **False for every variable**, so a one-chain run would look
+impeccable. r-hat is now reported as `None` below two chains, with the ESS floor taking
+over, and a test pins it.
+
+
 ## Conditioning: `observed` makes the question askable at all (2026-08-11)
 
 Raised by the user as a design critique: it is awkward that the metamodel layer hand-rolls

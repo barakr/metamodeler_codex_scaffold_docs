@@ -134,13 +134,16 @@ def build_parser() -> argparse.ArgumentParser:
     meta_sample.add_argument("--seed", type=int, default=0)
     meta_sample.add_argument(
         "--method",
-        choices=["propagate", "joint"],
+        choices=["propagate", "joint", "nuts"],
         default="propagate",
         help=(
             "propagate (default): draw from the priors and apply couplings as a "
             "post-draw transform — fast, and does NOT condition on the surrogates. "
             "joint: Metropolis over the full joint log-density, including the "
-            "surrogate likelihoods, so a coupling informs both of its variables."
+            "surrogate likelihoods, so a coupling informs both of its variables. "
+            "nuts: the same density sampled with gradients via PyMC — far more "
+            "efficient, and reports r-hat and divergences, but only for models whose "
+            "surrogates are all pymc_gp; falls back to joint otherwise, saying why."
         ),
     )
     meta_subparsers.add_parser("list", help="List stored metamodel artifacts and samples")
@@ -534,7 +537,7 @@ def _meta_sample_command(
         return code
 
     ir = build_ir_from_metamodel_spec(spec)
-    if method == "joint":
+    if method in {"joint", "nuts"}:
         # The coupled joint, conditioned on the surrogates. Kept behind a flag rather
         # than made the default because it is orders of magnitude slower than prior
         # propagation and changes what the numbers mean — an opt-in, not a surprise.
@@ -550,6 +553,19 @@ def _meta_sample_command(
             # not a bug: report it the way the other commands report spec errors.
             print(f"Joint sampling unavailable: {exc}")
             return 1
+        # `nuts` is a fast path, not a different model: same density, gradients instead
+        # of a random walk. It only applies when every surrogate has a symbolic
+        # log-density, so fall back rather than fail — but say so, because silently
+        # getting the slow sampler is how a performance flag becomes a lie.
+        use_nuts = method == "nuts"
+        if use_nuts:
+            from bayesian_metamodeling.meta.nuts_sampling import nuts_supported
+
+            ok, reason = nuts_supported(ir, surrogates)
+            if not ok:
+                print(f"--method nuts unavailable ({reason}); falling back to joint.")
+                use_nuts = False
+
         artifact = sample_joint_to_store(
             spec=spec,
             ir=ir,
@@ -558,10 +574,18 @@ def _meta_sample_command(
             chains=chains,
             seed=seed,
             surrogates=surrogates,
+            sampler="nuts" if use_nuts else "metropolis",
         )
+        _method_label = artifact.get("method", "random_walk_metropolis")
+        _extra = ""
+        if artifact.get("r_hat"):  # absent for the random walk, None for a single chain
+            _extra = (
+                f", r_hat_max={max(artifact['r_hat'].values()):.4f}"
+                f", divergences={artifact.get('divergences', 0)}"
+            )
         print(
-            f"Joint sampling: {len(surrogates)} surrogate(s) conditioned on, "
-            f"accept_rate={artifact['accept_rate']:.2f}"
+            f"Joint sampling [{_method_label}]: {len(surrogates)} surrogate(s) "
+            f"conditioned on, accept_rate={artifact['accept_rate']:.2f}{_extra}"
         )
         # Say what was held fixed. Two runs of the same spec, one conditioned and one not,
         # answer different questions and land in the same store — the reader needs to be

@@ -129,7 +129,14 @@ connected variable); under `propagate` it only flows downstream. Observing a
 `deterministic` coupling's target is refused by the builder, since that value is computed.
 Both paths record `observed` in `inference_data.json`.
 
-`inference_data.json` records `method` for both paths, so a stored dataset says how it
+- `nuts` (`meta/nuts_sampling.py`) — the **same density as `joint`**, written as a PyTensor
+  graph so NUTS can use gradients. Applies only when every surrogate is a diagonal
+  `pymc_gp` (linear regression, hence a symbolic predictive density); falls back to `joint`
+  with a printed reason otherwise. On the TCR metamodel: worst-variable ESS 58% against
+  0.7%, plus r-hat and divergence counts. r-hat is reported as `None` for a single chain
+  rather than as the NaN that would silently pass every mixing check.
+
+`inference_data.json` records `method` for all three paths, so a stored dataset says how it
 was made. Correctness of `joint` is pinned against a closed-form Gaussian in
 `tests/test_joint_sampling.py`, and against both surrogate backends in
 `tests/test_joint_sampling_backends.py` (`slow`; NPE `log_prob` is ~100x the cost of
@@ -303,7 +310,7 @@ bayesmm surrogate eval <spec.json> --inputs <json> --n N
 bayesmm surrogate list                 # List surrogate artifacts
 
 bayesmm meta build <spec.json>         # Build metamodel IR
-bayesmm meta sample <spec.json> --draws D --tune T [--method propagate|joint]
+bayesmm meta sample <spec.json> --draws D --tune T [--method propagate|joint|nuts]
 bayesmm meta list                      # List metamodel samples
 
 bayesmm tutorial                       # Print workflow guide

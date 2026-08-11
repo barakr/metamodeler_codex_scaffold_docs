@@ -366,8 +366,14 @@ def sample_joint_to_store(
     chains: int,
     seed: int,
     surrogates: dict[str, SurrogateModel] | None = None,
+    sampler: str = "metropolis",
 ) -> dict[str, Any]:
     """Sample the joint and persist it in the same layout as `sample_metamodel`.
+
+    `sampler` selects HOW the same density is explored — "metropolis" (gradient-free,
+    works for any surrogate) or "nuts" (gradients via PyMC, only for models whose
+    surrogates have a symbolic log-density). It does not change WHAT is sampled, which
+    is why both land in the same store and are told apart by the recorded `method`.
 
     Writing the identical files means `meta list`, the notebooks and anything else
     reading `samples_dataset.json` keep working regardless of which method produced
@@ -383,9 +389,16 @@ def sample_joint_to_store(
     from bayesian_metamodeling.storage._filelock import locked_registry
 
     compiled = compile_metamodel(ir, backend=getattr(spec, "ppl_backend", "pymc"))
-    samples, diagnostics = sample_joint(
-        compiled, draws=draws, tune=tune, chains=chains, seed=seed, surrogates=surrogates
-    )
+    if sampler == "nuts":
+        from bayesian_metamodeling.meta.nuts_sampling import sample_nuts
+
+        samples, diagnostics = sample_nuts(
+            compiled, draws=draws, tune=tune, chains=chains, seed=seed, surrogates=surrogates
+        )
+    else:
+        samples, diagnostics = sample_joint(
+            compiled, draws=draws, tune=tune, chains=chains, seed=seed, surrogates=surrogates
+        )
 
     sample_id = uuid4().hex
     out_dir = Path("tmp/metamodel_samples") / sample_id
@@ -442,8 +455,12 @@ def sample_joint_to_store(
         "inference_data_path": str(inference_path),
         "samples_dataset_path": str(dataset_path),
         "accept_rate": diagnostics["accept_rate"],
+        "method": diagnostics["method"],
         # Surfaced so the CLI can warn; a stored dataset whose chain never moved is
         # worse than no dataset, because it looks like an answer.
         "poorly_mixed": diagnostics["poorly_mixed"],
         "ess": diagnostics["ess"],
+        # NUTS-only, absent for the random walk — the CLI prints them when present.
+        "r_hat": diagnostics.get("r_hat"),
+        "divergences": diagnostics.get("divergences"),
     }
