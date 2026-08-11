@@ -1,5 +1,59 @@
 # Status: Metamodeling Automation Framework
 
+## Tutorial 7 rewritten to teach coupling as probability (2026-08-11)
+
+Three problems, all reported by the user reading it as a newcomer would.
+
+**1. The prerequisites spoke in implementation jargon.** The table said "no PPL backend at
+all", `"ppl_backend"` "names a *compiler target*", `compile_metamodel` "returns a plain
+dataclass". A reader who does not already know what a PPL or an IR is learns nothing from
+that. Rewritten in plain language, with the one unavoidable term defined once, inline.
+
+**2. "Why does coupling need no PyMC or SBI?"** — a good question that deserved a real
+answer rather than a parenthetical. It is now its own short section: the libraries were for
+*fitting* (T5/T6), that work is finished and saved as an artifact by the time you get here,
+and coupling itself needs only draws from a normal, an affine transform, and a
+log-density comparison. Verified rather than asserted: nothing under `meta/` imports
+`pymc`, `torch` or `sbi`.
+
+Also states accurately what `ppl_backend` does, which is nearly nothing —
+`compile_metamodel` validates the string against two allowed values and stores it; its only
+effect on any number is that `"numpyro"` multiplies coupling noise by 1.05 in the propagate
+path. The transferable lesson (a config field that looks like a dependency may be a
+statement of intent) is drawn explicitly, with `pymc_gp` named as the same trap.
+
+**3. Coupling was never written down as probability.** It was described as a sentence you
+add to a spec and shown as a scatter plot. A student could finish unable to say what density
+they had sampled from. There is now a section building it in three small steps — independent
+priors multiply; the assertion is a *scoring factor* `φ(y,C) = Normal(C; y, σ)`; the coupled
+joint is their product — followed by a computed three-panel figure and this table:
+
+```
+                              sd(y)    sd(C)     corr
+prior, uncoupled              1.000    1.000    0.000
+coupled joint (exact)         0.711    0.711    0.978
+propagate (sampled)           0.998    1.010    0.989
+```
+
+The correlation is nearly identical, so a scatter plot cannot distinguish the two — which is
+precisely why the confusion survives in real work. `sd(y)` can: the true joint narrows the
+coupling's *source* to 0.711 (exact, from inverting the precision matrix), while propagate
+leaves it at its prior width. That single number is the propagation-vs-inference distinction,
+made measurable.
+
+Writing the coupling as a factor rather than as `p(C | y)` matters and is called out: read it
+as a conditional and you have silently assumed `C` is *generated* from `y`, which is
+`--method propagate` chosen without realising you chose. A callout says so.
+
+**4. Structure was wrong** — the recap and troubleshooting tables sat in the *middle*, and
+step numbers ran 1, 2, 3, 6, 7 after the fitted-surrogate section was appended. Now: framing
+sections, Steps 1-5 in order, then recap, troubleshooting, final check. A "Where this sits in
+the series" table connects T1/T3/T4/T5/T6 to what T7 does with each.
+
+Verified: T7 executes clean in `py312_bayesmm_all` and its self-check passes; the full
+10-notebook suite is green; every cell keeps its nbformat id.
+
+
 ## Full pedagogical audit and repair of the tutorial series (2026-08-11)
 
 Ten independent reviewers, one per notebook, then a per-notebook repair pass, then my own
