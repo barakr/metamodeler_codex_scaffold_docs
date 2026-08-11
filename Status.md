@@ -1,5 +1,44 @@
 # Status: Metamodeling Automation Framework
 
+## A joint chain that never moved reported `accept_rate=0.29` (2026-08-11)
+
+Found while wiring a *real* fitted surrogate into a metamodel — something no tutorial had
+ever done (every coupled spec in the curriculum referenced `dummy_A/B/C` stub artifacts
+with no `backend_payload`).
+
+A `pymc_gp` fit of an exactly-linear truth has predictive sd ~1e-5, so its likelihood is
+effectively a delta function. Conditioning on it puts the posterior on a thin ridge;
+tuning then shrinks every proposal scale to ~6e-6 in order to keep accepting, and the
+chain explores a ~3e-5 sliver of a distribution whose real width is ~0.6. Result:
+
+```
+var   prior sd  propagate    joint
+a         0.60      0.600    0.000
+b         0.60      0.609    0.000
+y         3.00      2.971    0.000
+```
+
+Those zeros read as "conditioning pinned them precisely". They actually mean the sampler
+went nowhere. And `accept_rate` was **0.29** — by the only diagnostic reported, the run
+looked healthy. A coordinate-wise random walk cannot climb a ridge: to move `a` it must
+move `y` by the same amount in the same step, which it essentially never proposes.
+
+**Fix:** `sample_joint` now computes a per-variable effective sample size and reports
+`poorly_mixed` — free variables with ESS < 20. Both go into `inference_data.json`, and
+`bayesmm meta sample --method joint` prints a warning naming the variables and the usual
+cause. 20 is deliberately low: this is a "this chain told you nothing" alarm, not a
+convergence standard.
+
+**This is not hypothetical on real work.** The TCR metamodel flags
+`contact_radius`, `rigidity_kT_nm2` and `time_sec` — matching the ESS ≈ 10 measured by
+hand when notebook 03 gained its ESS column. The framework now says it without anyone
+computing it.
+
+**Tested in both directions** (`tests/test_joint_sampling_mixing_diagnostic.py`): a
+razor-sharp likelihood must be flagged, and a well-mixing chain must NOT be. A warning
+that fires on healthy runs is trained away within a week, which would leave us worse off
+than before.
+
 ## `pymc_gp` is not a Gaussian process, and the tutorials were teaching that it was (2026-08-11)
 
 Found during a full pedagogical audit of the tutorial series. `_fit_pymc_bayesian_linear`

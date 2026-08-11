@@ -563,6 +563,25 @@ def _meta_sample_command(
             f"Joint sampling: {len(surrogates)} surrogate(s) conditioned on, "
             f"accept_rate={artifact['accept_rate']:.2f}"
         )
+        # A healthy accept_rate does not mean the chain went anywhere. With a sharp
+        # surrogate likelihood the posterior sits on a thin ridge, tuning shrinks every
+        # proposal to match, and the sampler accepts plenty of microscopic moves while
+        # exploring almost none of the distribution. Say so here rather than let the
+        # numbers be read as a result.
+        stuck = artifact.get("poorly_mixed") or []
+        if stuck:
+            print(
+                f"  WARNING: {len(stuck)} variable(s) barely moved: {', '.join(stuck)}.\n"
+                "  Their effective sample size is near zero, so their summaries mean "
+                "nothing —\n"
+                "  a high accept_rate does not rule this out. This usually means a "
+                "surrogate\n"
+                "  likelihood is far sharper than the priors, putting the posterior on a "
+                "ridge a\n"
+                "  coordinate-wise random walk cannot follow. Raise --tune, or loosen the "
+                "coupling\n"
+                "  sigma / refit the surrogate with honest noise."
+            )
     else:
         artifact = sample_metamodel(
             spec=spec,

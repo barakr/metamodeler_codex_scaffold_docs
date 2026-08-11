@@ -288,6 +288,9 @@ def sample_joint(
         proposed_total += sum(attempted.values())
         final_scales = dict(scales)
 
+    ess = {name: _effective_sample_size(out[name]) for name in names}
+    stuck = sorted(n for n, value in ess.items() if n in free and value < _MIN_ESS)
+
     diagnostics = {
         "method": "random_walk_metropolis",
         "accept_rate": (accepted_total / proposed_total) if proposed_total else float("nan"),
@@ -295,8 +298,54 @@ def sample_joint(
         "derived_variables": sorted(derived),
         "surrogates_loaded": sorted(surrogates),
         "proposal_scales": final_scales,
+        "ess": ess,
+        # Variables the chain failed to explore. See `_MIN_ESS` for why this is
+        # reported separately from `accept_rate`.
+        "poorly_mixed": stuck,
     }
     return out, diagnostics
+
+
+# A coordinate-wise random walk cannot climb a ridge. When a surrogate likelihood is
+# very sharp — a `pymc_gp` fit of an exactly-linear truth has predictive sd ~1e-5 —
+# the posterior concentrates on a thin manifold, tuning shrinks every proposal scale
+# to match, and the chain then explores a ~1e-5 sliver of a distribution whose real
+# width is O(1). The damning part is that `accept_rate` looks perfectly healthy while
+# this happens (0.29 in the case that motivated this), because the moves it accepts
+# are all tiny. Reporting such a run as a result is exactly the silent-no-op failure
+# CLAUDE.md rule 12 is about, so the diagnostics name it.
+#
+# 20 is deliberately low: this is a "this chain told you nothing" alarm, not a
+# convergence standard. Anything near it is already unusable.
+_MIN_ESS = 20.0
+
+
+def _effective_sample_size(samples: np.ndarray) -> float:
+    """n / (1 + 2 * sum of positive autocorrelations), summed over chains.
+
+    Deliberately the crude initial-positive-sequence estimator rather than an ArviZ
+    dependency: this runs on every joint sample, ArviZ is an optional extra, and the
+    number is used as an alarm threshold rather than a reported statistic.
+    """
+    total = 0.0
+    for chain in np.atleast_2d(np.asarray(samples, dtype=float)):
+        n = chain.size
+        if n < 4:
+            total += float(n)
+            continue
+        centered = chain - chain.mean()
+        variance = float(centered.var())
+        if variance <= 0.0:  # a genuinely frozen coordinate
+            continue
+        max_lag = min(n - 2, 200)
+        tau = 1.0
+        for lag in range(1, max_lag + 1):
+            rho = float(np.dot(centered[:-lag], centered[lag:]) / ((n - lag) * variance))
+            if rho <= 0.05:
+                break
+            tau += 2.0 * rho
+        total += n / tau
+    return total
 
 
 def sample_joint_to_store(
@@ -384,4 +433,8 @@ def sample_joint_to_store(
         "inference_data_path": str(inference_path),
         "samples_dataset_path": str(dataset_path),
         "accept_rate": diagnostics["accept_rate"],
+        # Surfaced so the CLI can warn; a stored dataset whose chain never moved is
+        # worse than no dataset, because it looks like an answer.
+        "poorly_mixed": diagnostics["poorly_mixed"],
+        "ess": diagnostics["ess"],
     }
