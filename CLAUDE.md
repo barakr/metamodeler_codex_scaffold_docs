@@ -163,6 +163,18 @@ was made. Correctness of `joint` is pinned against a closed-form Gaussian in
     degrades when a dependency is absent needs a mode where that degradation is
     an error. Otherwise "green" means "nothing ran" and nobody can tell. See
     *Guarding against silent no-ops* below for the mechanisms already available
+13. **Explain the developer's actual situation before the technical detail** —
+    prominence must track *consequence to the reader*, not how interesting a
+    finding was to derive. State plainly, up front and unprompted: **where the
+    work landed** (branch? worktree? does the trunk have it? how do they collect
+    it?), **anything destructive** avoided or still latent, and **what changed in
+    practice**. Assume no familiarity with git plumbing, CI internals or build
+    systems, and define the term on first use. This exists because a session once
+    delivered pages on shader path resolution and test-collection floors while
+    mentioning only in passing that every commit sat on an unmerged branch in a
+    git worktree — the one fact without which none of the rest would ever have
+    reached the trunk. Work nobody knows how to collect is work nobody gets.
+    Mirrored as rule 8 in `projects/tcr_signaling/CLAUDE.md`
 
 ## Uncommitted work is a reportable failure
 
