@@ -231,5 +231,13 @@ def test_an_sbi_surrogate_falls_back_rather_than_being_mis_sampled():
         ],
     )
     ok, reason = nuts_supported(ir, {"npe": model})
+    # The refusal itself is the contract, and it holds in every environment.
     assert not ok, "an sbi_npe flow must not be claimed as NUTS-expressible"
-    assert "pymc_gp" in reason
+    # The *reason* legitimately differs by environment, and asserting only the
+    # surrogate-specific wording made this fail in CI's sbi-only job: `nuts_supported`
+    # checks for PyMC first and returns "PyMC is not installed" before ever inspecting
+    # the surrogate. Both are correct refusals; which one you get depends on the env.
+    if _has_pymc():
+        assert "pymc_gp" in reason, reason
+    else:
+        assert "PyMC is not installed" in reason, reason

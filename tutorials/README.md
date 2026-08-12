@@ -98,6 +98,20 @@ beacon. It is marked `slow`, so it is excluded from the default suite:
 pytest -m slow tests/test_tutorial_integration.py
 ```
 
+### Sampling budget
+
+Tutorial 7c samples a coupled model several times, so it carries a knob:
+
+```bash
+MM_TUTORIAL_DRAWS=6000 jupyter lab      # default is 1500
+```
+
+The default is small on purpose — it has to finish on a student laptop and inside a CI
+runner's per-cell timeout, and the notebook's claims are structural (a truth recovered, a
+ridge present) rather than precision estimates. Raising it is a good exercise in its own
+right: the posterior *means* barely move, the intervals narrow, and effective sample size
+rises roughly in proportion.
+
 Setting `REQUIRE_TUTORIAL_BACKENDS=1` turns any preflight skip into a failure — use
 it when you intend to verify the science rather than the plumbing. The scheduled
 `Deep CI` workflow runs exactly that, with every backend installed.

@@ -1,5 +1,50 @@
 # Status: Metamodeling Automation Framework
 
+## Deep CI red on three jobs — two distinct causes, both mine (2026-08-12)
+
+The nightly `Deep CI` failed on `full`, `pymc env` and `sbi env`. `main env (no backends)`
+passed, which was itself the clue: both faults needed a backend to appear.
+
+**1. `sbi env` — an over-specific assertion.**
+`test_an_sbi_surrogate_falls_back_rather_than_being_mis_sampled` asserted
+`"pymc_gp" in reason`. In an sbi-only environment `nuts_supported` checks for PyMC *first*
+and returns early with `"PyMC is not installed"`, never reaching the surrogate. Both are
+correct refusals; only one wording was allowed for. The test now asserts the contract that
+holds everywhere — **the refusal itself** — and checks the specific wording only when PyMC
+is present. Verified in `py312_bayesmm_sbi` (the job that failed) and in the default env.
+
+**2. `full` and `pymc env` — Tutorial 7c hit the 600s per-cell timeout.**
+Its Step 2 cell fitted three surrogates and ran two NUTS chains at 3000 draws / 1500 tune ×
+2 chains. Comfortable here, over the limit on a CI runner. Reduced to 1500/750 and the fits
+to 300 draws: **97s locally**, and the science is unchanged or slightly better —
+`log_decay` 6.001 ± 0.164 against a truth of 6.0, `depletion` 219.6 ± 23.8 against 220,
+ridge `sd(combo)` 0.33 vs 0.91/0.88, r-hat 1.0032, 0 divergences.
+
+### Sampling budget is now a knob, not a hard-coded number
+
+Rather than pick one number for every machine, 7c reads `MM_TUTORIAL_DRAWS` (default 1500).
+Deliberately one env var in one notebook — the two others that sample are already cheap
+enough — because a per-machine auto-tuning scheme would be more machinery than the problem
+deserves.
+
+The default has to finish on a student laptop and inside a CI runner's per-cell timeout,
+and the notebook's claims are structural (a truth recovered, a ridge present) rather than
+precision estimates. Raising it is a real exercise, and the numbers back the prose —
+measured at 1500 vs 4000 draws:
+
+| | means | r-hat | ridge sd(combo) vs individual |
+|---|---|---|---|
+| 1500 (default) | `log_decay` 6.00, `depletion` 220 | 1.0032 | 0.33 vs 0.91 / 0.88 |
+| 4000 | `log_decay` 6.00, `depletion` 220 | 1.0016 | 0.33 vs 0.88 / 0.88 |
+
+Means barely move; r-hat improves; the structural claim is identical. Documented in
+`tutorials/README.md`.
+
+Verified: `tests/test_nuts_sampling.py` green in both `py312_bayesmm_sbi` and the default
+env; 7c executes in 97s at the default and passes its self-check at 1500 and at 4000; fast
+suite green; `ruff format --check` and `ruff check` clean on 111 files.
+
+
 ## The default environment now carries both surrogate backends (2026-08-11)
 
 `environment.yml` (`py314_bayesmm`) gains pymc, arviz, pytorch and sbi;
