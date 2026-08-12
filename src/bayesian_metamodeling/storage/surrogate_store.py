@@ -39,6 +39,16 @@ def _digest_json(payload: dict) -> str:
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
 
 
+def digest_surrogate_spec(spec: SurrogateSpec) -> str:
+    """The digest recorded at fit time, computed the one way it is defined.
+
+    Public because the *load* path has to recompute it to detect drift (S4b). If fit and
+    load each rolled their own, they would eventually disagree and the check would report
+    drift that isn't there — a false alarm being the fastest way to get a check ignored.
+    """
+    return _digest_json(spec.model_dump(mode="json"))
+
+
 def list_surrogate_artifacts() -> list[dict[str, str]]:
     registry = _load_registry()
     return [
@@ -69,7 +79,6 @@ def persist_surrogate_artifact(
     backend_payload_path = artifact_dir / "backend_payload.json"
     backend_payload_path.write_text(payload_path.read_text(encoding="utf-8"))
 
-    spec_payload = spec.model_dump(mode="json")
     versions = {
         "python": platform.python_version(),
         "platform": platform.platform(),
@@ -81,7 +90,7 @@ def persist_surrogate_artifact(
         "artifact_id": artifact_id,
         "spec_name": spec.name,
         "backend": spec.backend,
-        "spec_digest": _digest_json(spec_payload),
+        "spec_digest": digest_surrogate_spec(spec),
         "dataset_digest": hashlib.sha256(dataset_digest.encode("utf-8")).hexdigest(),
         "variable_lists": {"inputs": spec.inputs, "outputs": spec.outputs},
         "io_signature": {"inputs_ordered": spec.inputs, "outputs_ordered": spec.outputs},

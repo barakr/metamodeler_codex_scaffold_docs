@@ -1,5 +1,28 @@
 # Status: Metamodeling Automation Framework
 
+## Security review, stage 2b: provenance that is actually checked (2026-08-12)
+
+`D7` + `S4b`. Artifacts have always recorded `spec_digest` and `dataset_digest`, and nothing
+ever read them back. Recording provenance without comparing it is book-keeping, not
+provenance (rule 3).
+
+**Now:** `storage/artifact.py` holds a typed `SurrogateArtifact` read model, and
+`_load_and_validate_artifact` compares the recorded spec digest against the current spec.
+`digest_surrogate_spec` is public so fit and load compute it *the one way it is defined* — if
+each rolled its own they would eventually disagree, and a check that cries wolf is a check
+people learn to ignore.
+
+**Drift warns; it does not refuse.** Editing a spec and re-evaluating before re-fitting is an
+ordinary mid-workflow state, and refusing to load would make edit-and-retry unusable. But it
+cannot be silent, or a number gets attributed to a model that never produced it. The warning
+names the fix (`bayesmm surrogate fit`), and a test asserts it does.
+
+**`extra="allow"` on the artifact model, unlike every spec model.** Artifacts are *data at
+rest* written by older versions of this package. Forbidding unknown keys would make every
+field ever added a breaking change for existing stores — the opposite of what a provenance
+record is for. Missing *required* keys still fail loudly, naming the file, instead of failing
+several frames deep inside numpy.
+
 ## Security review, stage 2a: the sweep engine is a library, not a CLI internal (2026-08-12)
 
 `D1` from `REVIEW_AND_UPGRADE_PLAN.md`, the highest-value item in the review. No behaviour
