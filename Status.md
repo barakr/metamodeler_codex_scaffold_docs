@@ -1,5 +1,46 @@
 # Status: Metamodeling Automation Framework
 
+## GitHub Actions bumped to Node 24 — `checkout@v7`, `setup-python@v7` (2026-08-12)
+
+Every job in all five workflows was emitting the same deprecation notice: `actions/checkout@v4`
+and `actions/setup-python@v5` are built on **Node.js 20**, which GitHub has retired. The runner
+was force-running them on Node 24 anyway, so nothing was broken — but that grace period is
+exactly the kind of thing that ends without warning, and it would end in all five workflows at
+once. Bumped now, while it is a two-line edit rather than an outage.
+
+**Which versions, and why not the minimum.** Node 24 arrives at `checkout@v5` and
+`setup-python@v6`, so those would have silenced the warning. Took the current majors instead —
+`v7` and `v7` — after checking that neither's breaking changes reach us:
+
+| Release | Breaking change | Our exposure |
+|---|---|---|
+| `checkout@v6` | credentials persisted to a separate file | none — plain token checkout, incl. `submodules: true` |
+| `checkout@v7` | blocks fork-PR checkout under `pull_request_target` / `workflow_run` | **none — we use neither trigger** |
+| `setup-python@v6` | Node 24 | — |
+| `setup-python@v7` | the `pip-install` input was removed | **none — we pass only `python-version`** |
+
+Both call sites are as plain as they get: `checkout` with `submodules:` true or false, and
+`setup-python` with `python-version` alone. No `cache:`, no credentials handling of our own.
+Verified by grep before editing rather than assumed. Going to the minimum would have bought a
+second bump in a few months for no reduction in risk.
+
+`setup-python@v7` also fixes a detail that matters here specifically: it classifies stderr
+warnings as *warnings* rather than errors in annotations. `Deep CI`'s skip audit reads
+`::error::` annotations as its failure signal, so a dependency spuriously emitting errors is
+noise in the one channel that is supposed to be quiet.
+
+**Scope: 8 of 10 usages.** The four parent workflows are done. The two in
+`projects/tcr_signaling/.github/workflows/ci.yml` are a **separate repository** — that change
+has to be committed there, pushed there, and only then can the parent's gitlink move, which is
+never automatic (rule 9). Left for the user to authorize; `KS model CI` keeps warning until
+then, and keeps passing.
+
+**Coverage note.** `Submodule notebooks CI` is the job most exposed to a checkout regression
+(it is the only one that checks out the submodule *and* builds its native model), and it runs
+only weekly. But `Interface CI` also does `submodules: true` and runs on **every push**, so the
+submodule-checkout path under `checkout@v7` is exercised immediately rather than in a week.
+
+
 ## Tutorial 7c blew Deep CI's cell timeout — the cause was `PYTENSOR_FLAGS: cxx=` (2026-08-12)
 
 Three Deep CI runs failed the same way after 7c landed: `Tutorial_7c.ipynb` hit the
