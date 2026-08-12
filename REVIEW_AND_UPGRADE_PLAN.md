@@ -1,6 +1,6 @@
 # Code Design & Security Review — Upgrade Plan
 
-**Date:** 2026-08-12 · **Branch:** `feature/design-security-review` · **Status:** proposal only, nothing implemented
+**Date:** 2026-08-12 · **Branch:** `feature/design-security-review` · **Status:** decisions taken, nothing implemented
 
 **Scope reviewed:** `src/bayesian_metamodeling/` (47 files, 6,115 lines), the 5 CI workflows,
 the 20 shipped specs, and the tracked surrogate artifacts. Not reviewed: the KS model's C/C++
@@ -31,6 +31,46 @@ Nothing here is on fire. No shipped artifact is exploitable today, and the reali
 attacker for a lab metamodeling tool is "a colleague sends me a file", not a targeted
 adversary. But the false-assurance items are worth fixing precisely because this codebase's
 own stated values are about not letting checks lie.
+
+---
+
+## Decisions taken (2026-08-12)
+
+| # | Question | Decision |
+|---|---|---|
+| Q1 | Is a spec trusted input? | **Trusted, stated loudly — plus show the command before running.** Document the boundary; make `bayesmm run` print the exact command and confirm when the entrypoint resolves outside the repo. Visibility, not containment, and labelled as such. |
+| Q2 | The sbi pickle | **Fix properly now.** Replace pickle with `state_dict` + architecture config, load with `weights_only=True`. Existing `sbi_npe` artifacts must be refitted (none are in git). |
+| Q3 | Appetite | **All three tiers.** |
+| Q4 | DOE defaults | **Document + warn; do not change defaults.** Warn on non-power-of-2 Sobol `n`, validate grid values against `support`, teach both in Tutorial 4. `scramble` stays `False` so no existing numbers move. |
+| Q5 | Supply chain | **Two-track, security-only alerts.** `environment.yml` untouched as the onboarding path; add generated `conda-lock` files for CI and opt-in exact reproduction; Dependabot in **security-only** mode; CI check that the lock matches the manifest. |
+
+**Why Q1 and Q5 are separate axes.** The concern that prompted Q1 — "a package I imported put a
+vulnerability in everything" — is a *dependency* compromise (event-stream, xz-utils, PyPI
+typosquatting). That is Q5, not Q1. Measured on the default environment:
+
+| | count |
+|---|---|
+| Packages declared by this project | 7 |
+| Packages installed | 182 |
+| Arrived as someone else's dependency | **175** |
+| Pinned by lockfile or hash | **0** |
+
+That is where the horror-story risk lives, and Q5 addresses it. Whether a *spec* is trusted is
+a different question with a different answer, and conflating them in one document was a flaw
+in the first draft of this review.
+
+**Why "trusted spec" is not a security hole.** Every tool in this class executes commands named
+in a config file: `make`, `npm run`, `docker build`, and — closest to what `bayesmm` is —
+Snakemake, Nextflow and CWL. None of them sandbox. "Don't run a stranger's Makefile" is a
+well-understood rule; "don't run a stranger's spec" is the same rule. The hole is not the trust
+boundary, it is *claiming a sandbox that isn't there*, which is the current state (**S2**).
+
+**Alert fatigue is the real UX risk in Q5, and it is avoidable.** Dependabot in version-update
+mode on a 182-package tree means dozens of PRs a month, everyone stops reading them, and the
+channel becomes worse than nothing. Security-only mode fires on published CVEs affecting the
+pinned set — realistically a handful a year, each worth reading. A lockfile itself does **not**
+slow onboarding: conda's slowest step is dependency solving, and installing from a lock skips
+it entirely.
 
 ---
 
@@ -65,9 +105,11 @@ being "trusted", because the guard is bypassable in four ways (see **S2**). That
 position is worse than either endpoint, because it teaches the reader that specs are
 sandboxed.
 
-**This is decision Q1 below.** My recommendation is **trusted input, stated loudly** — it
-matches reality, it is honest, and pretending otherwise would mean building a sandbox this
-project has no reason to build.
+**Decided (Q1): trusted input, stated loudly — plus visibility.** Documenting the boundary
+matches reality; pretending otherwise would mean building a sandbox this project has no reason
+to build. On top of that, `bayesmm run` will show the command it is about to execute and
+confirm when the entrypoint resolves outside the repo (**S2d**) — not a sandbox, and never to
+be described as one, but it makes the moment of trust visible rather than implicit.
 
 ---
 
@@ -133,8 +175,11 @@ my trained surrogate, try it" between two students, or a future decision to comm
   determined attacker, and **say so**).
 - **(c) Both, staged** — (b) now, (a) when convenient.
 
-**My recommendation: (c).** (b) is an hour and removes the false assurance immediately;
-(a) is the correct end state but is the only item in this review that forces a refit.
+> **DECIDED: (a) — fix it properly now.** The correct end state, chosen deliberately over the
+> staged route. Consequence to plan for: **every existing `sbi_npe` artifact must be refitted.**
+> Nothing in git breaks (all tracked artifacts are `pymc_gp`), but any artifact in a student's
+> local `tmp/` becomes unloadable, and Tutorial 6 must be re-run once. See *Student
+> communication* in Part 4 — this is the item that needs a heads-up before it lands.
 
 ---
 
@@ -174,7 +219,20 @@ catch "I pointed at the wrong directory".
 coherent if Q1 = untrusted, and it is a lot of work for a threat this project probably
 doesn't have.
 
-**My recommendation: (b).** Cheap, honest, keeps the accident-catching value.
+> **DECIDED: (b) + a new visibility feature.** Relabel the guard as a usability check (it does
+> genuinely catch "I pointed at the wrong directory"), fix the Windows separator gap, and
+> document the trust boundary in `README.md` and `CLAUDE.md`.
+>
+> **Additionally — new work item S2d, "show the command":** `bayesmm run` prints the exact
+> command it is about to execute, and asks for confirmation when the entrypoint resolves
+> outside the repo root. Roughly 30 lines.
+>
+> This is deliberately **not** containment and must never be described as such. It is the
+> `bayesmm` equivalent of reading a Makefile before typing `make` — it converts "I ran it
+> without realising what it does" into a deliberate act. Design notes for whoever implements
+> it: it must be suppressible for non-interactive use (CI, sweeps, notebooks) via a flag or
+> env var, it must not fire once per DOE point (once per sweep), and the suppression must be
+> visible in the output so a silenced prompt is not mistaken for no prompt.
 
 ---
 
@@ -264,8 +322,25 @@ published scientific method, "which pymc produced this figure?" is answerable on
 after the fact. A lockfile or a `constraints.txt` for the tutorial environments would make
 a student's run reproducible a year from now.
 
-Deliberately flagged as a **judgement call, not a recommendation** — lockfiles add
-maintenance, and four conda environments already exist.
+> **DECIDED: two-track, security-only alerts.** Four parts:
+>
+> 1. **`environment.yml` is untouched.** It remains the documented onboarding path — flexible,
+>    solver-resolved, identical experience for a new student. This is non-negotiable: onboarding
+>    must not regress.
+> 2. **Generated `conda-lock` files** for macOS / Linux / Windows, used by CI and offered to
+>    anyone who needs exact reproduction ("reproduce the 2024 figures"). Installing from a lock
+>    is *faster* than solving, so this is not a tax on anyone who opts in.
+> 3. **Dependabot in security-only mode.** Published CVEs against the pinned set only — a
+>    handful a year. Explicitly **not** version-update mode: dozens of PRs a month on a
+>    182-package tree would train everyone to ignore the channel, which is worse than having no
+>    channel at all.
+> 4. **A CI check that the lock matches the manifest**, so a dependency change with a stale lock
+>    fails loudly instead of silently drifting. This is the same guard-against-silent-no-ops
+>    discipline as the junit floor and the sanctioned-skip audit.
+>
+> Not chosen: `--require-hashes`. It is the only option that actually stops a tampered PyPI
+> artifact, but with conda + torch across four environments the regeneration friction is high
+> enough that it would rot. Revisit if the project is ever published for outside use.
 
 ---
 
@@ -351,6 +426,21 @@ The research specs use `n_points: 64` (a power of 2) and the tutorial spec sets
 `scramble: true` explicitly, so **no committed result is affected**. The exposure is to the
 next person who writes a spec, which for this project is a student.
 
+> **DECIDED: document and warn; do not change defaults.**
+>
+> - **Do:** emit a warning when Sobol `n_points` is not a power of 2, explaining what balance
+>   property is lost. Validate grid values against `io_schema` `support`, and cross-check grid
+>   keys against declared input names so a typo fails at validation rather than mid-sweep.
+> - **Do:** teach both points in Tutorial 4. The unscrambled-corner behaviour is unusually good
+>   teaching material — "your first design point sits at every variable's minimum" is a concrete
+>   way to explain what scrambling is *for*, and Tutorial 4 already exists to teach exactly this
+>   choice.
+> - **Do not:** flip the `scramble` default to `True`. It would be the methodologically tidier
+>   default and would match scipy, but it changes which points get sampled, so every re-run
+>   would produce numbers that differ from what the current tutorials show. Not worth it while
+>   students are mid-course. Note in the docs that the default *differs from scipy's*, so a
+>   reader who knows scipy is not surprised.
+
 ### D6 — Dead code (rule 7 says delete it)
 
 - `_fit_linear` (`backends.py:414`) — **no caller anywhere in `src/`**; only 2 test
@@ -372,39 +462,62 @@ still exists; if not, this is ~80 lines and three classes of removable complexit
 
 ---
 
-## Part 3 — Proposed plan, tiered by risk to students
+## Part 3 — Execution plan
 
-### Tier 0 — invisible to students, no behaviour change (~half a day)
+All three tiers are approved, so the useful ordering is no longer "by risk appetite" but **by
+blast radius and dependency order**. Four stages, each independently committable and each
+leaving the repo green. Stage 1 can land today; stage 4 is the only one students must be told
+about in advance.
 
-| # | Item | Breaks |
+### Stage 1 — Honest guards and cheap hardening · breaks nothing · ~half a day
+
+Do this first because it removes the false assurance, which is the whole reason this review
+exists. Every item is invisible to students.
+
+| # | Item |
+|---|---|
+| S6 | `permissions: contents: read` in all 5 workflows |
+| S3 | Validate `model.name` and `biomodels_id` charset (reuse the `conda_env` regex at `modelspec.py:75`) — stops an unvalidated name reaching an `rmtree`'d path |
+| S1b | Delete the misleading comment on the torch guard; keep the `hasattr` check but relabel it as the corruption check it actually is |
+| S2b | Relabel the entrypoint guard as a usability check; fix the Windows separator gap |
+| S4a | Add the containment check to `find_latest_artifact_for_spec`, matching `show_registered_run` |
+| D6 | Delete `_fit_linear` and the unused `sweep_id` parameter |
+| — | Document the trust boundary in `README.md` + `CLAUDE.md` (Q1) |
+
+**Test discipline:** `test_security_hardening.py` needs its
+`test_rejects_object_without_posterior_interface` renamed and re-documented — it currently
+reads as a security test for a control that isn't one. That rename is part of the fix, not
+cosmetic.
+
+### Stage 2 — Structure · breaks nothing student-visible · ~2–3 days
+
+| # | Item | Note |
 |---|---|---|
-| S6 | Add `permissions: contents: read` to 5 workflows | nothing |
-| S3 | Validate `model.name` + `biomodels_id` charset | nothing (all 20 specs pass) |
-| S1b | Delete the false comment/framing on the torch guard; add an honest warning | nothing |
-| S2b | Relabel the entrypoint guard as a typo-catcher; fix the Windows separator gap | nothing |
-| D6 | Delete `_fit_linear` and the unused `sweep_id` parameter | nothing |
-| S4 | Add the containment check to `find_latest_artifact_for_spec` | nothing |
+| D1 | Extract the sweep engine from `cli/main.py` into a typed `run_sweep(...)` API | The highest-value item in the review. Do it before D3, since it is where store paths are threaded through |
+| D2 | Split `backends.py` (1,112 lines) into a package, re-exporting from `__init__` | Do it before S1a — the pickle fix lands in a much smaller file afterwards |
+| D7 | Typed artifact model on the read path | |
+| S4b | Verify digests on load; **warn**, don't fail | |
+| S2d | "Show the command" before running (Q1) | Needs the non-interactive suppression path — see S2 |
 
-### Tier 1 — internal refactors, public behaviour unchanged (~2-3 days)
+### Stage 3 — DOE and spec validation · may reject existing specs · ~1 day
 
-| # | Item | Breaks |
+| # | Item | Consequence |
 |---|---|---|
-| D1 | Extract the sweep engine out of `cli/main.py`; add typed `run_sweep(...)` | nothing; **adds** the API notebooks want |
-| D2 | Split `backends.py` into a package | nothing if re-exported |
-| D3 | Make store roots explicit and configurable; stop hardcoding `tmp/` | changes where artifacts land → **needs a migration note** |
-| D7 | Typed artifact model on the read path | nothing |
-| S4 | Verify digests on load, warn on mismatch | nothing |
+| D4 | Type `design.sobol`, `extra="forbid"` | **Rejects both research specs** until the unread `ranges` key is removed or made authoritative. Decide which — my read is that `ranges` is the more natural place for a spec author to look, so making it authoritative and deriving `support` from it may be the better design |
+| D5 | Warn on non-power-of-2 Sobol `n`; validate grid values against `support`; cross-check grid keys against input names | Check all 20 shipped specs pass *before* making it an error |
+| D5 | Teach both DOE points in Tutorial 4 | Prose only |
 
-### Tier 2 — needs your decision, has visible consequences
+### Stage 4 — The disruptive one · tell the students first · ~2 days
 
-| # | Item | Breaks |
+| # | Item | Consequence |
 |---|---|---|
-| D4 | Type `design.sobol` with `extra="forbid"` | **rejects the 2 research specs** until `ranges` is removed or implemented |
-| D5 | Sobol: warn on non-power-of-2, flip `scramble` default to `True` | **changes sampled points** → any re-run produces different numbers than the current tutorials show |
-| D5 | Validate grid values against `support` | may reject existing specs — needs a check first |
-| S1a | Re-do sbi serialisation without pickle | **existing `sbi_npe` artifacts must be refitted** |
-| S7 | Lockfile / constraints for tutorial envs | new maintenance burden |
-| D8 | Drop v1 artifact support | breaks v1 artifacts if any survive |
+| S1a | Re-do sbi serialisation: `state_dict` + config, `weights_only=True` | **Existing `sbi_npe` artifacts stop loading.** Nothing in git breaks; local `tmp/` artifacts do |
+| D3 | Explicit, configurable store roots; stop hardcoding `tmp/` | Artifacts move. Needs a migration note, and ideally a one-shot `bayesmm migrate` or a clear error pointing at the old location |
+| D8 | Drop v1 artifact support (~80 lines, 3 classes) | Only after confirming no v1 artifact survives — check both students' checkouts first |
+| S7 | Two-track locks + security-only Dependabot + lock-vs-manifest CI check | Onboarding path unchanged |
+
+**Ordering constraint:** S1a and D3 both invalidate stored artifacts. Landing them in the same
+stage means students refit **once**, not twice. Do not split them across releases.
 
 ### Explicitly *not* proposed
 
@@ -416,14 +529,50 @@ still exists; if not, this is ~80 lines and three classes of removable complexit
 
 ---
 
-## Part 4 — Open decisions (details in the questions I'll ask alongside this doc)
+## Part 4 — Consequences to manage
 
-- **Q1. Trust model.** Is a spec trusted input? Gates S1, S2, and how loudly the docs speak.
-- **Q2. The sbi pickle.** Fix properly (refit required), make honest (docs + digest), or both
-  staged?
-- **Q3. Appetite.** Tier 0 only / Tier 0+1 / all three, given two students mid-course.
-- **Q4. DOE defaults.** Leave the numbers alone and only document, or fix the defaults and
-  accept that tutorial outputs shift?
+### Student communication
+
+Exactly one stage requires warning people in advance. Everything before it is invisible.
+
+**Before stage 4 lands**, both students need to know:
+
+1. **Any `sbi_npe` surrogate they have fitted locally will stop loading**, and must be refitted
+   by re-running Tutorial 6 (or `bayesmm surrogate fit`). This costs minutes, not hours. Nothing
+   they have committed is affected — all seven artifacts in git are `pymc_gp`.
+2. **Stored artifacts may move** when store roots become explicit (D3). The failure mode to
+   avoid is a silent "no artifact found"; the error must name the old location.
+
+A good forcing function: land stage 4 at a natural break in whatever they are working through,
+not mid-tutorial.
+
+### Two decisions deferred to implementation time
+
+These do not block the plan, but should not be made silently by whoever writes the code:
+
+1. **D4 — what happens to `ranges`?** Both research specs declare `design.sobol.ranges`, which
+   the planner never reads; bounds come from `io_schema.inputs[].support`. They agree today.
+   Either delete `ranges` from the two specs, or make it authoritative and derive `support`
+   from it. The second is arguably the better design — `ranges` is where a spec author would
+   naturally look — but it is a larger change. **Do not "fix" this by making the validator
+   tolerate the unread key**; that preserves exactly the silent-divergence trap the item exists
+   to close.
+2. **D8 — do any v1 artifacts survive?** Check both students' checkouts before deleting the v1
+   loading path, not after.
+
+### What this plan does not cover
+
+- The KS model's C/C++ core (`projects/tcr_signaling/models/kinetic_segregation/`) — separate
+  repository, separate review, and it has its own reference-value and portability test
+  discipline already.
+- Notebook prose quality, beyond the DOE teaching points in D5.
+- Any framework capability work. This is a hardening and structure pass only.
+
+### Status tracking
+
+`Status.md` gets an entry per stage as it lands, not now — the decisions above are a plan, and
+recording them as decisions in `Status.md` before any code moves would misrepresent the state
+of the repository. This document is the record until then.
 
 ---
 
