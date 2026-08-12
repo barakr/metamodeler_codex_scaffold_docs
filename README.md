@@ -57,6 +57,40 @@ All paths are relative to the repo root.
 4) `bayesmm runs list`
 5) `bayesmm runs show RUN_ID`
 
+## Specs are trusted input — treat one like a Makefile
+
+**Running a spec runs its author's code.** A `ModelSpec` contains an `entrypoint`:
+
+```json
+"artifact": { "type": "local", "entrypoint": ["python", "models/lck_activity/run.py"] }
+```
+
+`bayesmm run` executes that command once per design point. This is not a loophole — it is
+*the* composition mechanism, and it is what lets a C++ model, a Python model and an SBML
+model be swept by the same tool without any of them importing the framework.
+
+The practical rule is the one you already apply to build files:
+
+> **Do not run a spec you would not run a Makefile from.** `bayesmm run stranger.json` is
+> equivalent to `make -f stranger.mk`.
+
+Every comparable tool works this way — `make`, `npm run`, `docker build`, and the workflow
+engines closest to this one (Snakemake, Nextflow, CWL) all execute commands named in a
+config file. None of them sandbox, and neither does this.
+
+**What is *not* implied by this.** Installing `bayesian-metamodeling` is not affected; the
+specs and tutorials shipped in this repository are ours and are safe to run; and nothing
+here concerns dependency security, which is a separate matter handled by pinning.
+
+**What the framework does do**, none of which is containment:
+
+- `bayesmm run` prints the command before executing it, and asks for confirmation when an
+  entrypoint resolves outside the repository (suppress with `--yes` for non-interactive use).
+- Path-like entrypoint arguments are checked against the repository root — a **typo check**,
+  which catches "I pointed at the wrong directory". It cannot constrain the command itself.
+- `model.name`, `biomodels_id` and `storage.root` are validated before they are used to build
+  paths, so a malformed spec cannot write — or delete — outside its store.
+
 ## Centralized sweep output
 `bayesmm run` collects a whole sweep into one set of files, rather than one directory per point:
 - `sweep_rows.csv`: one row per design point (`point_index`, inputs, flattened outputs, status/error/timing)

@@ -79,10 +79,22 @@ class TestOutputPathTraversal:
         assert "y" in result
 
 
-# --- Entrypoint validation (H1) ---
+# --- Entrypoint path check: a TYPO check, not a containment boundary (H1) ---
 
 
-class TestEntrypointValidation:
+class TestEntrypointPathTypoCheck:
+    """Renamed and re-scoped deliberately (S2b).
+
+    This check cannot contain a spec — `entrypoint` names the command to execute, so a
+    spec is trusted input by design (README, "Specs are trusted input"). It catches
+    "I pointed at the wrong directory", which is a real mistake worth catching. The
+    assertion message below changed with the relabelling; the behaviour did not.
+
+    The check now also inspects **every** path-like argument rather than only
+    `command[1]`, and recognises `\\` as well as `/` — previously any Windows-style path
+    skipped it entirely.
+    """
+
     def test_rejects_entrypoint_outside_repo(self, tmp_path):
         adapter = PythonCLIAdapter()
         repo_root = tmp_path / "repo"
@@ -97,7 +109,46 @@ class TestEntrypointValidation:
         ]
         spec = load_and_validate_modelspec(spec_payload)
 
-        with pytest.raises(ValueError, match="Entrypoint path must be within repo root"):
+        with pytest.raises(ValueError, match="points outside the repository"):
+            adapter.materialize_inputs(
+                spec=spec, point={"x": 0.5}, run_dir=run_dir, repo_root=repo_root
+            )
+
+    def test_windows_separator_no_longer_skips_the_check(self, tmp_path):
+        """The old guard tested only "/", so `..\\..\\x.py` was never inspected."""
+        adapter = PythonCLIAdapter()
+        repo_root = tmp_path / "repo"
+        repo_root.mkdir()
+        run_dir = tmp_path / "run"
+        run_dir.mkdir()
+
+        spec_payload = _minimal_spec_payload()
+        spec_payload["model"]["artifact"]["entrypoint"] = ["python", "..\\..\\outside.py"]
+        spec = load_and_validate_modelspec(spec_payload)
+
+        with pytest.raises(ValueError, match="points outside the repository"):
+            adapter.materialize_inputs(
+                spec=spec, point={"x": 0.5}, run_dir=run_dir, repo_root=repo_root
+            )
+
+    def test_checks_arguments_beyond_the_second(self, tmp_path):
+        """The old guard inspected `command[1]` only."""
+        adapter = PythonCLIAdapter()
+        repo_root = tmp_path / "repo"
+        repo_root.mkdir()
+        run_dir = tmp_path / "run"
+        run_dir.mkdir()
+
+        spec_payload = _minimal_spec_payload()
+        spec_payload["model"]["artifact"]["entrypoint"] = [
+            "python",
+            "runner.py",
+            "--script",
+            "/etc/elsewhere.py",
+        ]
+        spec = load_and_validate_modelspec(spec_payload)
+
+        with pytest.raises(ValueError, match="points outside the repository"):
             adapter.materialize_inputs(
                 spec=spec, point={"x": 0.5}, run_dir=run_dir, repo_root=repo_root
             )
@@ -177,6 +228,126 @@ class TestStorageRootTraversal:
         assert spec.storage.root == "tmp/test_store"
 
 
+# --- Trust-boundary visibility: show the command before running it (S2d) ---
+
+
+class TestEntrypointConfirmation:
+    """Visibility, not containment.
+
+    Running a spec runs its author's code — that is the composition mechanism. These
+    tests pin that the command is *shown*, that leaving the repository *asks*, and that
+    a suppressed prompt still says so. The last one matters most: a silenced prompt that
+    looked identical to no prompt would be the same class of defect this codebase keeps
+    finding in its own CI.
+    """
+
+    @staticmethod
+    def _spec(entrypoint):
+        payload = _minimal_spec_payload()
+        payload["model"]["artifact"] = {"type": "local", "entrypoint": entrypoint}
+        return load_and_validate_modelspec(payload)
+
+    def test_prints_the_command_and_does_not_prompt_inside_the_repo(self, capsys):
+        from bayesian_metamodeling.cli.main import _confirm_entrypoint
+
+        assert _confirm_entrypoint(self._spec(["python", "models/toy.py"]), assume_yes=False)
+        assert "Entrypoint: python models/toy.py" in capsys.readouterr().out
+
+    def test_refuses_non_interactively_when_entrypoint_leaves_the_repo(self, capsys, monkeypatch):
+        from bayesian_metamodeling.cli import main as cli_main
+
+        monkeypatch.setattr(cli_main.sys.stdin, "isatty", lambda: False, raising=False)
+        assert not cli_main._confirm_entrypoint(
+            self._spec(["python", "../../../outside.py"]), assume_yes=False
+        )
+        assert "Refusing to run non-interactively" in capsys.readouterr().out
+
+    def test_assume_yes_proceeds_but_says_that_it_did(self, capsys):
+        from bayesian_metamodeling.cli.main import _confirm_entrypoint
+
+        assert _confirm_entrypoint(self._spec(["python", "../../../outside.py"]), assume_yes=True)
+        out = capsys.readouterr().out
+        assert "points outside the repository" in out
+        assert "Proceeding without confirmation" in out, (
+            "a suppressed prompt must be visible in the output, or it is "
+            "indistinguishable from no prompt at all"
+        )
+
+    def test_biomodels_specs_have_no_user_entrypoint_to_confirm(self):
+        from bayesian_metamodeling.cli.main import _confirm_entrypoint
+
+        payload = _minimal_spec_payload()
+        payload["model"]["artifact"] = {"type": "biomodels", "biomodels_id": "BIOMD0000000001"}
+        assert _confirm_entrypoint(load_and_validate_modelspec(payload), assume_yes=False)
+
+
+# --- Path-safe spec fields that become directory/file names (S3) ---
+
+
+class TestPathSafeSegments:
+    """`model.name` and `biomodels_id` are interpolated into paths.
+
+    `model.name` is the serious one: `cli/main.py` builds
+    `<storage.root>/_active/<token>/<name>_<i>` and `shutil.rmtree`s it in a
+    `finally`, so an unvalidated name puts a recursive delete on a path the spec
+    author chose. The realistic failure is an accident (`lck/activity`), not an
+    attack — a spec already names the command to run, so a hostile spec has no
+    need of this.
+    """
+
+    @pytest.mark.parametrize(
+        "bad_name",
+        ["../../evil", "lck/activity", "back\\slash", "a b", ".hidden", "-leading-dash"],
+    )
+    def test_rejects_unsafe_model_name(self, bad_name):
+        payload = _minimal_spec_payload()
+        payload["model"]["name"] = bad_name
+        with pytest.raises(ValidationError, match="model.name"):
+            load_and_validate_modelspec(payload)
+
+    @pytest.mark.parametrize("good_name", ["toy_program", "lck_activity", "model-2", "v1.2"])
+    def test_accepts_normal_model_name(self, good_name):
+        payload = _minimal_spec_payload()
+        payload["model"]["name"] = good_name
+        assert load_and_validate_modelspec(payload).model.name == good_name
+
+    def test_rejects_traversal_in_biomodels_id(self):
+        payload = _minimal_spec_payload()
+        payload["model"]["artifact"] = {
+            "type": "biomodels",
+            "biomodels_id": "../../../etc/passwd",
+        }
+        with pytest.raises(ValidationError, match="biomodels_id"):
+            load_and_validate_modelspec(payload)
+
+    def test_accepts_real_biomodels_id(self):
+        payload = _minimal_spec_payload()
+        payload["model"]["artifact"] = {"type": "biomodels", "biomodels_id": "BIOMD0000000001"}
+        spec = load_and_validate_modelspec(payload)
+        assert spec.model.artifact.biomodels_id == "BIOMD0000000001"
+
+    @pytest.mark.parametrize("bad_path", ["../../../etc/passwd", "/etc/passwd", "..\\win"])
+    def test_rejects_escaping_local_sbml_path(self, bad_path):
+        payload = _minimal_spec_payload()
+        payload["model"]["artifact"] = {
+            "type": "biomodels",
+            "biomodels_id": "BIOMD0000000001",
+            "local_sbml_path": bad_path,
+        }
+        with pytest.raises(ValidationError, match="local_sbml_path"):
+            load_and_validate_modelspec(payload)
+
+    def test_accepts_in_tree_local_sbml_path(self):
+        payload = _minimal_spec_payload()
+        payload["model"]["artifact"] = {
+            "type": "biomodels",
+            "biomodels_id": "BIOMD0000000001",
+            "local_sbml_path": "tutorials/data/sample.xml",
+        }
+        spec = load_and_validate_modelspec(payload)
+        assert spec.model.artifact.local_sbml_path == "tutorials/data/sample.xml"
+
+
 # --- Dataset path validation (M1) ---
 
 
@@ -198,10 +369,88 @@ class TestDatasetPathValidation:
         assert result == Path("/tmp/test_store")
 
 
-# --- torch deserialization type check (C1) ---
+# --- Surrogate registry containment (S4a) ---
 
 
-class TestTorchDeserializationTypeCheck:
+class TestSurrogateRegistryContainment:
+    """The registry is a plain JSON file, and the payload it names can reach `torch.load`.
+
+    `run_store.show_registered_run` has always refused entries pointing outside the
+    project; this path did not. Anchored on the registry's own directory rather than the
+    process cwd, because that is the invariant `persist_surrogate_artifact` actually
+    maintains — and because a rule that depends on where you launched `bayesmm` from is
+    the cwd-sensitivity recorded as D3.
+    """
+
+    def test_rejects_entry_pointing_outside_the_store(self, tmp_path, monkeypatch):
+        from bayesian_metamodeling.storage import surrogate_store
+
+        registry = tmp_path / "store" / "surrogate_registry.json"
+        registry.parent.mkdir(parents=True)
+        elsewhere = tmp_path / "elsewhere" / "artifact.json"
+        elsewhere.parent.mkdir(parents=True)
+        elsewhere.write_text(json.dumps({"artifact_id": "x", "spec_name": "s"}))
+        registry.write_text(json.dumps({"x": str(elsewhere)}))
+        monkeypatch.setattr(surrogate_store, "SURROGATE_REGISTRY_PATH", registry)
+
+        with pytest.raises(ValueError, match="outside the surrogate store"):
+            surrogate_store.find_latest_artifact_for_spec("s")
+
+    def test_persist_and_lookup_agree_on_the_store_root(self, tmp_path, monkeypatch):
+        """The bug this pins: the registry path was overridable, the artifact dir was not.
+
+        `persist_surrogate_artifact` hardcoded `tmp/surrogate_artifacts`, so relocating
+        the registry put the two in different roots — which only became visible once
+        something checked.
+        """
+        from bayesian_metamodeling.spec import SurrogateSpec
+        from bayesian_metamodeling.storage import surrogate_store
+
+        registry = tmp_path / "store" / "surrogate_registry.json"
+        registry.parent.mkdir(parents=True)
+        monkeypatch.setattr(surrogate_store, "SURROGATE_REGISTRY_PATH", registry)
+
+        payload = tmp_path / "payload.json"
+        payload.write_text(json.dumps({"model_type": "pymc_bayesian_linear_v2"}))
+        spec = SurrogateSpec.model_validate(
+            {
+                "schema_version": "1.0",
+                "name": "roundtrip",
+                "kind": "conditional",
+                "backend": "pymc_gp",
+                "dataset_ref": {"run_store_root": "tmp/store"},
+                "inputs": ["a"],
+                "outputs": ["y"],
+                "seed": 0,
+            }
+        )
+        surrogate_store.persist_surrogate_artifact(
+            spec=spec, dataset_digest="d", payload_path=payload
+        )
+
+        _, found = surrogate_store.find_latest_artifact_for_spec("roundtrip")
+        assert found.resolve().is_relative_to(registry.parent.resolve())
+
+
+# --- torch deserialization: a CORRUPTION check, not a security control (C1) ---
+
+
+class TestTorchDeserializationCorruptionCheck:
+    """This class used to be named as though it tested a security control. It does not.
+
+    `_deserialize_torch_object` calls `torch.load(..., weights_only=False)`, which is
+    pickle. Pickle executes code **while deserialising** — a crafted payload runs inside
+    `torch.load`, on the line *before* the `hasattr(obj, "sample")` check. The check
+    therefore inspects the return value of an operation whose danger is its side effects,
+    and cannot stop a malicious artifact. It can only catch a *corrupted* or
+    wrong-type one, which is worth having and is what these tests actually pin.
+
+    Naming it a security test was worse than having no test: a reader saw a green
+    assertion and concluded the deserialisation path was defended. The real fix is to
+    stop pickling (see REVIEW_AND_UPGRADE_PLAN.md, S1a); until that lands, this test
+    says what it means.
+    """
+
     def test_rejects_object_without_posterior_interface(self, monkeypatch):
         import bayesian_metamodeling.surrogates.backends as backends_mod
 

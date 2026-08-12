@@ -5,8 +5,10 @@ from __future__ import annotations
 import argparse
 import concurrent.futures
 import json
+import os
 import shutil
 import subprocess
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -105,6 +107,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     run_parser = subparsers.add_parser("run", help="Execute all planned runs for a ModelSpec")
     run_parser.add_argument("spec", help="Path to ModelSpec JSON")
+    run_parser.add_argument(
+        "--yes",
+        "-y",
+        action="store_true",
+        help="Do not prompt before executing the spec's entrypoint (for CI and scripts)",
+    )
 
     runs_parser = subparsers.add_parser("runs", help="Inspect run registry")
     runs_subparsers = runs_parser.add_subparsers(dest="runs_command")
@@ -378,10 +386,75 @@ def _run_mpi(
     return merged, 0
 
 
-def _run_command(spec_path: Path) -> int:
+MM_ASSUME_YES_ENV_VAR = "MM_ASSUME_YES"
+
+
+def _assume_yes_from_env() -> bool:
+    return os.environ.get(MM_ASSUME_YES_ENV_VAR, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _confirm_entrypoint(spec, *, assume_yes: bool) -> bool:
+    """Show the command this spec will execute, and confirm it when it leaves the repo.
+
+    Running a spec runs its author's code — that is the composition mechanism, not a bug
+    (see README, "Specs are trusted input"). This is therefore **not** a containment
+    check and must never be described as one. It is the `bayesmm` equivalent of reading a
+    Makefile before typing `make`: it makes the moment of trust visible instead of
+    implicit.
+
+    Deliberate design points:
+
+    - Printed **once per sweep**, not once per design point. A prompt that fires 64 times
+      is a prompt everyone learns to hold Enter through.
+    - A prompt only when the entrypoint resolves outside the repository. Inside the repo
+      is the overwhelmingly common case and is not worth a keystroke.
+    - When confirmation is suppressed, that is stated in the output. A silenced prompt
+      must not be indistinguishable from no prompt — that is the failure mode this
+      codebase keeps finding in its own CI.
+    """
+    entrypoint = spec.model.artifact.entrypoint
+    if not entrypoint:
+        return True  # biomodels artifacts run a worker we ship, not a user command
+
+    print(f"Entrypoint: {' '.join(entrypoint)}")
+
+    outside: list[str] = []
+    for argument in entrypoint[1:]:
+        # Normalise separators first — see the matching comment in
+        # `adapters/python_cli.py`. A Windows-style path must be judged the same way on
+        # POSIX, or the check silently passes on half the platforms.
+        normalized = argument.replace("\\", "/")
+        if "/" not in normalized:
+            continue
+        candidate = Path(normalized)
+        if not candidate.is_absolute():
+            candidate = REPO_ROOT / candidate
+        if not candidate.resolve().is_relative_to(REPO_ROOT.resolve()):
+            outside.append(argument)
+    if not outside:
+        return True
+
+    print(f"This entrypoint points outside the repository: {', '.join(outside)}")
+    print("Running it executes that code with your permissions.")
+    if assume_yes:
+        print(f"Proceeding without confirmation (--yes or {MM_ASSUME_YES_ENV_VAR}).")
+        return True
+    if not sys.stdin.isatty():
+        print(
+            "Refusing to run non-interactively without confirmation. "
+            f"Pass --yes or set {MM_ASSUME_YES_ENV_VAR}=1 if this is intended."
+        )
+        return False
+    return input("Continue? [y/N] ").strip().lower() in {"y", "yes"}
+
+
+def _run_command(spec_path: Path, *, assume_yes: bool = False) -> int:
     payload, spec, code = _load_and_validate(spec_path)
     if code != 0:
         return code
+
+    if not _confirm_entrypoint(spec, assume_yes=assume_yes or _assume_yes_from_env()):
+        return 1
 
     try:
         points = plan_points(spec)
@@ -697,7 +770,7 @@ def main() -> int:
     if args.command == "plan":
         return _plan_command(Path(args.spec))
     if args.command == "run":
-        return _run_command(Path(args.spec))
+        return _run_command(Path(args.spec), assume_yes=args.yes)
     if args.command == "runs" and args.runs_command == "list":
         return _runs_list_command()
     if args.command == "runs" and args.runs_command == "show":

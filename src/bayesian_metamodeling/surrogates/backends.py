@@ -411,24 +411,6 @@ class _ModelWrapper(SurrogateModel):
         return self.model.summary(inputs)
 
 
-def _fit_linear(
-    x: np.ndarray, y: np.ndarray, input_names: list[str], output_name: str
-) -> LinearGaussianModel:
-    x_design = np.column_stack([x, np.ones(len(x))])
-    beta, *_ = np.linalg.lstsq(x_design, y, rcond=None)
-    weights = np.asarray(beta[:-1], dtype=float)
-    bias = float(beta[-1])
-    residual = y - (x @ weights + bias)
-    sigma = float(max(np.sqrt(np.mean(residual**2)), 1e-6))
-    return LinearGaussianModel(
-        weights=weights,
-        bias=bias,
-        sigma=sigma,
-        input_names=input_names,
-        output_name=output_name,
-    )
-
-
 _ARVIZ_REFACTOR_WARNING_PATTERN = r"\s*ArviZ is undergoing a major refactor.*"
 
 _ENV_LOCK = threading.Lock()
@@ -902,11 +884,25 @@ def _serialize_torch_object(payload: Any) -> str:
 
 
 def _deserialize_torch_object(serialized: str) -> Any:
+    """Load a pickled SBI posterior. **This executes code from the artifact.**
+
+    `weights_only=False` means pickle, and pickle runs code *during* deserialisation —
+    inside the `torch.load` call below, before any check here can look at the result.
+    The `hasattr` test that follows is therefore a **corruption check, not a security
+    control**: it catches a truncated or wrong-type payload, and cannot catch a
+    malicious one, because by the time it runs the payload has already had its way.
+
+    An earlier version of this function claimed the opposite ("guard against loading
+    arbitrary objects from tampered artifacts"), which was worse than saying nothing —
+    it invited exactly the behaviour it could not defend.
+
+    **So: only load `sbi_npe` artifacts you fitted yourself.** No artifact tracked in
+    this repository takes this path (all are `pymc_gp`, which serialises as plain JSON
+    numbers). Replacing this with a `state_dict` + `weights_only=True` load is item S1a
+    in REVIEW_AND_UPGRADE_PLAN.md.
+    """
     torch = _require_torch()
     buffer = io.BytesIO(base64.b64decode(serialized.encode("ascii")))
-    # Security: weights_only=False is required because SBI posteriors are full Python
-    # objects (not just tensors). We validate the loaded object conforms to the expected
-    # posterior interface to guard against loading arbitrary objects from tampered artifacts.
     try:
         obj = torch.load(buffer, map_location="cpu", weights_only=False)
     except TypeError:
@@ -914,7 +910,7 @@ def _deserialize_torch_object(serialized: str) -> Any:
     if not hasattr(obj, "sample") or not hasattr(obj, "log_prob"):
         raise ValueError(
             "Deserialized torch object does not implement the expected posterior interface "
-            "(sample, log_prob). Artifact may be corrupted or tampered with."
+            "(sample, log_prob). Artifact is corrupted or is not an sbi posterior."
         )
     return obj
 

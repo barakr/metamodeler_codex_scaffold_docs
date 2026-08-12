@@ -23,6 +23,11 @@ on:
     - cron: "0 8 * * 1"
   workflow_dispatch:
 
+# Least privilege: these workflows only read the repo and run tests. Without an
+# explicit block, jobs inherit the repository default, which can be read/write.
+permissions:
+  contents: read
+
 jobs:
   interface:
     name: framework <-> tcr_signaling specs

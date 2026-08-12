@@ -1,5 +1,75 @@
 # Status: Metamodeling Automation Framework
 
+## Security review, stage 1: guards that now say what they do (2026-08-12)
+
+First of four stages from `REVIEW_AND_UPGRADE_PLAN.md`, on branch
+`feature/design-security-review`. Nothing here changes behaviour a student would notice.
+
+**The finding this stage exists for.** Three guards claimed protection they could not
+provide, and one had a *passing test* asserting it worked. That is this repo's recurring
+defect — a check that reports success without being able to hold — appearing in security
+code rather than in CI:
+
+| Guard | Claimed | Actually |
+|---|---|---|
+| `_deserialize_torch_object`'s `hasattr` check | "guard against loading arbitrary objects from tampered artifacts" | runs *after* `torch.load(weights_only=False)` has already unpickled — pickle executes during load, so it inspects the return value of an operation whose danger is its side effects |
+| `python_cli` entrypoint check | "validate that path-like entrypoints don't traverse outside repo" | inspected `command[1]` only, only when it contained `/`, so `["/bin/sh","-c",…]` and every Windows-style path passed untouched |
+| `test_rejects_object_without_posterior_interface` | read as a security test | pins a corruption check, which is worth having and is not a security control |
+
+All three now say what they are. The torch check is documented as a **corruption** check
+with an explicit "only load `sbi_npe` artifacts you fitted yourself"; the entrypoint check
+is documented as a **typo** check; the test is renamed with the reasoning attached.
+Replacing the pickle entirely is stage 4.
+
+**`model.name` reached a path that gets `rmtree`'d.** `cli/main.py` builds
+`<storage.root>/_active/<token>/<name>_<i>` and recursively deletes it in a `finally`.
+`name` was validated only as `min_length=1`. Now `model.name`, `biomodels_id` and
+`local_sbml_path` are validated with the same rule already applied to `conda_env`. The
+realistic failure was never an attack — a spec already names the command to run — it was a
+model called `lck/activity` silently writing, then deleting, somewhere nobody looked. All
+11 shipped ModelSpecs validate unchanged.
+
+**A real bug the new tests caught, worth recording.** The first version of the entrypoint
+fix checked for `\` as a separate separator. On POSIX that does nothing: `..\..\x.py` is a
+single *filename* containing backslashes, resolves happily inside the repo, and passes.
+Specs are portable JSON shared between machines, so both adapters now normalise `\`→`/`
+before judging, matching what `storage.root` has always done. The test asserting the
+Windows gap was closed failed on macOS until this was fixed — which is exactly why it was
+written as a test rather than assumed.
+
+**Trust boundary, now stated.** `README.md` gains *"Specs are trusted input — treat one
+like a Makefile"*: running a spec runs its author's code, because `entrypoint` naming a
+command is the composition mechanism that lets a C++ model and a Python model be swept by
+one tool. Every comparable tool behaves this way (`make`, `npm run`, Snakemake, Nextflow,
+CWL) and none sandbox. The decision was to say so rather than imply a containment that
+does not exist.
+
+**New, and deliberately not containment:** `bayesmm run` prints the entrypoint before
+executing, and refuses to run non-interactively when it resolves outside the repository
+unless `--yes` / `MM_ASSUME_YES=1` is given. Once per sweep, not once per point — a prompt
+that fires 64 times is a prompt nobody reads. When suppressed it *says* it was suppressed,
+so a silenced prompt is never indistinguishable from no prompt.
+
+**A second latent bug, found the same way.** Adding the registry-containment check that
+`run_store.show_registered_run` always had to `surrogate_store.find_latest_artifact_for_spec`
+immediately reddened six unrelated tests — because `SURROGATE_REGISTRY_PATH` was overridable
+while `persist_surrogate_artifact` hardcoded `Path("tmp/surrogate_artifacts")`. Relocate the
+registry and the two ended up in **different roots**, with nothing to notice. Both now derive
+from `_store_root()`, so they agree by construction; with the default registry the resolved
+paths are byte-identical to before. This is the first piece of D3, and it is a good
+advertisement for the check: the guard's first act was to expose a real incoherence rather
+than a hypothetical attack.
+
+**Also:** least-privilege `permissions: contents: read` on all four workflows; `_fit_linear`
+deleted (zero callers — an earlier note that tests referenced it was wrong, those tests use a
+same-named local helper) and `persist_sweep`'s unused `sweep_id` parameter removed.
+
+**Process note.** `pytest … | tail` reports *tail's* exit code, so a run with four failures
+looked like a pass. Every gate in this stage was re-run redirecting to a file and checking
+`$?` directly. Worth remembering: it is the same class of mistake as everything else in this
+entry — a check that cannot fail is not a check.
+
+
 ## GitHub Actions bumped to Node 24 — `checkout@v7`, `setup-python@v7` (2026-08-12)
 
 Every job in all five workflows was emitting the same deprecation notice: `actions/checkout@v4`

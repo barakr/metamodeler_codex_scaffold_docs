@@ -8,6 +8,50 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
+# Fields that end up as a path *segment* must be safe to interpolate into one.
+# `model.name` and `biomodels_id` are both used to build directories/filenames
+# (`cli/main.py` builds `<storage.root>/_active/<token>/<name>_<i>`, which is
+# `shutil.rmtree`'d in a `finally`; `adapters/biomodels_sbml.py` builds
+# `<cache>/<biomodels_id>.xml`). Without this, a name containing `..` or a
+# separator escapes the store — and in the first case takes a recursive delete
+# with it. The realistic failure is not an attack (a spec already names the
+# command to run) but an accident: a model called `lck/activity` silently
+# writing, and then deleting, somewhere nobody looked.
+#
+# Same charset as `runner.execution_env.conda_env` below, deliberately: one rule
+# for "this string becomes a path segment" is easier to remember than three.
+_PATH_SAFE_SEGMENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+
+
+def _require_path_safe(value: str, *, field: str) -> str:
+    if not _PATH_SAFE_SEGMENT.match(value):
+        raise ValueError(
+            f"{field} must start with a letter or digit and contain only letters, digits, "
+            f"'.', '_' or '-' (it is used to build a directory or file name): {value!r}"
+        )
+    return value
+
+
+def _reject_absolute_or_traversal(value: str, *, field: str) -> str:
+    """Reject absoluteness and `..` under BOTH POSIX and Windows conventions.
+
+    Platform-independent on purpose: without the double check, `/tmp/x` slips
+    through on Windows (pathlib treats it as drive-relative, not absolute) and
+    `C:\\x` / UNC paths slip through on POSIX. The explicit leading-separator
+    test catches drive-less rooted paths like `\\foo`, which Windows pathlib
+    does not flag as absolute even though they unambiguously escape.
+    """
+    if (
+        PurePosixPath(value).is_absolute()
+        or PureWindowsPath(value).is_absolute()
+        or value.startswith(("/", "\\"))
+    ):
+        raise ValueError(f"{field} must be a project-relative path")
+    # Split on either separator so `..\foo` is caught on POSIX and `../foo` on Windows.
+    if ".." in value.replace("\\", "/").split("/"):
+        raise ValueError(f"{field} must not contain directory traversal (..) sequences")
+    return value
+
 
 class ArtifactSpec(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -22,6 +66,20 @@ class ArtifactSpec(BaseModel):
     # materialized, so a tutorial can ship a reproducible sample SBML in-tree
     # and run with no network. Compatible with `MM_BIOMODELS_OFFLINE=1`.
     local_sbml_path: str | None = None
+
+    @field_validator("biomodels_id")
+    @classmethod
+    def check_biomodels_id(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        return _require_path_safe(value, field="model.artifact.biomodels_id")
+
+    @field_validator("local_sbml_path")
+    @classmethod
+    def check_local_sbml_path(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        return _reject_absolute_or_traversal(value, field="model.artifact.local_sbml_path")
 
     @model_validator(mode="after")
     def check_required_fields(self) -> "ArtifactSpec":
@@ -42,6 +100,11 @@ class ModelInfoSpec(BaseModel):
     name: str = Field(min_length=1)
     version: str = Field(min_length=1)
     artifact: ArtifactSpec
+
+    @field_validator("name")
+    @classmethod
+    def check_name_is_path_safe(cls, value: str) -> str:
+        return _require_path_safe(value, field="model.name")
 
 
 class RunnerResourcesSpec(BaseModel):
@@ -202,25 +265,7 @@ class StorageSpec(BaseModel):
     @field_validator("root")
     @classmethod
     def check_not_absolute(cls, value: str) -> str:
-        # Reject absoluteness under EITHER POSIX or Windows conventions so the
-        # rule is platform-independent. Without this, `/tmp/x` would slip
-        # through on Windows (pathlib treats it as drive-relative, not
-        # absolute) and `C:\x` / UNC paths would slip through on POSIX. Also
-        # catch a leading `/` or `\` explicitly, since Windows pathlib does
-        # not flag drive-less rooted paths like `\foo` as absolute even
-        # though they unambiguously try to escape relativeness.
-        if (
-            PurePosixPath(value).is_absolute()
-            or PureWindowsPath(value).is_absolute()
-            or value.startswith(("/", "\\"))
-        ):
-            raise ValueError("storage.root must be a project-relative path")
-        # Same idea for parent-directory traversal: split on either separator
-        # so `..\foo` is caught on POSIX and `../foo` is caught on Windows.
-        parts = value.replace("\\", "/").split("/")
-        if ".." in parts:
-            raise ValueError("storage.root must not contain directory traversal (..) sequences")
-        return value
+        return _reject_absolute_or_traversal(value, field="storage.root")
 
 
 class ModelSpec(BaseModel):

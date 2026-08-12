@@ -119,13 +119,12 @@ def persist_sweep(
     spec: ModelSpec,
     point_results: list[dict[str, Any]],
     execution_mode: str,
-    sweep_id: str | None = None,
 ) -> StoredRun:
     """Persist a full DOE sweep into centralized artifacts."""
     if not point_results:
         raise ValueError("persist_sweep requires at least one point result")
 
-    run_id = sweep_id or uuid4().hex
+    run_id = uuid4().hex
     sweep_root = Path(spec.storage.root) / "sweeps" / run_id
     sweep_root.mkdir(parents=True, exist_ok=True)
 
