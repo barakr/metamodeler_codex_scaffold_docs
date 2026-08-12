@@ -29,16 +29,20 @@ warnings as *warnings* rather than errors in annotations. `Deep CI`'s skip audit
 `::error::` annotations as its failure signal, so a dependency spuriously emitting errors is
 noise in the one channel that is supposed to be quiet.
 
-**Scope: 8 of 10 usages.** The four parent workflows are done. The two in
-`projects/tcr_signaling/.github/workflows/ci.yml` are a **separate repository** — that change
-has to be committed there, pushed there, and only then can the parent's gitlink move, which is
-never automatic (rule 9). Left for the user to authorize; `KS model CI` keeps warning until
-then, and keeps passing.
+**Scope: all 10 usages, across two repositories.** The four parent workflows went first
+(`2352487`). The two in `projects/tcr_signaling/.github/workflows/ci.yml` are a **separate
+repository**, so they needed their own commit and push there (`87dd84e`) before the parent's
+gitlink could move — a sequence that is never automatic (rule 9) and was authorised
+explicitly. Order was deliberate: all four parent workflows had to come back green before
+anything was pushed to the submodule, so that a bad `v7` would have cost one revert in one
+repo rather than two.
 
 **Coverage note.** `Submodule notebooks CI` is the job most exposed to a checkout regression
-(it is the only one that checks out the submodule *and* builds its native model), and it runs
-only weekly. But `Interface CI` also does `submodules: true` and runs on **every push**, so the
-submodule-checkout path under `checkout@v7` is exercised immediately rather than in a week.
+— it is the only one that checks out the submodule *and* builds its native model — and it is
+scheduled weekly, so the assumption was that this change would go a week unverified there.
+It did not: the workflow also triggers on changes to its own file, so it ran on this commit
+and passed. `Interface CI` independently covers `submodules: true` on every push. Both green,
+so the submodule-checkout path under `checkout@v7` is verified now rather than on Sunday.
 
 
 ## Tutorial 7c blew Deep CI's cell timeout — the cause was `PYTENSOR_FLAGS: cxx=` (2026-08-12)
