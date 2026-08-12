@@ -71,4 +71,9 @@ def test_mm_plan_fails_when_sobol_points_missing(monkeypatch, capsys, tmp_path):
     out = capsys.readouterr().out
 
     assert code == 1
-    assert "DOE planning failed" in out
+    # This used to surface as "DOE planning failed" from inside the planner. Since
+    # `design.sobol` became a typed model (D4), a missing `n_points` is caught during spec
+    # validation instead — earlier, and with the field named. Failing sooner is the
+    # improvement; the assertion moved with it.
+    assert "Spec validation failed" in out
+    assert "n_points" in out

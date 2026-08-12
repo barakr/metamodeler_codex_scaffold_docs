@@ -205,12 +205,35 @@ class IOSchemaSpec(BaseModel):
     time_grid: TimeGridSpec | None = None
 
 
+class SobolDesignSpec(BaseModel):
+    """Typed Sobol configuration (D4).
+
+    This was `dict[str, Any]` — the only untyped object in an otherwise strictly-validated
+    spec tree — and the planner read exactly three keys from it with `.get()`. Anything else
+    was silently ignored, which is how both research specs came to carry a `ranges` key that
+    nothing reads. See `ModelSpec.check_design_against_io_schema` for what happens to it now.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    n_points: int = Field(ge=1)
+    #: Default `False` preserves every number this project has already produced. Note that
+    #: **scipy's own default is `True`**, so a reader who knows `qmc.Sobol` will expect the
+    #: opposite; with `scramble=False` the first point is exactly the lower corner of the
+    #: box (every variable at its minimum). Tutorial 4 teaches this.
+    scramble: bool = False
+    seed: int | None = None
+    #: Accepted, and cross-checked against `io_schema.inputs[].support` rather than used.
+    #: See the class docstring and the ModelSpec validator.
+    ranges: dict[str, list[float]] | None = None
+
+
 class DesignSpec(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     strategy: Literal["grid", "sobol"]
     grid: dict[str, list[float]] | None = None
-    sobol: dict[str, Any] | None = None
+    sobol: SobolDesignSpec | None = None
 
     @model_validator(mode="after")
     def check_strategy_config(self) -> "DesignSpec":
@@ -279,6 +302,70 @@ class ModelSpec(BaseModel):
     adapter: AdapterSpec
     reproducibility: ReproducibilitySpec
     storage: StorageSpec
+
+    @model_validator(mode="after")
+    def check_design_against_io_schema(self) -> "ModelSpec":
+        """The design and the I/O schema must agree — D5, and the `ranges` trap in D4.
+
+        Nothing previously connected these two halves of a spec, so a design could name a
+        variable that does not exist, sample outside a variable's declared support, or (the
+        one that actually happened) declare bounds in a key the planner never reads. Each
+        failed late and unhelpfully, or not at all.
+        """
+        declared = {variable.name: variable for variable in self.io_schema.inputs}
+
+        if self.design.strategy == "grid" and self.design.grid:
+            unknown = sorted(set(self.design.grid) - set(declared))
+            if unknown:
+                raise ValueError(
+                    f"design.grid names variables that are not declared in io_schema.inputs: "
+                    f"{unknown}. Declared inputs are {sorted(declared)}. (Previously this "
+                    f'failed mid-sweep as "Missing input variable", once per design point.)'
+                )
+            for name, values in self.design.grid.items():
+                support = declared[name].support
+                if support is None:
+                    continue
+                outside = [v for v in values if not (support[0] <= v <= support[1])]
+                if outside:
+                    raise ValueError(
+                        f"design.grid['{name}'] contains values outside the declared support "
+                        f"{support}: {outside}. Either widen io_schema support or correct the "
+                        f"grid — sampling outside the domain a model declares is not a "
+                        f"decision that should be made silently."
+                    )
+
+        if self.design.strategy == "sobol" and self.design.sobol is not None:
+            unknown = sorted(set(self.design.sobol.ranges or {}) - set(declared))
+            if unknown:
+                raise ValueError(
+                    f"design.sobol.ranges names variables that are not declared in "
+                    f"io_schema.inputs: {unknown}. Declared inputs are {sorted(declared)}."
+                )
+            # `ranges` is NOT read by the planner — Sobol bounds come from
+            # `io_schema.inputs[].support`. Rather than forbid the key (which would reject
+            # specs that already ship, in a *separate repository*) or start honouring it
+            # (two sources of truth for one number), require the two to agree. Divergence
+            # then fails at validation instead of silently sampling a region nobody asked
+            # for, and a spec author who edits the obvious-looking place is told.
+            for name, bounds in (self.design.sobol.ranges or {}).items():
+                support = declared[name].support
+                if support is None:
+                    raise ValueError(
+                        f"design.sobol.ranges['{name}'] is set but io_schema declares no "
+                        f"support for '{name}'. Sobol bounds are taken from io_schema.support, "
+                        f"so the range would be ignored."
+                    )
+                if [float(b) for b in bounds] != [float(s) for s in support]:
+                    raise ValueError(
+                        f"design.sobol.ranges['{name}'] is {bounds} but "
+                        f"io_schema.inputs['{name}'].support is {support}, and **support is "
+                        f"what the planner actually samples**. These must agree. Edit "
+                        f"io_schema support (or remove the redundant ranges entry) — "
+                        f"otherwise the spec says one thing and the sweep does another."
+                    )
+
+        return self
 
 
 class ModelSpecValidationError(ValueError):

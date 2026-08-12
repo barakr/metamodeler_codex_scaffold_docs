@@ -1,5 +1,46 @@
 # Status: Metamodeling Automation Framework
 
+## Security review, stage 3: the design and the I/O schema now have to agree (2026-08-12)
+
+`D4` + `D5`. All 11 shipped ModelSpecs still validate unchanged, and no sampled point moves.
+
+**`design.sobol` was the one untyped object in the spec tree** — `dict[str, Any]`, read with
+three `.get()` calls. Everything else in `spec/` is Pydantic with `extra="forbid"`. It is now
+`SobolDesignSpec`.
+
+The clearest evidence of what that cost: `tests/test_spec_edge_cases.py::test_design_sobol_valid`
+asserted that `sobol={"n": 16}` was **valid**. `n` is not a key the planner reads. The test was
+encoding the bug. It now asserts the opposite, with the history in its docstring.
+
+**The `ranges` trap, resolved differently from what the plan proposed.** Both research specs
+carry `design.sobol.ranges`; the planner takes bounds from `io_schema.inputs[].support` and has
+never read `ranges`. The plan offered "delete it from the specs" or "make it authoritative".
+Both are wrong here: those specs live in **`projects/tcr_signaling`, a separate repository**, so
+forbidding the key would redden another repo's specs from this one, and honouring it would leave
+two sources of truth for one number.
+
+Instead, `ranges` is accepted and **cross-checked against `support`**. Agreement is now
+enforced; divergence fails at validation with a message saying which one the planner actually
+samples. Nothing needed to change in the submodule, the trap is closed, and a spec author who
+edits the natural-looking place is told rather than ignored.
+
+**Also connected, for the first time:** grid keys must name declared inputs (previously a typo
+surfaced mid-sweep as "Missing input variable", once per point), and grid values must lie inside
+the declared support (previously a spec could sample outside its own stated domain in silence).
+
+**Sobol balance.** `plan_points` now warns when `n_points` is not a power of 2 — the property
+Sobol is chosen for — and names the neighbouring powers. Tutorial 4's spec uses `n_points: 9`,
+so the tutorial that teaches DOE was demonstrating the case scipy itself warns about. scipy's
+own warning is suppressed by exact message, since ours states the same fact with the fix
+attached; any other scipy warning still gets through. That also keeps planning usable under
+`-W error`, which this project's `pytest.ini` sets.
+
+**`scramble` still defaults to `False`** (Q4): flipping it to match scipy would change which
+points get sampled and therefore every number the tutorials show. The divergence from scipy's
+default is documented instead, and a test pins the consequence — unscrambled, design point 1 sits
+at every variable's *minimum*, the corner of the box. That is good teaching material rather than
+a defect.
+
 ## Security review, stage 2b: provenance that is actually checked (2026-08-12)
 
 `D7` + `S4b`. Artifacts have always recorded `spec_digest` and `dataset_digest`, and nothing

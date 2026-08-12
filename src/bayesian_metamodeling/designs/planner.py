@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+import warnings
 from itertools import product
-from typing import Any
 
 from scipy.stats import qmc
 
@@ -12,6 +12,16 @@ from bayesian_metamodeling.spec import ModelSpec
 
 class DOEPlanError(ValueError):
     """Raised when DOE planning inputs are invalid."""
+
+
+class SobolBalanceWarning(UserWarning):
+    """A Sobol design was requested at a size where its balance property does not hold.
+
+    Not an error: `n_points` is usually set by a compute budget, and a slightly unbalanced
+    design is still a design. But it is the kind of thing that should never pass unremarked
+    in a project that teaches DOE — the reason to pick Sobol over uniform random sampling is
+    exactly the property being given up.
+    """
 
 
 def _input_support_map(spec: ModelSpec) -> dict[str, tuple[float, float]]:
@@ -50,16 +60,43 @@ def plan_sobol_points(spec: ModelSpec) -> list[dict[str, float]]:
     if not var_names:
         raise DOEPlanError("io_schema.inputs must include at least one variable")
 
-    sobol_cfg: dict[str, Any] = spec.design.sobol
-    n_points = int(sobol_cfg.get("n_points", 0))
-    if n_points <= 0:
-        raise DOEPlanError("design.sobol.n_points must be a positive integer")
+    sobol_cfg = spec.design.sobol
+    n_points = sobol_cfg.n_points
+    scramble = sobol_cfg.scramble
+    seed = sobol_cfg.seed if sobol_cfg.seed is not None else spec.reproducibility.seed
 
-    scramble = bool(sobol_cfg.get("scramble", False))
-    seed = int(sobol_cfg.get("seed", spec.reproducibility.seed))
+    # A Sobol sequence's whole selling point is that its points are more evenly spread than
+    # random ones. That guarantee — the "balance property" — holds for n a power of 2, and
+    # scipy says so itself. Using n = 9 does not fail; it quietly gives you a design with
+    # less of the uniformity you chose Sobol for. Warn, do not refuse: it is a defensible
+    # choice when a compute budget is what it is, and refusing would break shipped specs.
+    if n_points & (n_points - 1) != 0:
+        lower = 1 << (n_points.bit_length() - 1)
+        warnings.warn(
+            f"design.sobol.n_points={n_points} is not a power of 2. Sobol' points are "
+            f"balanced (evenly spread) only at powers of 2, which is the property Sobol is "
+            f"usually chosen for; scipy warns about this too. Consider {lower} or "
+            f"{lower * 2}. This is a quality note, not an error.",
+            SobolBalanceWarning,
+            stacklevel=2,
+        )
 
     engine = qmc.Sobol(d=len(var_names), scramble=scramble, seed=seed)
-    unit_samples = engine.random(n=n_points)
+    with warnings.catch_warnings():
+        # scipy raises its own "balance properties ... power of 2" UserWarning here. We have
+        # just emitted the same fact with the actionable part attached (which sizes to use),
+        # so letting both through is noise. Suppressed by exact message so any *other*
+        # scipy warning still reaches the user.
+        #
+        # This also keeps `plan_points` usable under `-W error`, which this project's
+        # pytest.ini sets: without it, planning any non-power-of-2 Sobol design raised from
+        # inside scipy, which is a confusing way to learn about a design-quality issue.
+        warnings.filterwarnings(
+            "ignore",
+            message=r".*balance properties of Sobol.*",
+            category=UserWarning,
+        )
+        unit_samples = engine.random(n=n_points)
 
     points: list[dict[str, float]] = []
     for sample in unit_samples:
