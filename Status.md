@@ -1,5 +1,42 @@
 # Status: Metamodeling Automation Framework
 
+## Tutorial 7c blew Deep CI's cell timeout — the cause was `PYTENSOR_FLAGS: cxx=` (2026-08-12)
+
+Three Deep CI runs failed the same way after 7c landed: `Tutorial_7c.ipynb` hit the
+notebook runner's **600s per-cell timeout** in `full` and `pymc env`, while
+`main env (no backends)` passed — the clue, since only a job *with* PyMC could run the cell
+at all.
+
+**It was never the draw count.** Reducing 3000 → 1500 did not fix it, and reproducing CI's
+condition locally showed why: **even 400 draws exceeded 10 minutes**. All three workflows
+set `PYTENSOR_FLAGS: cxx=`, which makes PyTensor evaluate its graphs in pure Python. That is
+harmless for the fast suite's small linear fits, and pathological for 7c: `sample_nuts`
+builds a graph whose surrogate term is a **several-hundred-component Gaussian mixture**
+(one component per posterior draw), evaluated at *every leapfrog step*. The cost is
+per-evaluation, not per-draw, so no draw budget rescues it.
+
+**Fix:** `slow.yml` no longer sets `cxx=`. `CI` and `Submodule notebooks CI` keep it — their
+workloads are fine without a compiler and the flag protects them from BLAS variation. With
+compilation, 7c runs in ~97s locally. If a runner ever lacks a compiler PyTensor falls back
+to the Python path by itself, so the job would be slow rather than wrong.
+
+**Also fixed, from the same run:** `test_an_sbi_surrogate_falls_back_rather_than_being_mis_sampled`
+asserted `"pymc_gp" in reason`, but in an sbi-only env `nuts_supported` checks for PyMC first
+and returns `"PyMC is not installed"` without reaching the surrogate. Both are correct
+refusals; the test now asserts the refusal itself everywhere and the specific wording only
+when PyMC is present. `sbi env` is green again.
+
+**Kept:** the `MM_TUTORIAL_DRAWS` knob (default 1500) added while diagnosing this. It did not
+solve the timeout, but it is worth having on its own terms — measured at 1500 vs 4000, the
+means are identical (`log_decay` 6.00, `depletion` 220), r-hat improves 1.0032 → 1.0016, and
+the ridge is unchanged, which is exactly what the notebook tells the reader to expect.
+
+**Lesson worth carrying:** a workflow-level environment variable set defensively years ago
+silently defined what kind of computation the tutorials were allowed to contain. It cost
+three red runs to find, because the flag lives in CI config and the symptom appeared in a
+notebook.
+
+
 ## Deep CI red on three jobs — two distinct causes, both mine (2026-08-12)
 
 The nightly `Deep CI` failed on `full`, `pymc env` and `sbi env`. `main env (no backends)`

@@ -97,9 +97,19 @@ jobs:
             # Anything else means a dependency is missing from the job.
             strict_skips: "1"
     env:
-      # PyTensor needs a system BLAS to compile its C ops; the C-less mode keeps
-      # this deterministic, matching the main CI workflow.
-      PYTENSOR_FLAGS: cxx=
+      # NOTE: unlike `CI` and `Submodule notebooks CI`, this job does NOT set
+      # `PYTENSOR_FLAGS: cxx=`, and the difference is load-bearing.
+      #
+      # Without a C compiler PyTensor evaluates its graphs in pure Python. That is fine
+      # for the fast suite's small fits, and catastrophic for Tutorial 7c: its NUTS run
+      # evaluates a several-hundred-component Gaussian mixture at every leapfrog step,
+      # which took over 10 minutes locally even at 400 draws and blew the notebook
+      # runner's 600s per-cell timeout on three separate Deep CI runs.
+      #
+      # Reducing draws cannot fix it — the cost is per-evaluation, not per-draw. Letting
+      # PyTensor compile brings 7c back to ~97s locally. If a runner ever lacks a
+      # compiler or BLAS, PyTensor falls back to the Python path on its own and this job
+      # will simply be slow again rather than wrong.
       REQUIRE_TUTORIAL_BACKENDS: ${{ matrix.require_backends }}
       # Same idea, for tests/test_joint_sampling_backends.py: in the `full` job an
       # absent surrogate backend is a failure, not a skip. Joint sampling touches each
