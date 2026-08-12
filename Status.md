@@ -1,5 +1,48 @@
 # Status: Metamodeling Automation Framework
 
+## Deep CI went red on the branch — the tutorials taught the gaps I closed (2026-08-12)
+
+Stages 1-3 are green on `make fast` and red on Deep CI. The cause is the inverse of a bug, and
+it is worth recording carefully.
+
+**Four tutorials deliberately DEMONSTRATE the validation gaps stage 3 closed.** Tutorial 1 said
+outright: *"There is no cross-block validator in `ModelSpec` -- every rule lives inside one
+sub-block"*, then built a spec with an undeclared grid key to prove it validated. Tutorial 3's
+entire thesis is *"validation is per-section"*; it has a Step 5 titled **"A break the validator
+does not catch"**. Those breaks are now caught, so the demonstrations raise.
+
+**Tutorial 3 had already built the tripwire for this exact day.** Its self-check reads:
+
+> `"{label} now FAILS validation. Good news about the framework, bad news about this notebook:`
+> `Steps 5-6 and the 'Why this matters' cell..."`
+
+Whoever wrote that anticipated the framework outgrowing the lesson and left instructions. It
+worked exactly as intended.
+
+**Two failure modes, and only one is visible.** A 12-agent audit of all twelve notebooks (saved
+as `TUTORIAL_IMPACT_MAP.md`) found 40 affected cells, of which only 3 *raise*. The other 37
+still run and now **teach something false** -- prose asserting a limitation that no longer
+exists. Nothing will ever fail to report those, which is why the audit covered all twelve
+notebooks rather than the four that went red. Eight notebooks are genuinely unaffected.
+
+**Tutorial 5's failure is a cascade, not a break.** It has zero static findings. Its surrogate
+reads `tmp/tutorials/toy_store`, which Tutorial 1 *writes*; T1 crashing left that store absent in
+a fresh checkout, so T5 fitted on inadequate data and its "parameter uncertainty grows away from
+the data" assertion failed.
+
+**The process failure is mine, and it is the interesting one.** I ran `make fast` and called the
+branch stable. `make fast` cannot execute notebooks -- only the slow suite does. Worse, when I
+did run Tutorial 5 locally it **passed**, because `tmp/tutorials/toy_store` already existed from
+earlier runs. So the local check was not merely incomplete, it was *actively misleading*: stale
+shared state made a broken tutorial look fine. A clean checkout is the only honest run, which is
+what Deep CI gives. For any change touching spec validation, `make slow` belongs in the gate.
+
+**State:** Tutorial 1 rewritten and passing. The new lesson is better than the one it replaces --
+of the three cross-block breaks T1 listed, two are now caught and one (`adapter.input_mapping`
+naming an undeclared variable) still is not, so the notebook now teaches the *boundary* of the
+validator's guarantees using a live example rather than asserting it has none. Tutorials 3, 4
+and 2 remain; the map has cell-level findings and suggested fixes for each.
+
 ## Security review, stage 3: the design and the I/O schema now have to agree (2026-08-12)
 
 `D4` + `D5`. All 11 shipped ModelSpecs still validate unchanged, and no sampled point moves.
