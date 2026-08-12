@@ -1,5 +1,53 @@
 # Status: Metamodeling Automation Framework
 
+## Security review, stage 2a: the sweep engine is a library, not a CLI internal (2026-08-12)
+
+`D1` from `REVIEW_AND_UPGRADE_PLAN.md`, the highest-value item in the review. No behaviour
+changes; `bayesmm run` prints exactly what it printed before.
+
+**The problem.** `_execute_design_point`, `_run_serial`, `_run_parallel_local` and `_run_mpi`
+lived inside `cli/main.py`. The only supported way to run a sweep was therefore to invoke the
+CLI — so a student wanting to sweep from a notebook cell had to shell out to `bayesmm run`, or
+import underscore-prefixed functions out of a CLI module and hope they kept working. For a
+project whose tutorials *are* notebooks, that is backwards. `TechSpec.md` describes
+spec → design → adapter → runner → storage and has no home for *orchestration*, which is why
+it landed in the CLI by default.
+
+**Now:** `bayesian_metamodeling/execution/` is that home.
+
+```python
+from bayesian_metamodeling.execution import run_sweep
+outcome = run_sweep(spec)                      # silent; returns per-point results
+outcome = run_sweep(spec, on_progress=print)   # or narrate
+outcome, stored = run_sweep_to_store(spec, spec_payload=payload)   # run and persist
+```
+
+`cli/main.py` drops 739 → 622 lines and is now argument parsing and printing.
+
+**Three deliberate changes in the move**, everything else byte-identical:
+
+1. **Typed.** All four functions took a bare, unannotated `spec`; they take `ModelSpec` now
+   (rule 8).
+2. **Printing became a callback.** A library that prints to stdout cannot be used by a
+   notebook rendering its own progress, and cannot be tested without capturing output.
+   `on_progress` defaults to silent; the CLI passes `print`. Pinned by a test asserting
+   `run_sweep` emits nothing by default.
+3. **MPI rank handling became explicit.** `SweepOutcome.is_writer` is `False` on non-root
+   ranks instead of that being implied by an early `return [], 0`. Exit-code broadcasting
+   stayed in the CLI, because an exit code is a command-line concern — the library returns
+   results.
+
+**What did not change, on purpose.** The per-point payload stays a `dict[str, Any]` rather
+than becoming a dataclass: it is `persist_sweep`'s input contract and the `sweep_logs.jsonl`
+schema, so promoting it would either duplicate that schema or force a storage change. Neither
+belongs in a refactor whose entire value is that behaviour does not move.
+
+**Test-modification note (rule 7).** Two test files imported `_execute_design_point` from
+`cli.main` and patched `cli.main.resolve_adapter`. Both were repointed at the new module —
+a rename with the function, not a weakened assertion. `tests/test_execution_api.py` is new
+and covers what the extraction actually buys.
+
+
 ## Security review, stage 1: guards that now say what they do (2026-08-12)
 
 First of four stages from `REVIEW_AND_UPGRADE_PLAN.md`, on branch

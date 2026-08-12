@@ -5,7 +5,8 @@ from unittest.mock import patch
 import pytest
 
 import bayesian_metamodeling.storage.surrogate_store as surrogate_store
-from bayesian_metamodeling.cli.main import _execute_design_point, main
+from bayesian_metamodeling.cli.main import main
+from bayesian_metamodeling.execution import execute_design_point
 from bayesian_metamodeling.spec import SurrogateSpec
 from bayesian_metamodeling.surrogates import fit_surrogate
 from tests.backend_support import available_fit_backend
@@ -122,10 +123,10 @@ def test_specific_exceptions_caught_in_execute_design_point():
             raise ValueError("bad input")
 
     with patch(
-        "bayesian_metamodeling.cli.main.resolve_adapter",
+        "bayesian_metamodeling.execution.sweep.resolve_adapter",
         return_value=_FailAdapter(),
     ):
-        result = _execute_design_point(
+        result = execute_design_point(
             spec=spec,
             point_index=0,
             point={"a": 1.0},
@@ -145,11 +146,11 @@ def test_unexpected_exceptions_propagate_from_execute_design_point():
             raise RuntimeError("unexpected")
 
     with patch(
-        "bayesian_metamodeling.cli.main.resolve_adapter",
+        "bayesian_metamodeling.execution.sweep.resolve_adapter",
         return_value=_FailAdapter(),
     ):
         with pytest.raises(RuntimeError, match="unexpected"):
-            _execute_design_point(
+            execute_design_point(
                 spec=spec,
                 point_index=0,
                 point={"a": 1.0},
