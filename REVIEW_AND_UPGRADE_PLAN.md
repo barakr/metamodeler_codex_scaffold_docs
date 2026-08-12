@@ -1,6 +1,6 @@
 # Code Design & Security Review — Upgrade Plan
 
-**Date:** 2026-08-12 · **Branch:** `feature/design-security-review` · **Status:** decisions taken, nothing implemented
+**Date:** 2026-08-12 · **Branch:** `feature/design-security-review` · **Status:** stages 1-3 implemented and committed; stage 4 not started
 
 **Scope reviewed:** `src/bayesian_metamodeling/` (47 files, 6,115 lines), the 5 CI workflows,
 the 20 shipped specs, and the tracked surrogate artifacts. Not reviewed: the KS model's C/C++
@@ -508,6 +508,50 @@ cosmetic.
 | D5 | Teach both DOE points in Tutorial 4 | Prose only |
 
 ### Stage 4 — The disruptive one · tell the students first · ~2 days
+
+> **STATUS: not started.** Stages 1–3 are implemented and committed. The feasibility probe
+> below was run so that whoever picks this up does not have to re-derive it.
+
+#### S1a feasibility — verified, with the mechanism and the one open problem
+
+Measured on the installed stack (**sbi 0.26.1, torch 2.13.0**), on a real trained NPE:
+
+- `density_estimator.state_dict()` is **99 entries, all pure tensors** — so
+  `torch.load(..., weights_only=True)` accepts it. No pickle, no code execution.
+- A posterior rebuilt from that state dict alone is **numerically identical**:
+  `log_prob` at a probe point was `-0.19843745231628418` both before and after the
+  round-trip, to the last digit.
+
+The rebuild that was proven to work:
+
+```python
+sd   = torch.load(buf, map_location="cpu", weights_only=True)   # safe
+est2 = posterior_nn(model="maf")(theta_batch, x_batch)          # architecture from shapes
+est2.load_state_dict(sd)
+post2 = DirectPosterior(posterior_estimator=est2, prior=prior)
+```
+
+**The one open problem: the prior.** `_fit_sbi_npe` never passes an explicit prior — it calls
+`inference.build_posterior(density_estimator)` and lets sbi 0.26 auto-derive the prior from
+the trained estimator (this is the behaviour `_sbi_warnings_filtered` exists to silence).
+`DirectPosterior` needs one at rebuild time. Two ways out, and the choice should be made
+deliberately rather than discovered:
+
+1. **Persist the prior explicitly.** Capture its bounds at fit time and rebuild a
+   `BoxUniform`. Straightforward, but must reproduce exactly what sbi derived, or the
+   posterior's normalisation shifts silently.
+2. **Pass an explicit prior at fit time.** Give `_fit_sbi_npe` a prior derived from the
+   normalised training data, so fit and load share one definition. Cleaner, and it removes
+   the auto-derivation advisory — but it *changes fitted results*, so it must land with the
+   refit that S1a already requires, not separately.
+
+Option 2 is probably right, precisely because it makes the prior a recorded decision instead
+of an implicit one. Either way the payload needs a new `model_type` (`sbi_npe_v3`), and
+loading an old `torch_save_base64` payload should fail with an explicit "refit required"
+message rather than silently falling back to the pickle path — a fallback would defeat the
+entire point of the change.
+
+
 
 | # | Item | Consequence |
 |---|---|---|
