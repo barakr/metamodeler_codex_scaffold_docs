@@ -126,8 +126,25 @@ def test_design_grid_valid():
 
 
 def test_design_sobol_valid():
-    d = DesignSpec(strategy="sobol", sobol={"n": 16})
-    assert d.sobol == {"n": 16}
+    d = DesignSpec(strategy="sobol", sobol={"n_points": 16, "scramble": True, "seed": 3})
+    assert d.sobol.n_points == 16
+    assert d.sobol.scramble is True
+
+
+def test_design_sobol_rejects_a_key_the_planner_would_never_read():
+    """This test previously asserted the opposite, and that was the bug (D4).
+
+    It read `DesignSpec(strategy="sobol", sobol={"n": 16})` and called it valid. `n` is not
+    a key the planner reads — `plan_sobol_points` looks for `n_points` — so the design it
+    described would have been planned with a different number of points than it named, or
+    failed later with a confusing message. `design.sobol` was `dict[str, Any]`, the one
+    untyped object in an otherwise strictly-validated spec tree, so nothing objected.
+
+    That is the same shape as the `ranges` key both research specs still carry: a plausible
+    name, silently ignored.
+    """
+    with pytest.raises(ValidationError, match="n_points"):
+        DesignSpec(strategy="sobol", sobol={"n": 16})
 
 
 # --- ModelSpec duplicate variable names (io_schema) ---

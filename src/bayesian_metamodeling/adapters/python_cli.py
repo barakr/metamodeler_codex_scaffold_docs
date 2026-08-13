@@ -19,12 +19,39 @@ class PythonCLIAdapter:
             raise ValueError("model.artifact.entrypoint is required for python_cli_adapter_v1")
 
         command = list(spec.model.artifact.entrypoint)
-        # Security: entrypoint is user-controlled by design (CLI-first tool where user
-        # controls the spec). Validate that path-like entrypoints don't traverse outside repo.
-        if len(command) > 1 and "/" in command[1]:
-            ep_path = Path(command[1]).resolve()
-            if not ep_path.is_relative_to(repo_root.resolve()):
-                raise ValueError(f"Entrypoint path must be within repo root: {command[1]}")
+        # This is a USABILITY check, not a security boundary. It catches "I pointed at
+        # the wrong directory", which is a real and common mistake. It does not — and
+        # cannot — contain a spec: `entrypoint` names the command to execute, so running
+        # a spec is running its author's code, by design. That is how this tool composes
+        # heterogeneous models (see README, "Specs are trusted input").
+        #
+        # Do not read the check below as a sandbox. It inspects path-like arguments only;
+        # the interpreter in `command[0]` is unconstrained, and any argument could name a
+        # script. It was previously commented as a security control, which was misleading.
+        repo_root_resolved = repo_root.resolve()
+        for argument in command[1:]:
+            # Normalise `\` to `/` before deciding anything. Specs are portable JSON and
+            # get shared between machines, so a path written on Windows must be judged
+            # the same way on POSIX — where `..\..\x.py` is otherwise just a *filename*
+            # containing backslashes, resolves happily inside the repo, and slips the
+            # check entirely. The previous version tested only "/", so every
+            # Windows-style path skipped it. `spec/modelspec.py` already normalises both
+            # separators for `storage.root`; that knowledge had not reached here.
+            normalized = argument.replace("\\", "/")
+            if "/" not in normalized:
+                continue
+            candidate = Path(normalized)
+            # Resolve relative arguments against the repo root, not this process's cwd:
+            # the subprocess runs with `cwd=repo_root` (see AdapterMaterialization
+            # below), so the repo root is the base that actually applies.
+            if not candidate.is_absolute():
+                candidate = repo_root / candidate
+            if not candidate.resolve().is_relative_to(repo_root_resolved):
+                raise ValueError(
+                    f"Entrypoint path points outside the repository: {argument!r}. "
+                    "This is a typo check, not a security boundary — if you meant it, "
+                    "move the script into the repo."
+                )
         for mapping in spec.adapter.input_mapping:
             if mapping.to is None:
                 continue

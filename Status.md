@@ -1,5 +1,567 @@
 # Status: Metamodeling Automation Framework
 
+## KNOWN-GOOD CHECKPOINT — `checkpoint/2026-08-13-review-verified` (a6f9d7a)
+
+**If later work goes wrong, this is the commit to return to.** It is an annotated git tag on
+branch `feature/design-security-review`, chosen because every signal was green on it at once —
+which is not true of most commits, and is the whole point of marking it.
+
+| Verified on this commit | |
+|---|---|
+| `CI` (3 OSes) | success |
+| `Interface CI` | success |
+| `Deep CI` — main / pymc / sbi / full | success |
+| `make fast` | green |
+| `pytest -m slow tests/test_tutorial_integration.py` | **12/12** |
+| `MM_STRICT_ARTIFACTS=1` on fast **and** slow suites | green |
+
+That last row is worth its own sentence: it proves the repository never depends on the legacy
+pickled-artifact path, rather than assuming it.
+
+**To come back:**
+
+```bash
+git checkout checkpoint/2026-08-13-review-verified          # look around
+git reset --hard checkpoint/2026-08-13-review-verified      # on a branch you own
+git tag -n99 -l 'checkpoint/*'                              # read the full tag message
+```
+
+**Two user-visible behaviour changes are already baked in at this point**, so returning here
+does *not* undo them: stricter spec validation (a grid naming an undeclared variable, or
+straying outside its declared `support`, is rejected at `validate` instead of failing
+mid-sweep), and the v3 sbi artifact format (older artifacts still load, with a warning). To get
+behind those, go back to `develop` at `faa39b9`.
+
+Work after this point — `S7` locks, `D8` v1 loader removal, `D2` backends split, `D3` store
+roots — is recorded in `REVIEW_AND_UPGRADE_PLAN.md` and lands in commits above this tag.
+
+
+## D2: backends.py split into a package — and the trap that shaped it (2026-08-13)
+
+1300 lines -> `__init__.py` 906, `_models.py` 373, `_helpers.py` 61. Public API unchanged:
+every name importable from `bayesian_metamodeling.surrogates.backends` before still is.
+
+**The split is smaller than "one module per backend", for a reason worth recording.** Nine
+names in this package are monkeypatched by the test suite — `_require_torch` alone in twelve
+places. Python's `from x import f` copies a reference, so a caller in a *sibling* module keeps
+its own binding and a patch applied to the package **silently stops taking effect**. Nothing
+raises. The affected tests keep passing, for the wrong reason. That is exactly the defect class
+this whole review was about, arriving through the back door of a refactor.
+
+So a patched name and its callers must share a module, which ties the guards to the fit
+functions, the fit functions to the sbi shims, and the serialisers to the save/load dispatch.
+What separated cleanly — the model classes and the shape/name helpers — moved out; the
+entangled cluster stayed, with a header explaining why rather than leaving the next reader to
+conclude the job was abandoned half-done.
+
+**One class needed care.** `SbiNPEPosteriorModel` is otherwise pure numpy but calls
+`_require_torch` and `_sbi_warnings_filtered`. It resolves them through the package **at call
+time** (`_models._runtime()`), which keeps patching working. Verified directly rather than
+assumed: patching `backends._require_torch` and calling `SbiNPEPosteriorModel.sample` reaches
+the fake.
+
+**`tests/test_backends_package_layout.py` keeps this from rotting**, with two guards: a
+behavioural one (a patch on the package must reach `_models.py`) and a static one (the
+split-out modules must not import any patched name at module scope). Without them, a future
+`from ... import _require_torch` would defeat twelve monkeypatches and every affected test
+would still be green.
+
+**The real fix, noted not done:** replace module-level patching with dependency injection in
+the tests. Then the package could split by backend properly. That is a test-architecture
+change, not a refactor, and it deserves its own decision.
+
+## D3: one explicit store root, replacing two implicit ones (2026-08-13)
+
+Every registry and artifact path was a module constant relative to the process working
+directory. Two consequences, both real:
+
+1. running `bayesmm` from a different folder silently used a **different store** — a student
+   running from `tutorials/` would wonder where their runs went, and nothing would say
+   anything;
+2. the "is this registry entry inside the store" rule was written **twice, with different
+   anchors**: `Path.cwd()` in `run_store`, the registry's own directory in `surrogate_store`.
+   Both defensible. Having both is not.
+
+`storage/_root.py` is now the single answer, named by `MM_STORE_ROOT`. **The default is
+unchanged** — the working directory — so no existing store moves. That is deliberate: the fix
+for a surprising location is to make it *sayable*, not to relocate everyone's data.
+
+**Why not anchor on the source tree**, which would have removed the surprise entirely:
+`Path(__file__).parents[3]` is the repo root only in a source checkout. For a `pip install`ed
+package it points into `site-packages`, which is nobody's idea of where sweep results belong.
+The working directory is the right default for a CLI-first tool.
+
+**`surrogate_store` deliberately keeps a stricter rule.** It requires artifacts to sit under
+the *registry's own* directory, not merely somewhere under the store root, because that is the
+tighter invariant `persist_surrogate_artifact` actually maintains — and it is the path that can
+reach a model loader. The docstring now says why it differs instead of leaving a reader to
+guess which of the two rules is the mistake.
+
+## D8: legacy artifact schemas deprecated, not deleted — and why (2026-08-13)
+
+The plan said "drop v1 artifact support after confirming none survive". I confirmed the first
+half and then deliberately did **not** do the second, because it would contradict a decision
+taken one step earlier.
+
+**The check.** No `linear_gaussian`, `pymc_bayesian_linear` or `sbi_npe_posterior` payload
+exists anywhere in git or in any store on this machine. The v1 classes have **zero** callers in
+`src/` outside `backends.py` itself.
+
+**Why deleting anyway would be wrong.** The `sbi_npe_v2` pickled format was kept loadable
+specifically so students' locally-fitted work would not break. v1 schemas are the same
+situation with less at stake — plain numbers, no security dimension — and I cannot inspect
+either student's machine to confirm they hold none. Deleting a compatibility path on the
+strength of "not on *my* laptop" is exactly the reasoning that made a contaminated local
+tutorial run look green.
+
+**So instead they became visible.** `LegacyArtifactSchemaWarning` fires on load, naming the
+schema and the command that rewrites it, and `MM_STRICT_ARTIFACTS=1` turns it into an error —
+the same mechanism as the pickled format. Deletion is now a one-line change whenever the
+population is known to be zero, and until then the population is *measurable* instead of
+assumed.
+
+**A footgun closed on the way.** `load_backend_model` did `payload.get("model_type",
+"linear_gaussian")` — a payload with no `model_type` silently became a v1 model. That is a
+guess, not a default: a truncated file produces the same input. It now warns that it is
+guessing.
+
+**A new marker, so the strict gate keeps meaning something.** Tests that deliberately load a
+deprecated artifact would make `MM_STRICT_ARTIFACTS=1` fail by design, which would render the
+gate useless. They are marked `legacy_artifact`, and the gate is:
+
+```bash
+MM_STRICT_ARTIFACTS=1 pytest -m "not slow and not legacy_artifact"
+```
+
+Green. That is the claim worth making: nothing *except* the tests that exist to exercise the
+old paths needs the old paths.
+
+## Correction: the pin file was invisible to the scanner (2026-08-13)
+
+S7 shipped the pins as `constraints/darwin-arm64.txt` and claimed that gave GitHub's dependency
+graph exact versions to match CVEs against. **That claim was wrong**, and it was wrong in the
+way this whole review has been about: the mechanism looked present and did nothing.
+
+GitHub's dependency graph only reads *recognised manifest filenames* — `requirements.txt`,
+`pyproject.toml`, `setup.py`, `Pipfile`, `poetry.lock`. A file named `darwin-arm64.txt` in a
+`constraints/` directory is not one of them, so it was never parsed. Dependabot would have
+matched vulnerabilities against the seven open ranges in `pyproject.toml` and **ignored the
+~175 transitive packages** — which were the entire reason for enabling alerting.
+
+| watched | packages |
+|---|---|
+| `pyproject.toml` alone | 7 |
+| plus `requirements.txt` | 182 |
+
+**Fix:** the pins moved to `requirements.txt` at the repository root, and
+`constraints/README.md` became `REPRODUCIBILITY.md`. Same content, a name the scanner reads.
+
+**The new hazard that name creates, and what was done about it.** A root `requirements.txt`
+invites `pip install -r`, which would push 181 packages — many of them conda-provided, including
+torch and pymc — into a conda environment and break it. The file opens with an unmissable
+`DO NOT` block pointing at `conda env create -f environment.yml`, and a test asserts that
+warning is present.
+
+**Two tests now guard the name itself**, because the name *is* the feature: one asserts the file
+is called `requirements.txt` and explains that renaming it silently drops 175 packages out of
+scanning, the other asserts the anti-footgun header survives. Without them a future tidy-up
+that moved the file back into a folder would undo the fix with nothing going red.
+
+**How this was caught:** trying to verify the user's Dependabot clicks had landed. The token
+could not read security settings, which prompted re-reading what the claim actually depended
+on. The verification failed and was useful anyway.
+
+## S7: pinned environments and where dependency alerts actually come from (2026-08-13)
+
+The supply-chain item, and the one that addresses the concern that prompted the Q1/Q5 split:
+**7 declared packages, 182 installed, 175 arriving as somebody else's dependency, none
+pinned.**
+
+**Delivered.** `requirements.txt` records all 181 packages present when
+`checkpoint/2026-08-13-review-verified` was verified green, with a header stating exactly what
+"green" meant. `REPRODUCIBILITY.md` explains the two-track split. Onboarding is untouched:
+`environment.yml` stays unpinned and is still the documented way in, because a pinned
+onboarding file is a file that stops resolving.
+
+> **Corrected the same day — see the entry above.** This originally landed as
+> `constraints/darwin-arm64.txt`, and claimed that gave the dependency graph exact versions.
+> It did not: GitHub only reads recognised manifest filenames, so that file was never
+> scanned.
+
+**The guard.** `tests/test_constraints_match_manifest.py` (fast suite) asserts every pin
+satisfies the ranges `pyproject.toml` declares. It catches the mundane way a lock becomes a
+liability: a range is tightened, nobody regenerates, and the file keeps claiming a set the
+project no longer permits. Verified it can fail, by pinning `pydantic==1.9.0` and watching it
+report `violates 'pydantic>=2,<3'`.
+
+**The test caught my own overreach immediately**, which is worth recording. The first version
+required *every* declared dependency to be pinned, and failed on `libroadrunner`/`tellurium` —
+which `py314_bayesmm` deliberately does not install, because libroadrunner is PyPI-only and the
+most platform-fragile dependency here. Core dependencies are now required; optional extras are
+range-checked only when present.
+
+**Two things are deliberately NOT done, and pretending otherwise would be the failure mode this
+whole review is about:**
+
+1. **Cross-platform locks.** Only `darwin-arm64` is pinned. Conda packages differ by OS, so a
+   macOS list is not installable elsewhere. Real locks need `conda-lock`, which is not a
+   dependency of this project and whose maintenance cost (regenerate three platforms on every
+   dependency change) is a decision rather than a detail. The README gives the exact command.
+2. **Enabling the alerts.** Dependabot security updates are a *repository setting*, not a file,
+   so no commit can turn them on. The README names the three checkboxes
+   (Settings → Code security → Dependabot) and states plainly why **version** updates must stay
+   off: on ~180 packages they produce dozens of PRs a month, everyone stops reading them, and
+   the channel becomes worse than no channel. Security-only fires a handful of times a year.
+
+So the honest summary is: the repository now makes vulnerability detection *possible* and
+reproduction *exact on one platform*. Someone with admin has to click three boxes for the first
+half to start working.
+
+## sbi artifacts no longer store a pickled object (2026-08-13)
+
+`S1a`, the security headline of the review, with the backward compatibility the user asked
+for. All suites green, including a strict-mode run.
+
+**The problem.** `sbi_npe` surrogates were saved by pickling the live posterior and loaded
+with `torch.load(weights_only=False)`. Pickle executes code *while deserialising*, so opening
+someone's surrogate was equivalent to running their program. The `hasattr(obj, "sample")`
+check beside it could not help — it inspected the return value of an operation whose danger is
+its side effects.
+
+**v3 stores weights.** The density estimator's `state_dict` (tensors only), plus the recipe to
+rebuild the architecture: the estimator name and the two dimensions. Loading uses
+`weights_only=True`, so `torch.load` refuses anything that is not a plain tensor container.
+A test pins that directly by feeding a pickled object into the v3 slot and requiring a refusal
+— the security property is *tested*, not inferred from the format.
+
+**Backward compatible, deliberately.** v2 artifacts still load, so nothing fitted before this
+breaks. But never silently: they emit `LegacyPickleArtifactWarning` naming the risk and the
+fix, and `MM_STRICT_ARTIFACTS=1` turns it into an error. That is what lets CI prove the
+repository itself never needs the unsafe path — verified by running both the fast and slow
+suites with the flag set.
+
+**The prior question, settled by measurement rather than assumption.** `_fit_sbi_npe` passes
+no prior, so sbi derives an `ImproperEmpirical` one and the rebuild needs *something*. I had
+assumed recording it would shift fitted results, which would have been a real trade-off
+against the "don't move the numbers" decision taken on DOE. Measured on sbi 0.26.1:
+
+- the derived prior is improper and flat — `log_prob` is `0.0` even at theta = 1e6;
+- `log_prob` and `sample` are **bit-identical** when it is rebuilt from wildly different
+  moments, or from an arbitrary two-point sample;
+- only its *dimension* matters, and a degenerate zero-variance placeholder is rejected by
+  sbi's own transform check.
+
+So the artifact carries no training data, and nothing moves. A full fit → save → load
+round-trip reproduces `log_prob` and `sample` exactly (`np.array_equal`, not `allclose`),
+for both single-output and multi-output `diagonal` fits.
+
+**Tests updated rather than weakened (rule 7).** Four files asserted the v2 payload shape;
+they now assert v3, and the two corruption-check tests additionally assert the new
+deprecation warning — so the announcement cannot quietly disappear.
+
+## A contaminated local tutorial run now fails instead of passing (2026-08-13)
+
+The process fix for how this branch got pushed red. Chosen over "write it down" because the
+problem was never that the rule was unknown — it was that the local check gave a **confident
+wrong answer**.
+
+**What it does.** `tests/test_tutorial_integration.py` refuses to run when `tmp/tutorials/`
+already contains data from an earlier session, and **fails** rather than skips. The message
+names what it found, how to clear it, and the override
+(`MM_ALLOW_DIRTY_TUTORIAL_STORE=1`) for anyone who knowingly wants a weaker result. CI runs on
+a clean checkout and never needs it.
+
+**Why this and not a hook.** A pre-push hook running the slow suite would catch the *incomplete*
+half and add minutes to every validation push. It would not touch the half that actually cost the
+time here: `Tutorial_5` **passed locally while failing in CI**, because this machine had a store
+`Tutorial_1` should have produced and hadn't. That is the repo's own defect class — a check that
+cannot fail — and it is fixed by making the contaminated case impossible to mistake for a good
+one. The gate rule is documented in `CLAUDE.md` as well, so both halves are covered.
+
+**A bug in the guard, caught while writing it.** The first version checked per-test. That is
+self-defeating: `Tutorial_1` *creates* the directory being guarded, so tutorials 2-12 would have
+failed in every CI run, on a clean checkout. It is now an import-time snapshot — the question is
+only ever "was the store dirty when this session started". `tests/test_tutorial_store_hygiene.py`
+pins that, and the fail-not-skip property, in the **fast** suite: a guard nobody exercises is the
+next thing to rot. It also caught a second bug of mine, a `relative_to` that raises when the
+store sits outside the repo root.
+
+Verified both directions: the guard fires against this machine's real store, and the full
+tutorial suite still passes 12/12 with the override set.
+
+## Tutorials 3 and 4 rewritten; all twelve green locally (2026-08-13)
+
+Completes the tutorial repair. `pytest -m slow tests/test_tutorial_integration.py` passes
+12/12 — the gate that should have run before the first push.
+
+**T4** taught that grid levels are never checked against `support`. Its demo built levels at
+-50 and 99 against `[0, 2]` and concluded "nothing checks it, at plan time or at run time".
+Now it shows three things instead of one: the rogue grid is rejected at `validate`; the *same*
+grid with `support` removed validates and plans all nine points, because the check can only
+compare against a bound you declared; and sobol still refuses outright without support. The
+closing text separates the **syntactic** guarantee (your design is inside the numbers you
+wrote) from the **scientific** one (those numbers are the regime your model is valid in).
+
+**T3** was the large one — its thesis was "validation is per-section, nothing spans two
+sections". That is now false in exactly one place, so the notebook teaches the boundary rather
+than the absence: *one* root-level rule (`check_design_against_io_schema`) ties `design` to
+`io_schema`, and everything touching `adapter` is still unenforced.
+
+Step 5 moved the typo to where silence still lives — `adapter.input_mapping[0].var` — and the
+resulting lesson is better than the one it replaces:
+
+| | old break (`design.grid` rename) | new break (`adapter` rename) |
+|---|---|---|
+| validate | passed | passes |
+| plan | passed, printing `alpha` — reading it saved you | passes, printing `a`/`b` — **reading it cannot save you**, the design is correct |
+| run | `KeyError: 'a'` from `run_store.py` after the sweep | all 9 points fail with `Missing input variable 'alpha'` |
+| data | **lost entirely**, 0 files | **kept**, 9 failed rows + the message in `sweep_logs.jsonl` |
+
+So the habit T3 teaches moved with the bug: "read `plan`'s keys" is now done for you by the
+validator, and what catches the surviving break is "when a run reports failures, read
+`sweep_logs.jsonl` before re-running". Step 6 became "`support` is a claim, **and now also a
+fence**", keeping the scientific half that no checker can ever hold.
+
+**Two guards fired on me while doing this, both correctly.**
+
+1. `EXPECTED_DIAGNOSTIC_MARKERS` — the harness scans notebook output for failure markers, and
+   the new Step 5 legitimately prints `Run complete with failures` / `0 successful runs`. The
+   old break never printed a summary because it died before writing one. Both markers are now
+   registered, with the reason.
+2. My own new assertion `n_mismatch_sweeps == 1` failed on the second local run, because that
+   store accumulates. Relaxed to `>= 1` with the reasoning inline — the claim is "the sweep
+   survives", and the *content* is pinned separately. An exact count would have passed on a
+   fresh checkout and failed for any student who ran the notebook twice: the same
+   stale-state trap that made my earlier local T5 run misleadingly green.
+
+**Lesson carried forward:** for changes touching spec validation, `make fast` is not a gate —
+only the slow suite executes notebooks, and only a clean checkout is honest.
+
+## Deep CI went red on the branch — the tutorials taught the gaps I closed (2026-08-12)
+
+Stages 1-3 are green on `make fast` and red on Deep CI. The cause is the inverse of a bug, and
+it is worth recording carefully.
+
+**Four tutorials deliberately DEMONSTRATE the validation gaps stage 3 closed.** Tutorial 1 said
+outright: *"There is no cross-block validator in `ModelSpec` -- every rule lives inside one
+sub-block"*, then built a spec with an undeclared grid key to prove it validated. Tutorial 3's
+entire thesis is *"validation is per-section"*; it has a Step 5 titled **"A break the validator
+does not catch"**. Those breaks are now caught, so the demonstrations raise.
+
+**Tutorial 3 had already built the tripwire for this exact day.** Its self-check reads:
+
+> `"{label} now FAILS validation. Good news about the framework, bad news about this notebook:`
+> `Steps 5-6 and the 'Why this matters' cell..."`
+
+Whoever wrote that anticipated the framework outgrowing the lesson and left instructions. It
+worked exactly as intended.
+
+**Two failure modes, and only one is visible.** A 12-agent audit of all twelve notebooks (saved
+as `TUTORIAL_IMPACT_MAP.md`) found 40 affected cells, of which only 3 *raise*. The other 37
+still run and now **teach something false** -- prose asserting a limitation that no longer
+exists. Nothing will ever fail to report those, which is why the audit covered all twelve
+notebooks rather than the four that went red. Eight notebooks are genuinely unaffected.
+
+**Tutorial 5's failure is a cascade, not a break.** It has zero static findings. Its surrogate
+reads `tmp/tutorials/toy_store`, which Tutorial 1 *writes*; T1 crashing left that store absent in
+a fresh checkout, so T5 fitted on inadequate data and its "parameter uncertainty grows away from
+the data" assertion failed.
+
+**The process failure is mine, and it is the interesting one.** I ran `make fast` and called the
+branch stable. `make fast` cannot execute notebooks -- only the slow suite does. Worse, when I
+did run Tutorial 5 locally it **passed**, because `tmp/tutorials/toy_store` already existed from
+earlier runs. So the local check was not merely incomplete, it was *actively misleading*: stale
+shared state made a broken tutorial look fine. A clean checkout is the only honest run, which is
+what Deep CI gives. For any change touching spec validation, `make slow` belongs in the gate.
+
+**State:** Tutorial 1 rewritten and passing. The new lesson is better than the one it replaces --
+of the three cross-block breaks T1 listed, two are now caught and one (`adapter.input_mapping`
+naming an undeclared variable) still is not, so the notebook now teaches the *boundary* of the
+validator's guarantees using a live example rather than asserting it has none. Tutorials 3, 4
+and 2 remain; the map has cell-level findings and suggested fixes for each.
+
+## Security review, stage 3: the design and the I/O schema now have to agree (2026-08-12)
+
+`D4` + `D5`. All 11 shipped ModelSpecs still validate unchanged, and no sampled point moves.
+
+**`design.sobol` was the one untyped object in the spec tree** — `dict[str, Any]`, read with
+three `.get()` calls. Everything else in `spec/` is Pydantic with `extra="forbid"`. It is now
+`SobolDesignSpec`.
+
+The clearest evidence of what that cost: `tests/test_spec_edge_cases.py::test_design_sobol_valid`
+asserted that `sobol={"n": 16}` was **valid**. `n` is not a key the planner reads. The test was
+encoding the bug. It now asserts the opposite, with the history in its docstring.
+
+**The `ranges` trap, resolved differently from what the plan proposed.** Both research specs
+carry `design.sobol.ranges`; the planner takes bounds from `io_schema.inputs[].support` and has
+never read `ranges`. The plan offered "delete it from the specs" or "make it authoritative".
+Both are wrong here: those specs live in **`projects/tcr_signaling`, a separate repository**, so
+forbidding the key would redden another repo's specs from this one, and honouring it would leave
+two sources of truth for one number.
+
+Instead, `ranges` is accepted and **cross-checked against `support`**. Agreement is now
+enforced; divergence fails at validation with a message saying which one the planner actually
+samples. Nothing needed to change in the submodule, the trap is closed, and a spec author who
+edits the natural-looking place is told rather than ignored.
+
+**Also connected, for the first time:** grid keys must name declared inputs (previously a typo
+surfaced mid-sweep as "Missing input variable", once per point), and grid values must lie inside
+the declared support (previously a spec could sample outside its own stated domain in silence).
+
+**Sobol balance.** `plan_points` now warns when `n_points` is not a power of 2 — the property
+Sobol is chosen for — and names the neighbouring powers. Tutorial 4's spec uses `n_points: 9`,
+so the tutorial that teaches DOE was demonstrating the case scipy itself warns about. scipy's
+own warning is suppressed by exact message, since ours states the same fact with the fix
+attached; any other scipy warning still gets through. That also keeps planning usable under
+`-W error`, which this project's `pytest.ini` sets.
+
+**`scramble` still defaults to `False`** (Q4): flipping it to match scipy would change which
+points get sampled and therefore every number the tutorials show. The divergence from scipy's
+default is documented instead, and a test pins the consequence — unscrambled, design point 1 sits
+at every variable's *minimum*, the corner of the box. That is good teaching material rather than
+a defect.
+
+## Security review, stage 2b: provenance that is actually checked (2026-08-12)
+
+`D7` + `S4b`. Artifacts have always recorded `spec_digest` and `dataset_digest`, and nothing
+ever read them back. Recording provenance without comparing it is book-keeping, not
+provenance (rule 3).
+
+**Now:** `storage/artifact.py` holds a typed `SurrogateArtifact` read model, and
+`_load_and_validate_artifact` compares the recorded spec digest against the current spec.
+`digest_surrogate_spec` is public so fit and load compute it *the one way it is defined* — if
+each rolled its own they would eventually disagree, and a check that cries wolf is a check
+people learn to ignore.
+
+**Drift warns; it does not refuse.** Editing a spec and re-evaluating before re-fitting is an
+ordinary mid-workflow state, and refusing to load would make edit-and-retry unusable. But it
+cannot be silent, or a number gets attributed to a model that never produced it. The warning
+names the fix (`bayesmm surrogate fit`), and a test asserts it does.
+
+**`extra="allow"` on the artifact model, unlike every spec model.** Artifacts are *data at
+rest* written by older versions of this package. Forbidding unknown keys would make every
+field ever added a breaking change for existing stores — the opposite of what a provenance
+record is for. Missing *required* keys still fail loudly, naming the file, instead of failing
+several frames deep inside numpy.
+
+## Security review, stage 2a: the sweep engine is a library, not a CLI internal (2026-08-12)
+
+`D1` from `REVIEW_AND_UPGRADE_PLAN.md`, the highest-value item in the review. No behaviour
+changes; `bayesmm run` prints exactly what it printed before.
+
+**The problem.** `_execute_design_point`, `_run_serial`, `_run_parallel_local` and `_run_mpi`
+lived inside `cli/main.py`. The only supported way to run a sweep was therefore to invoke the
+CLI — so a student wanting to sweep from a notebook cell had to shell out to `bayesmm run`, or
+import underscore-prefixed functions out of a CLI module and hope they kept working. For a
+project whose tutorials *are* notebooks, that is backwards. `TechSpec.md` describes
+spec → design → adapter → runner → storage and has no home for *orchestration*, which is why
+it landed in the CLI by default.
+
+**Now:** `bayesian_metamodeling/execution/` is that home.
+
+```python
+from bayesian_metamodeling.execution import run_sweep
+outcome = run_sweep(spec)                      # silent; returns per-point results
+outcome = run_sweep(spec, on_progress=print)   # or narrate
+outcome, stored = run_sweep_to_store(spec, spec_payload=payload)   # run and persist
+```
+
+`cli/main.py` drops 739 → 622 lines and is now argument parsing and printing.
+
+**Three deliberate changes in the move**, everything else byte-identical:
+
+1. **Typed.** All four functions took a bare, unannotated `spec`; they take `ModelSpec` now
+   (rule 8).
+2. **Printing became a callback.** A library that prints to stdout cannot be used by a
+   notebook rendering its own progress, and cannot be tested without capturing output.
+   `on_progress` defaults to silent; the CLI passes `print`. Pinned by a test asserting
+   `run_sweep` emits nothing by default.
+3. **MPI rank handling became explicit.** `SweepOutcome.is_writer` is `False` on non-root
+   ranks instead of that being implied by an early `return [], 0`. Exit-code broadcasting
+   stayed in the CLI, because an exit code is a command-line concern — the library returns
+   results.
+
+**What did not change, on purpose.** The per-point payload stays a `dict[str, Any]` rather
+than becoming a dataclass: it is `persist_sweep`'s input contract and the `sweep_logs.jsonl`
+schema, so promoting it would either duplicate that schema or force a storage change. Neither
+belongs in a refactor whose entire value is that behaviour does not move.
+
+**Test-modification note (rule 7).** Two test files imported `_execute_design_point` from
+`cli.main` and patched `cli.main.resolve_adapter`. Both were repointed at the new module —
+a rename with the function, not a weakened assertion. `tests/test_execution_api.py` is new
+and covers what the extraction actually buys.
+
+
+## Security review, stage 1: guards that now say what they do (2026-08-12)
+
+First of four stages from `REVIEW_AND_UPGRADE_PLAN.md`, on branch
+`feature/design-security-review`. Nothing here changes behaviour a student would notice.
+
+**The finding this stage exists for.** Three guards claimed protection they could not
+provide, and one had a *passing test* asserting it worked. That is this repo's recurring
+defect — a check that reports success without being able to hold — appearing in security
+code rather than in CI:
+
+| Guard | Claimed | Actually |
+|---|---|---|
+| `_deserialize_torch_object`'s `hasattr` check | "guard against loading arbitrary objects from tampered artifacts" | runs *after* `torch.load(weights_only=False)` has already unpickled — pickle executes during load, so it inspects the return value of an operation whose danger is its side effects |
+| `python_cli` entrypoint check | "validate that path-like entrypoints don't traverse outside repo" | inspected `command[1]` only, only when it contained `/`, so `["/bin/sh","-c",…]` and every Windows-style path passed untouched |
+| `test_rejects_object_without_posterior_interface` | read as a security test | pins a corruption check, which is worth having and is not a security control |
+
+All three now say what they are. The torch check is documented as a **corruption** check
+with an explicit "only load `sbi_npe` artifacts you fitted yourself"; the entrypoint check
+is documented as a **typo** check; the test is renamed with the reasoning attached.
+Replacing the pickle entirely is stage 4.
+
+**`model.name` reached a path that gets `rmtree`'d.** `cli/main.py` builds
+`<storage.root>/_active/<token>/<name>_<i>` and recursively deletes it in a `finally`.
+`name` was validated only as `min_length=1`. Now `model.name`, `biomodels_id` and
+`local_sbml_path` are validated with the same rule already applied to `conda_env`. The
+realistic failure was never an attack — a spec already names the command to run — it was a
+model called `lck/activity` silently writing, then deleting, somewhere nobody looked. All
+11 shipped ModelSpecs validate unchanged.
+
+**A real bug the new tests caught, worth recording.** The first version of the entrypoint
+fix checked for `\` as a separate separator. On POSIX that does nothing: `..\..\x.py` is a
+single *filename* containing backslashes, resolves happily inside the repo, and passes.
+Specs are portable JSON shared between machines, so both adapters now normalise `\`→`/`
+before judging, matching what `storage.root` has always done. The test asserting the
+Windows gap was closed failed on macOS until this was fixed — which is exactly why it was
+written as a test rather than assumed.
+
+**Trust boundary, now stated.** `README.md` gains *"Specs are trusted input — treat one
+like a Makefile"*: running a spec runs its author's code, because `entrypoint` naming a
+command is the composition mechanism that lets a C++ model and a Python model be swept by
+one tool. Every comparable tool behaves this way (`make`, `npm run`, Snakemake, Nextflow,
+CWL) and none sandbox. The decision was to say so rather than imply a containment that
+does not exist.
+
+**New, and deliberately not containment:** `bayesmm run` prints the entrypoint before
+executing, and refuses to run non-interactively when it resolves outside the repository
+unless `--yes` / `MM_ASSUME_YES=1` is given. Once per sweep, not once per point — a prompt
+that fires 64 times is a prompt nobody reads. When suppressed it *says* it was suppressed,
+so a silenced prompt is never indistinguishable from no prompt.
+
+**A second latent bug, found the same way.** Adding the registry-containment check that
+`run_store.show_registered_run` always had to `surrogate_store.find_latest_artifact_for_spec`
+immediately reddened six unrelated tests — because `SURROGATE_REGISTRY_PATH` was overridable
+while `persist_surrogate_artifact` hardcoded `Path("tmp/surrogate_artifacts")`. Relocate the
+registry and the two ended up in **different roots**, with nothing to notice. Both now derive
+from `_store_root()`, so they agree by construction; with the default registry the resolved
+paths are byte-identical to before. This is the first piece of D3, and it is a good
+advertisement for the check: the guard's first act was to expose a real incoherence rather
+than a hypothetical attack.
+
+**Also:** least-privilege `permissions: contents: read` on all four workflows; `_fit_linear`
+deleted (zero callers — an earlier note that tests referenced it was wrong, those tests use a
+same-named local helper) and `persist_sweep`'s unused `sweep_id` parameter removed.
+
+**Process note.** `pytest … | tail` reports *tail's* exit code, so a run with four failures
+looked like a pass. Every gate in this stage was re-run redirecting to a file and checking
+`$?` directly. Worth remembering: it is the same class of mistake as everything else in this
+entry — a check that cannot fail is not a check.
+
+
 ## GitHub Actions bumped to Node 24 — `checkout@v7`, `setup-python@v7` (2026-08-12)
 
 Every job in all five workflows was emitting the same deprecation notice: `actions/checkout@v4`

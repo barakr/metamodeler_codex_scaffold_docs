@@ -5,7 +5,7 @@ from __future__ import annotations
 import subprocess
 from unittest.mock import patch
 
-from bayesian_metamodeling.cli.main import _execute_design_point
+from bayesian_metamodeling.execution import execute_design_point
 from bayesian_metamodeling.spec import load_and_validate_modelspec
 
 
@@ -42,7 +42,7 @@ def test_nonexistent_entrypoint_records_failure():
         return subprocess.CompletedProcess(command, 1, stdout="", stderr="No such file")
 
     with patch("subprocess.run", _fake_run):
-        result = _execute_design_point(
+        result = execute_design_point(
             spec=spec,
             point_index=0,
             point={"a": 1.0},
@@ -66,7 +66,7 @@ def test_partial_failures_in_batch():
     results = []
     with patch("subprocess.run", _alternating_run):
         for i in range(4):
-            r = _execute_design_point(
+            r = execute_design_point(
                 spec=spec,
                 point_index=i,
                 point={"a": float(i)},
@@ -110,7 +110,7 @@ def test_output_parse_failure_records_as_failed():
         return subprocess.CompletedProcess(command, 0, stdout="ok", stderr="")
 
     with patch("subprocess.run", _success_run):
-        result = _execute_design_point(
+        result = execute_design_point(
             spec=spec,
             point_index=0,
             point={"a": 1.0},

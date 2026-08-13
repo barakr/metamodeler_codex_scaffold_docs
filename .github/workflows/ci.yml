@@ -20,6 +20,11 @@ on:
     - cron: "0 6 * * 1"
   workflow_dispatch:
 
+# Least privilege: these workflows only read the repo and run tests. Without an
+# explicit block, jobs inherit the repository default, which can be read/write.
+permissions:
+  contents: read
+
 jobs:
   test:
     name: ${{ matrix.os }} / py${{ matrix.python-version }}

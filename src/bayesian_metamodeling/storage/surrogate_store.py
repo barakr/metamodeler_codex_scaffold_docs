@@ -15,6 +15,15 @@ from bayesian_metamodeling.storage._filelock import locked_registry
 SURROGATE_REGISTRY_PATH = Path("tmp/surrogate_registry.json")
 
 
+def _store_root() -> Path:
+    """The directory the registry lives in — everything it names must be under it.
+
+    Read at call time, not import time, because the registry path is a module-level
+    constant that tests (and, once D3 lands, configuration) rebind.
+    """
+    return SURROGATE_REGISTRY_PATH.parent
+
+
 def _load_registry() -> dict[str, str]:
     if not SURROGATE_REGISTRY_PATH.exists():
         return {}
@@ -28,6 +37,16 @@ def _save_registry(registry: dict[str, str]) -> None:
 
 def _digest_json(payload: dict) -> str:
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
+
+
+def digest_surrogate_spec(spec: SurrogateSpec) -> str:
+    """The digest recorded at fit time, computed the one way it is defined.
+
+    Public because the *load* path has to recompute it to detect drift (S4b). If fit and
+    load each rolled their own, they would eventually disagree and the check would report
+    drift that isn't there — a false alarm being the fastest way to get a check ignored.
+    """
+    return _digest_json(spec.model_dump(mode="json"))
 
 
 def list_surrogate_artifacts() -> list[dict[str, str]]:
@@ -46,13 +65,20 @@ def persist_surrogate_artifact(
     dependency_versions: dict[str, str] | None = None,
 ) -> dict[str, str]:
     artifact_id = uuid4().hex
-    artifact_dir = Path("tmp/surrogate_artifacts") / artifact_id
+    # Derive the artifact directory from the registry's location rather than hardcoding
+    # `tmp/`. The two must live under one root or the registry can name paths outside the
+    # store it belongs to — which is precisely what `_check_inside_store` refuses below,
+    # and what made these two disagree: the registry path was overridable while this one
+    # was not. With the default registry (`tmp/surrogate_registry.json`) this resolves to
+    # `tmp/surrogate_artifacts/<id>`, exactly as before. Part of D3 in
+    # REVIEW_AND_UPGRADE_PLAN.md; the rest of D3 makes the root explicit rather than
+    # implied by a module constant.
+    artifact_dir = _store_root() / "surrogate_artifacts" / artifact_id
     artifact_dir.mkdir(parents=True, exist_ok=True)
 
     backend_payload_path = artifact_dir / "backend_payload.json"
     backend_payload_path.write_text(payload_path.read_text(encoding="utf-8"))
 
-    spec_payload = spec.model_dump(mode="json")
     versions = {
         "python": platform.python_version(),
         "platform": platform.platform(),
@@ -64,7 +90,7 @@ def persist_surrogate_artifact(
         "artifact_id": artifact_id,
         "spec_name": spec.name,
         "backend": spec.backend,
-        "spec_digest": _digest_json(spec_payload),
+        "spec_digest": digest_surrogate_spec(spec),
         "dataset_digest": hashlib.sha256(dataset_digest.encode("utf-8")).hexdigest(),
         "variable_lists": {"inputs": spec.inputs, "outputs": spec.outputs},
         "io_signature": {"inputs_ordered": spec.inputs, "outputs_ordered": spec.outputs},
@@ -89,12 +115,32 @@ def persist_surrogate_artifact(
     }
 
 
+def _check_inside_store(artifact_path: Path) -> Path:
+    """Refuse to read a registry entry pointing outside the store that lists it.
+
+    The registry is a plain JSON file anyone (or an older version of this package) can have
+    written, and the payload an entry names can lead to `torch.load`, so an entry pointing
+    somewhere unexpected is worth refusing rather than following.
+
+    **Anchored on the registry's own directory** — stricter than the store-wide rule in
+    `storage/_root.py`, and deliberately so. The invariant `persist_surrogate_artifact`
+    maintains is tighter than "somewhere under the store": a registry at
+    `<root>/surrogate_registry.json` only ever names artifacts under `<root>/`. Checking the
+    tighter property is free, and this is the path that can reach a model loader.
+    """
+    root = _store_root().resolve()
+    resolved = artifact_path.resolve()
+    if not resolved.is_relative_to(root):
+        raise ValueError(f"Registry entry points outside the surrogate store ({root}): {resolved}")
+    return resolved
+
+
 def find_latest_artifact_for_spec(spec_name: str) -> tuple[str, Path]:
     registry = _load_registry()
     candidates: list[tuple[str, dict, Path]] = []
     for artifact_id, path in registry.items():
         artifact_path = Path(path)
-        payload = json.loads(artifact_path.read_text(encoding="utf-8"))
+        payload = json.loads(_check_inside_store(artifact_path).read_text(encoding="utf-8"))
         if payload.get("spec_name") == spec_name:
             candidates.append((artifact_id, payload, artifact_path))
     if not candidates:

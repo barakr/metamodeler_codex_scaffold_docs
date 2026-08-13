@@ -152,8 +152,8 @@ def test_sbi_npe_backend_fit_sample_and_logprob(monkeypatch, tmp_path):
 
     payload_path = Path(artifact["backend_payload"])
     payload = json.loads(payload_path.read_text())
-    assert payload["model_type"] == "sbi_npe_posterior_v2"
-    assert "posterior_blobs_b64" in payload
+    assert payload["model_type"] == "sbi_npe_posterior_v3"
+    assert "state_dicts_b64" in payload
 
     model = load_backend_model("sbi_npe", payload_path)
     inputs = {"a": np.array([0.2, -0.1]), "b": np.array([0.3, 0.4])}

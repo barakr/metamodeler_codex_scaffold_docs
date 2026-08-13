@@ -12,6 +12,18 @@ import pytest
 
 import bayesian_metamodeling.surrogates.backends as backends
 
+# These fixtures use a deprecated artifact schema only as a vehicle for testing
+# something else, so the deprecation warning is noise here — it is asserted properly in
+# tests/test_surrogate_payload_v1_compat.py. The `legacy_artifact` marker keeps them out
+# of the MM_STRICT_ARTIFACTS=1 gate, which exists to prove nothing ELSE needs the old
+# paths; a test that deliberately loads an old artifact would make that gate meaningless.
+pytestmark = [
+    pytest.mark.legacy_artifact,
+    pytest.mark.filterwarnings(
+        "ignore::bayesian_metamodeling.surrogates.backends.LegacyArtifactSchemaWarning"
+    ),
+]
+
 
 class FakeTensor:
     def __init__(self, data: Any) -> None:
@@ -564,9 +576,21 @@ def test_fit_sbi_npe_uses_default_summary_samples(monkeypatch):
 
 
 def test_save_backend_payload_sbi_contains_required_fields(monkeypatch, tmp_path):
-    monkeypatch.setattr(backends, "_serialize_torch_object", lambda payload: "blob123")
+    # v3 saves the density estimator's weights rather than pickling the posterior, so the
+    # stand-in has to expose the same shape the real object does: `.posterior_estimator`
+    # with a `.state_dict()`. The serializer itself is stubbed; this test is about the
+    # payload's structure, not torch.
+    monkeypatch.setattr(backends, "_serialize_state_dict", lambda sd: "blob123")
+
+    class _FakeEstimator:
+        def state_dict(self):
+            return {"fake": "weights"}
+
+    class _FakePosterior:
+        posterior_estimator = _FakeEstimator()
+
     model = backends.SbiNPEPosteriorModel(
-        posterior={"fake": True},
+        posterior=_FakePosterior(),
         input_names=["a"],
         output_name="y",
         x_mean=np.asarray([0.0]),
@@ -579,9 +603,10 @@ def test_save_backend_payload_sbi_contains_required_fields(monkeypatch, tmp_path
     backends.save_backend_payload(model, payload_path)
     payload = json.loads(payload_path.read_text())
 
-    assert payload["model_type"] == "sbi_npe_posterior_v2"
-    assert payload["serialization"] == "torch_save_base64"
-    assert payload["posterior_blobs_b64"] == ["blob123"]
+    assert payload["model_type"] == "sbi_npe_posterior_v3"
+    assert payload["serialization"] == "state_dict_base64"
+    assert payload["state_dicts_b64"] == ["blob123"]
+    assert "posterior_blobs_b64" not in payload, "the pickled blob must not come back"
     assert payload["summary_samples"] == 19
     assert payload["input_names"] == ["a"]
     assert payload["output_names"] == ["y"]

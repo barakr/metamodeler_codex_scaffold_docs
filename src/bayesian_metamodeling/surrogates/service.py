@@ -10,7 +10,9 @@ from typing import Any
 import numpy as np
 
 from bayesian_metamodeling.spec import SurrogateSpec
+from bayesian_metamodeling.storage.artifact import parse_artifact
 from bayesian_metamodeling.storage.surrogate_store import (
+    digest_surrogate_spec,
     find_latest_artifact_for_spec,
     persist_surrogate_artifact,
 )
@@ -57,35 +59,42 @@ def _validate_eval_inputs(
 
 def _load_and_validate_artifact(spec: SurrogateSpec) -> dict[str, Any]:
     _, artifact_path = find_latest_artifact_for_spec(spec.name)
-    artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+    # Typed on the way in (D7), so a truncated or hand-edited artifact fails here, naming
+    # the file, instead of somewhere inside numpy several frames later.
+    artifact_model = parse_artifact(
+        json.loads(artifact_path.read_text(encoding="utf-8")), source=str(artifact_path)
+    )
 
-    artifact_backend = artifact.get("backend")
-    if artifact_backend != spec.backend:
+    if artifact_model.backend != spec.backend:
         raise ValueError(
             f"Surrogate backend mismatch for spec '{spec.name}': "
-            f"artifact backend is '{artifact_backend}', requested backend is '{spec.backend}'."
+            f"artifact backend is '{artifact_model.backend}', "
+            f"requested backend is '{spec.backend}'."
         )
 
-    variable_lists = artifact.get("variable_lists", {})
-    artifact_inputs = list(variable_lists.get("inputs", []))
-    artifact_outputs = list(variable_lists.get("outputs", []))
-
-    if artifact_inputs != spec.inputs:
+    if artifact_model.inputs != spec.inputs:
         raise ValueError(
             "Surrogate artifact input signature mismatch: "
-            f"artifact has {artifact_inputs}, spec expects {spec.inputs}."
+            f"artifact has {artifact_model.inputs}, spec expects {spec.inputs}."
         )
-    if artifact_outputs != spec.outputs:
+    if artifact_model.outputs != spec.outputs:
         raise ValueError(
             "Surrogate artifact output signature mismatch: "
-            f"artifact has {artifact_outputs}, spec expects {spec.outputs}."
+            f"artifact has {artifact_model.outputs}, spec expects {spec.outputs}."
         )
 
-    payload_path = Path(str(artifact.get("backend_payload", "")))
+    # S4b: the digests have always been recorded and never compared. A spec edited since
+    # the fit is a legitimate mid-workflow state, so this warns rather than refuses — but
+    # it must not be silent, or a result gets attributed to a model that never produced it.
+    artifact_model.warn_on_provenance_drift(
+        expected_spec_digest=digest_surrogate_spec(spec), expected_dataset_digest=None
+    )
+
+    payload_path = Path(artifact_model.backend_payload)
     if not payload_path.exists():
         raise ValueError(f"Surrogate backend payload is missing: {payload_path}")
 
-    return artifact
+    return artifact_model.model_dump()
 
 
 def fit_surrogate(spec: SurrogateSpec) -> dict[str, str]:

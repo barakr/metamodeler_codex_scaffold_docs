@@ -3,23 +3,19 @@
 from __future__ import annotations
 
 import argparse
-import concurrent.futures
 import json
-import shutil
-import subprocess
-from datetime import UTC, datetime
+import os
+import sys
 from pathlib import Path
 from typing import Any
-from uuid import uuid4
 
 from pydantic import ValidationError
 
-from bayesian_metamodeling.adapters import resolve_adapter
 from bayesian_metamodeling.config import diagnose, format_diagnose_report, setup
 from bayesian_metamodeling.config.diagnose import diagnose_to_json
 from bayesian_metamodeling.designs import DOEPlanError, plan_points, render_plan_preview
+from bayesian_metamodeling.execution import run_sweep_to_store
 from bayesian_metamodeling.meta import build_ir_from_metamodel_spec, sample_metamodel
-from bayesian_metamodeling.runners import LocalProcessRunner
 from bayesian_metamodeling.spec import (
     MetaModelSpec,
     SurrogateSpec,
@@ -32,7 +28,6 @@ from bayesian_metamodeling.storage import (
     list_registered_runs,
     list_surrogate_artifacts,
     persist_ir_artifact,
-    persist_sweep,
     show_registered_run,
 )
 from bayesian_metamodeling.surrogates import eval_surrogate, fit_surrogate
@@ -105,6 +100,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     run_parser = subparsers.add_parser("run", help="Execute all planned runs for a ModelSpec")
     run_parser.add_argument("spec", help="Path to ModelSpec JSON")
+    run_parser.add_argument(
+        "--yes",
+        "-y",
+        action="store_true",
+        help="Do not prompt before executing the spec's entrypoint (for CI and scripts)",
+    )
 
     runs_parser = subparsers.add_parser("runs", help="Inspect run registry")
     runs_subparsers = runs_parser.add_subparsers(dest="runs_command")
@@ -202,235 +203,117 @@ def _plan_command(spec_path: Path) -> int:
     return 0
 
 
-def _execute_design_point(
-    *,
-    spec,
-    point_index: int,
-    point: dict[str, float],
-    run_token: str,
-) -> dict[str, Any]:
-    """Execute one DOE point and return normalized result/log payload."""
-    adapter = resolve_adapter(spec)
-    runner = LocalProcessRunner(timeout_sec=spec.runner.resources.walltime_min * 60)
+MM_ASSUME_YES_ENV_VAR = "MM_ASSUME_YES"
 
-    run_label = f"{spec.model.name}_{point_index + 1}"
-    # Absolute, deliberately. The adapter passes this to the model as `--run-dir`
-    # and the model subprocess runs with `cwd=REPO_ROOT`, not with this process's
-    # cwd. A relative `storage.root` therefore resolved to two different
-    # directories: the model wrote its outputs under REPO_ROOT while
-    # `parse_outputs` looked under the invoking cwd, and every point failed with
-    # "Output parsing failed: No such file or directory" — the outputs existed,
-    # just somewhere nobody looked. It only appeared to work when `bayesmm` was
-    # invoked from REPO_ROOT, which made the two paths coincide.
-    temp_run_dir = (Path(spec.storage.root) / "_active" / run_token / run_label).resolve()
-    temp_run_dir.mkdir(parents=True, exist_ok=True)
 
-    started_at = datetime.now(UTC)
-    status = "failed"
-    returncode = 1
-    outputs: dict[str, Any] = {}
-    error = ""
-    stdout_text = ""
-    stderr_text = ""
+def _assume_yes_from_env() -> bool:
+    return os.environ.get(MM_ASSUME_YES_ENV_VAR, "").strip().lower() in {"1", "true", "yes", "on"}
 
-    try:
-        materialization = adapter.materialize_inputs(
-            spec=spec,
-            point=point,
-            run_dir=temp_run_dir,
-            repo_root=REPO_ROOT,
+
+def _confirm_entrypoint(spec, *, assume_yes: bool) -> bool:
+    """Show the command this spec will execute, and confirm it when it leaves the repo.
+
+    Running a spec runs its author's code — that is the composition mechanism, not a bug
+    (see README, "Specs are trusted input"). This is therefore **not** a containment
+    check and must never be described as one. It is the `bayesmm` equivalent of reading a
+    Makefile before typing `make`: it makes the moment of trust visible instead of
+    implicit.
+
+    Deliberate design points:
+
+    - Printed **once per sweep**, not once per design point. A prompt that fires 64 times
+      is a prompt everyone learns to hold Enter through.
+    - A prompt only when the entrypoint resolves outside the repository. Inside the repo
+      is the overwhelmingly common case and is not worth a keystroke.
+    - When confirmation is suppressed, that is stated in the output. A silenced prompt
+      must not be indistinguishable from no prompt — that is the failure mode this
+      codebase keeps finding in its own CI.
+    """
+    entrypoint = spec.model.artifact.entrypoint
+    if not entrypoint:
+        return True  # biomodels artifacts run a worker we ship, not a user command
+
+    print(f"Entrypoint: {' '.join(entrypoint)}")
+
+    outside: list[str] = []
+    for argument in entrypoint[1:]:
+        # Normalise separators first — see the matching comment in
+        # `adapters/python_cli.py`. A Windows-style path must be judged the same way on
+        # POSIX, or the check silently passes on half the platforms.
+        normalized = argument.replace("\\", "/")
+        if "/" not in normalized:
+            continue
+        candidate = Path(normalized)
+        if not candidate.is_absolute():
+            candidate = REPO_ROOT / candidate
+        if not candidate.resolve().is_relative_to(REPO_ROOT.resolve()):
+            outside.append(argument)
+    if not outside:
+        return True
+
+    print(f"This entrypoint points outside the repository: {', '.join(outside)}")
+    print("Running it executes that code with your permissions.")
+    if assume_yes:
+        print(f"Proceeding without confirmation (--yes or {MM_ASSUME_YES_ENV_VAR}).")
+        return True
+    if not sys.stdin.isatty():
+        print(
+            "Refusing to run non-interactively without confirmation. "
+            f"Pass --yes or set {MM_ASSUME_YES_ENV_VAR}=1 if this is intended."
         )
-        run_result = runner.run(materialization=materialization, run_dir=temp_run_dir)
-        returncode = run_result.returncode
-
-        if run_result.stdout_path.exists():
-            stdout_text = run_result.stdout_path.read_text(errors="replace")
-        if run_result.stderr_path.exists():
-            stderr_text = run_result.stderr_path.read_text(errors="replace")
-
-        if returncode == 0:
-            try:
-                outputs = adapter.parse_outputs(spec=spec, run_dir=temp_run_dir)
-                status = "success"
-            except (ValueError, FileNotFoundError, json.JSONDecodeError, KeyError, OSError) as exc:
-                error = f"Output parsing failed: {exc}"
-                stderr_text = f"{stderr_text}\n{error}".strip()
-                status = "failed"
-                returncode = 1
-        else:
-            status = "failed"
-    except (
-        ValueError,
-        FileNotFoundError,
-        subprocess.SubprocessError,
-        json.JSONDecodeError,
-        OSError,
-        KeyError,
-    ) as exc:
-        error = str(exc)
-        stderr_text = f"{stderr_text}\n{error}".strip()
-        status = "failed"
-        returncode = 1
-    finally:
-        finished_at = datetime.now(UTC)
-        duration_sec = (finished_at - started_at).total_seconds()
-        shutil.rmtree(temp_run_dir, ignore_errors=True)
-
-    return {
-        "point_index": point_index,
-        "point": point,
-        "status": status,
-        "returncode": returncode,
-        "outputs": outputs,
-        "error": error,
-        "stdout": stdout_text,
-        "stderr": stderr_text,
-        "started_at": started_at.isoformat(),
-        "finished_at": finished_at.isoformat(),
-        "duration_sec": duration_sec,
-    }
+        return False
+    return input("Continue? [y/N] ").strip().lower() in {"y", "yes"}
 
 
-def _run_serial(spec, points: list[dict[str, float]], *, run_token: str) -> list[dict[str, Any]]:
-    results: list[dict[str, Any]] = []
-    for idx, point in enumerate(points):
-        print(f"Running point {idx + 1}/{len(points)}: {point}")
-        results.append(
-            _execute_design_point(
-                spec=spec,
-                point_index=idx,
-                point=point,
-                run_token=run_token,
-            )
-        )
-    return results
+def _mpi_broadcast_exit_code(final_code: int | None) -> int:
+    """Agree on one exit code across all MPI ranks.
 
-
-def _run_parallel_local(
-    spec,
-    points: list[dict[str, float]],
-    *,
-    run_token: str,
-) -> list[dict[str, Any]]:
-    workers = spec.runner.workers or max(1, spec.runner.resources.cpus)
-    print(f"Running {len(points)} points in local parallel mode with workers={workers}")
-
-    results: list[dict[str, Any]] = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = {
-            pool.submit(
-                _execute_design_point,
-                spec=spec,
-                point_index=idx,
-                point=point,
-                run_token=run_token,
-            ): idx
-            for idx, point in enumerate(points)
-        }
-        for future in concurrent.futures.as_completed(futures):
-            result = future.result()
-            idx = int(result["point_index"])
-            print(
-                f"Completed point {idx + 1}/{len(points)} "
-                f"status={result['status']} returncode={result['returncode']}"
-            )
-            results.append(result)
-
-    return results
-
-
-def _run_mpi(
-    spec,
-    points: list[dict[str, float]],
-    *,
-    run_token: str,
-) -> tuple[list[dict[str, Any]], int]:
+    Rank 0 decides and broadcasts; every other rank passes `None` and receives it. Kept in
+    the CLI rather than in `execution/` because it is about this *process's* exit status,
+    which is a command-line concern — the library returns results, not exit codes.
+    """
     try:
         from mpi4py import MPI
-    except ImportError:
-        print("MPI mode requested but 'mpi4py' is not installed.")
-        return [], 1
-
-    comm = MPI.COMM_WORLD
-    rank = comm.Get_rank()
-    size = comm.Get_size()
-    local_indices = [idx for idx in range(len(points)) if idx % size == rank]
-
-    if rank == 0:
-        print(f"Running {len(points)} points in MPI mode across ranks={size}")
-
-    local_results: list[dict[str, Any]] = []
-    for idx in local_indices:
-        local_results.append(
-            _execute_design_point(
-                spec=spec,
-                point_index=idx,
-                point=points[idx],
-                run_token=run_token,
-            )
-        )
-
-    gathered = comm.gather(local_results, root=0)
-    if rank != 0:
-        return [], 0
-
-    merged = [item for chunk in gathered for item in chunk]
-    return merged, 0
+    except ImportError:  # pragma: no cover - only reachable in mpi mode, which needs mpi4py
+        return 1
+    return int(MPI.COMM_WORLD.bcast(final_code, root=0))
 
 
-def _run_command(spec_path: Path) -> int:
+def _run_command(spec_path: Path, *, assume_yes: bool = False) -> int:
     payload, spec, code = _load_and_validate(spec_path)
     if code != 0:
         return code
 
+    if not _confirm_entrypoint(spec, assume_yes=assume_yes or _assume_yes_from_env()):
+        return 1
+
     try:
-        points = plan_points(spec)
+        outcome, stored = run_sweep_to_store(spec, spec_payload=payload, on_progress=print)
     except DOEPlanError as exc:
         print(f"DOE planning failed: {exc}")
         return 1
 
-    run_token = uuid4().hex
-    execution_mode = spec.runner.sweep_mode
-    mpi_comm = None
+    # A non-root MPI rank has run its share and must not write. It still has to take part
+    # in the broadcast below, so rank 0's exit code is the one every rank returns.
+    if not outcome.is_writer:
+        return _mpi_broadcast_exit_code(None)
+    if outcome.exit_code != 0:
+        return outcome.exit_code
 
-    point_results: list[dict[str, Any]]
-    if execution_mode == "serial":
-        point_results = _run_serial(spec, points, run_token=run_token)
-    elif execution_mode == "parallel_local":
-        point_results = _run_parallel_local(spec, points, run_token=run_token)
-    elif execution_mode == "mpi":
-        point_results, mpi_code = _run_mpi(spec, points, run_token=run_token)
-        if mpi_code != 0:
-            return mpi_code
-        try:
-            from mpi4py import MPI
-        except ImportError:  # pragma: no cover
-            return 1
-        mpi_comm = MPI.COMM_WORLD
-        if mpi_comm.Get_rank() != 0:
-            return int(mpi_comm.bcast(None, root=0))
-    else:  # pragma: no cover - validation should prevent this
-        print(f"Unsupported runner.sweep_mode: {execution_mode}")
-        return 1
+    if stored is not None:
+        print(f"Stored sweep run: {stored.run_id}")
 
-    stored = persist_sweep(
-        spec_payload=payload,
-        spec=spec,
-        point_results=point_results,
-        execution_mode=execution_mode,
-    )
-    print(f"Stored sweep run: {stored.run_id}")
-
-    failed = sum(1 for item in point_results if item["status"] != "success")
-    success = len(point_results) - failed
-    print(f"Run complete: {success} successful runs")
+    print(f"Run complete: {outcome.success_count} successful runs")
     final_code = 0
-    if failed:
-        print(f"Run complete with failures: {failed}/{len(point_results)} points failed")
+    if outcome.failed_count:
+        print(
+            f"Run complete with failures: "
+            f"{outcome.failed_count}/{len(outcome.point_results)} points failed"
+        )
         final_code = 1
 
-    if mpi_comm is not None:
-        final_code = int(mpi_comm.bcast(final_code, root=0))
+    if outcome.execution_mode == "mpi":
+        final_code = _mpi_broadcast_exit_code(final_code)
     return final_code
 
 
@@ -697,7 +580,7 @@ def main() -> int:
     if args.command == "plan":
         return _plan_command(Path(args.spec))
     if args.command == "run":
-        return _run_command(Path(args.spec))
+        return _run_command(Path(args.spec), assume_yes=args.yes)
     if args.command == "runs" and args.runs_command == "list":
         return _runs_list_command()
     if args.command == "runs" and args.runs_command == "show":

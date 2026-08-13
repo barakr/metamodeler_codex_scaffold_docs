@@ -8,6 +8,50 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
+# Fields that end up as a path *segment* must be safe to interpolate into one.
+# `model.name` and `biomodels_id` are both used to build directories/filenames
+# (`cli/main.py` builds `<storage.root>/_active/<token>/<name>_<i>`, which is
+# `shutil.rmtree`'d in a `finally`; `adapters/biomodels_sbml.py` builds
+# `<cache>/<biomodels_id>.xml`). Without this, a name containing `..` or a
+# separator escapes the store — and in the first case takes a recursive delete
+# with it. The realistic failure is not an attack (a spec already names the
+# command to run) but an accident: a model called `lck/activity` silently
+# writing, and then deleting, somewhere nobody looked.
+#
+# Same charset as `runner.execution_env.conda_env` below, deliberately: one rule
+# for "this string becomes a path segment" is easier to remember than three.
+_PATH_SAFE_SEGMENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+
+
+def _require_path_safe(value: str, *, field: str) -> str:
+    if not _PATH_SAFE_SEGMENT.match(value):
+        raise ValueError(
+            f"{field} must start with a letter or digit and contain only letters, digits, "
+            f"'.', '_' or '-' (it is used to build a directory or file name): {value!r}"
+        )
+    return value
+
+
+def _reject_absolute_or_traversal(value: str, *, field: str) -> str:
+    """Reject absoluteness and `..` under BOTH POSIX and Windows conventions.
+
+    Platform-independent on purpose: without the double check, `/tmp/x` slips
+    through on Windows (pathlib treats it as drive-relative, not absolute) and
+    `C:\\x` / UNC paths slip through on POSIX. The explicit leading-separator
+    test catches drive-less rooted paths like `\\foo`, which Windows pathlib
+    does not flag as absolute even though they unambiguously escape.
+    """
+    if (
+        PurePosixPath(value).is_absolute()
+        or PureWindowsPath(value).is_absolute()
+        or value.startswith(("/", "\\"))
+    ):
+        raise ValueError(f"{field} must be a project-relative path")
+    # Split on either separator so `..\foo` is caught on POSIX and `../foo` on Windows.
+    if ".." in value.replace("\\", "/").split("/"):
+        raise ValueError(f"{field} must not contain directory traversal (..) sequences")
+    return value
+
 
 class ArtifactSpec(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -22,6 +66,20 @@ class ArtifactSpec(BaseModel):
     # materialized, so a tutorial can ship a reproducible sample SBML in-tree
     # and run with no network. Compatible with `MM_BIOMODELS_OFFLINE=1`.
     local_sbml_path: str | None = None
+
+    @field_validator("biomodels_id")
+    @classmethod
+    def check_biomodels_id(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        return _require_path_safe(value, field="model.artifact.biomodels_id")
+
+    @field_validator("local_sbml_path")
+    @classmethod
+    def check_local_sbml_path(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        return _reject_absolute_or_traversal(value, field="model.artifact.local_sbml_path")
 
     @model_validator(mode="after")
     def check_required_fields(self) -> "ArtifactSpec":
@@ -42,6 +100,11 @@ class ModelInfoSpec(BaseModel):
     name: str = Field(min_length=1)
     version: str = Field(min_length=1)
     artifact: ArtifactSpec
+
+    @field_validator("name")
+    @classmethod
+    def check_name_is_path_safe(cls, value: str) -> str:
+        return _require_path_safe(value, field="model.name")
 
 
 class RunnerResourcesSpec(BaseModel):
@@ -142,12 +205,35 @@ class IOSchemaSpec(BaseModel):
     time_grid: TimeGridSpec | None = None
 
 
+class SobolDesignSpec(BaseModel):
+    """Typed Sobol configuration (D4).
+
+    This was `dict[str, Any]` — the only untyped object in an otherwise strictly-validated
+    spec tree — and the planner read exactly three keys from it with `.get()`. Anything else
+    was silently ignored, which is how both research specs came to carry a `ranges` key that
+    nothing reads. See `ModelSpec.check_design_against_io_schema` for what happens to it now.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    n_points: int = Field(ge=1)
+    #: Default `False` preserves every number this project has already produced. Note that
+    #: **scipy's own default is `True`**, so a reader who knows `qmc.Sobol` will expect the
+    #: opposite; with `scramble=False` the first point is exactly the lower corner of the
+    #: box (every variable at its minimum). Tutorial 4 teaches this.
+    scramble: bool = False
+    seed: int | None = None
+    #: Accepted, and cross-checked against `io_schema.inputs[].support` rather than used.
+    #: See the class docstring and the ModelSpec validator.
+    ranges: dict[str, list[float]] | None = None
+
+
 class DesignSpec(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     strategy: Literal["grid", "sobol"]
     grid: dict[str, list[float]] | None = None
-    sobol: dict[str, Any] | None = None
+    sobol: SobolDesignSpec | None = None
 
     @model_validator(mode="after")
     def check_strategy_config(self) -> "DesignSpec":
@@ -202,25 +288,7 @@ class StorageSpec(BaseModel):
     @field_validator("root")
     @classmethod
     def check_not_absolute(cls, value: str) -> str:
-        # Reject absoluteness under EITHER POSIX or Windows conventions so the
-        # rule is platform-independent. Without this, `/tmp/x` would slip
-        # through on Windows (pathlib treats it as drive-relative, not
-        # absolute) and `C:\x` / UNC paths would slip through on POSIX. Also
-        # catch a leading `/` or `\` explicitly, since Windows pathlib does
-        # not flag drive-less rooted paths like `\foo` as absolute even
-        # though they unambiguously try to escape relativeness.
-        if (
-            PurePosixPath(value).is_absolute()
-            or PureWindowsPath(value).is_absolute()
-            or value.startswith(("/", "\\"))
-        ):
-            raise ValueError("storage.root must be a project-relative path")
-        # Same idea for parent-directory traversal: split on either separator
-        # so `..\foo` is caught on POSIX and `../foo` is caught on Windows.
-        parts = value.replace("\\", "/").split("/")
-        if ".." in parts:
-            raise ValueError("storage.root must not contain directory traversal (..) sequences")
-        return value
+        return _reject_absolute_or_traversal(value, field="storage.root")
 
 
 class ModelSpec(BaseModel):
@@ -234,6 +302,70 @@ class ModelSpec(BaseModel):
     adapter: AdapterSpec
     reproducibility: ReproducibilitySpec
     storage: StorageSpec
+
+    @model_validator(mode="after")
+    def check_design_against_io_schema(self) -> "ModelSpec":
+        """The design and the I/O schema must agree — D5, and the `ranges` trap in D4.
+
+        Nothing previously connected these two halves of a spec, so a design could name a
+        variable that does not exist, sample outside a variable's declared support, or (the
+        one that actually happened) declare bounds in a key the planner never reads. Each
+        failed late and unhelpfully, or not at all.
+        """
+        declared = {variable.name: variable for variable in self.io_schema.inputs}
+
+        if self.design.strategy == "grid" and self.design.grid:
+            unknown = sorted(set(self.design.grid) - set(declared))
+            if unknown:
+                raise ValueError(
+                    f"design.grid names variables that are not declared in io_schema.inputs: "
+                    f"{unknown}. Declared inputs are {sorted(declared)}. (Previously this "
+                    f'failed mid-sweep as "Missing input variable", once per design point.)'
+                )
+            for name, values in self.design.grid.items():
+                support = declared[name].support
+                if support is None:
+                    continue
+                outside = [v for v in values if not (support[0] <= v <= support[1])]
+                if outside:
+                    raise ValueError(
+                        f"design.grid['{name}'] contains values outside the declared support "
+                        f"{support}: {outside}. Either widen io_schema support or correct the "
+                        f"grid — sampling outside the domain a model declares is not a "
+                        f"decision that should be made silently."
+                    )
+
+        if self.design.strategy == "sobol" and self.design.sobol is not None:
+            unknown = sorted(set(self.design.sobol.ranges or {}) - set(declared))
+            if unknown:
+                raise ValueError(
+                    f"design.sobol.ranges names variables that are not declared in "
+                    f"io_schema.inputs: {unknown}. Declared inputs are {sorted(declared)}."
+                )
+            # `ranges` is NOT read by the planner — Sobol bounds come from
+            # `io_schema.inputs[].support`. Rather than forbid the key (which would reject
+            # specs that already ship, in a *separate repository*) or start honouring it
+            # (two sources of truth for one number), require the two to agree. Divergence
+            # then fails at validation instead of silently sampling a region nobody asked
+            # for, and a spec author who edits the obvious-looking place is told.
+            for name, bounds in (self.design.sobol.ranges or {}).items():
+                support = declared[name].support
+                if support is None:
+                    raise ValueError(
+                        f"design.sobol.ranges['{name}'] is set but io_schema declares no "
+                        f"support for '{name}'. Sobol bounds are taken from io_schema.support, "
+                        f"so the range would be ignored."
+                    )
+                if [float(b) for b in bounds] != [float(s) for s in support]:
+                    raise ValueError(
+                        f"design.sobol.ranges['{name}'] is {bounds} but "
+                        f"io_schema.inputs['{name}'].support is {support}, and **support is "
+                        f"what the planner actually samples**. These must agree. Edit "
+                        f"io_schema support (or remove the redundant ranges entry) — "
+                        f"otherwise the spec says one thing and the sweep does another."
+                    )
+
+        return self
 
 
 class ModelSpecValidationError(ValueError):

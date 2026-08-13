@@ -1,6 +1,11 @@
 """Storage and artifact registry utilities."""
 
 from bayesian_metamodeling.meta.sampling import META_SAMPLE_REGISTRY_PATH, list_meta_samples
+from bayesian_metamodeling.storage.artifact import (
+    ArtifactMismatchWarning,
+    SurrogateArtifact,
+    parse_artifact,
+)
 from bayesian_metamodeling.storage.meta_store import (
     META_REGISTRY_PATH,
     list_meta_ir_artifacts,
@@ -16,17 +21,21 @@ from bayesian_metamodeling.storage.run_store import (
 )
 from bayesian_metamodeling.storage.surrogate_store import (
     SURROGATE_REGISTRY_PATH,
+    digest_surrogate_spec,
     find_latest_artifact_for_spec,
     list_surrogate_artifacts,
     persist_surrogate_artifact,
 )
 
 __all__ = [
+    "ArtifactMismatchWarning",
     "META_REGISTRY_PATH",
     "META_SAMPLE_REGISTRY_PATH",
     "REGISTRY_PATH",
     "SURROGATE_REGISTRY_PATH",
     "StoredRun",
+    "SurrogateArtifact",
+    "digest_surrogate_spec",
     "find_latest_artifact_for_spec",
     "list_meta_ir_artifacts",
     "list_meta_samples",
@@ -36,5 +45,6 @@ __all__ = [
     "persist_run",
     "persist_sweep",
     "persist_surrogate_artifact",
+    "parse_artifact",
     "show_registered_run",
 ]
