@@ -36,6 +36,40 @@ Work after this point — `S7` locks, `D8` v1 loader removal, `D2` backends spli
 roots — is recorded in `REVIEW_AND_UPGRADE_PLAN.md` and lands in commits above this tag.
 
 
+## D2: backends.py split into a package — and the trap that shaped it (2026-08-13)
+
+1300 lines -> `__init__.py` 906, `_models.py` 373, `_helpers.py` 61. Public API unchanged:
+every name importable from `bayesian_metamodeling.surrogates.backends` before still is.
+
+**The split is smaller than "one module per backend", for a reason worth recording.** Nine
+names in this package are monkeypatched by the test suite — `_require_torch` alone in twelve
+places. Python's `from x import f` copies a reference, so a caller in a *sibling* module keeps
+its own binding and a patch applied to the package **silently stops taking effect**. Nothing
+raises. The affected tests keep passing, for the wrong reason. That is exactly the defect class
+this whole review was about, arriving through the back door of a refactor.
+
+So a patched name and its callers must share a module, which ties the guards to the fit
+functions, the fit functions to the sbi shims, and the serialisers to the save/load dispatch.
+What separated cleanly — the model classes and the shape/name helpers — moved out; the
+entangled cluster stayed, with a header explaining why rather than leaving the next reader to
+conclude the job was abandoned half-done.
+
+**One class needed care.** `SbiNPEPosteriorModel` is otherwise pure numpy but calls
+`_require_torch` and `_sbi_warnings_filtered`. It resolves them through the package **at call
+time** (`_models._runtime()`), which keeps patching working. Verified directly rather than
+assumed: patching `backends._require_torch` and calling `SbiNPEPosteriorModel.sample` reaches
+the fake.
+
+**`tests/test_backends_package_layout.py` keeps this from rotting**, with two guards: a
+behavioural one (a patch on the package must reach `_models.py`) and a static one (the
+split-out modules must not import any patched name at module scope). Without them, a future
+`from ... import _require_torch` would defeat twelve monkeypatches and every affected test
+would still be green.
+
+**The real fix, noted not done:** replace module-level patching with dependency injection in
+the tests. Then the package could split by backend properly. That is a test-architecture
+change, not a refactor, and it deserves its own decision.
+
 ## D3: one explicit store root, replacing two implicit ones (2026-08-13)
 
 Every registry and artifact path was a module constant relative to the process working
