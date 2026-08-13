@@ -1,5 +1,41 @@
 # Status: Metamodeling Automation Framework
 
+## KNOWN-GOOD CHECKPOINT — `checkpoint/2026-08-13-review-verified` (a6f9d7a)
+
+**If later work goes wrong, this is the commit to return to.** It is an annotated git tag on
+branch `feature/design-security-review`, chosen because every signal was green on it at once —
+which is not true of most commits, and is the whole point of marking it.
+
+| Verified on this commit | |
+|---|---|
+| `CI` (3 OSes) | success |
+| `Interface CI` | success |
+| `Deep CI` — main / pymc / sbi / full | success |
+| `make fast` | green |
+| `pytest -m slow tests/test_tutorial_integration.py` | **12/12** |
+| `MM_STRICT_ARTIFACTS=1` on fast **and** slow suites | green |
+
+That last row is worth its own sentence: it proves the repository never depends on the legacy
+pickled-artifact path, rather than assuming it.
+
+**To come back:**
+
+```bash
+git checkout checkpoint/2026-08-13-review-verified          # look around
+git reset --hard checkpoint/2026-08-13-review-verified      # on a branch you own
+git tag -n99 -l 'checkpoint/*'                              # read the full tag message
+```
+
+**Two user-visible behaviour changes are already baked in at this point**, so returning here
+does *not* undo them: stricter spec validation (a grid naming an undeclared variable, or
+straying outside its declared `support`, is rejected at `validate` instead of failing
+mid-sweep), and the v3 sbi artifact format (older artifacts still load, with a warning). To get
+behind those, go back to `develop` at `faa39b9`.
+
+Work after this point — `S7` locks, `D8` v1 loader removal, `D2` backends split, `D3` store
+roots — is recorded in `REVIEW_AND_UPGRADE_PLAN.md` and lands in commits above this tag.
+
+
 ## sbi artifacts no longer store a pickled object (2026-08-13)
 
 `S1a`, the security headline of the review, with the backward compatibility the user asked
