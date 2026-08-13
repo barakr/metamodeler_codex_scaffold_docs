@@ -1,5 +1,53 @@
 # Status: Metamodeling Automation Framework
 
+## Tutorials 3 and 4 rewritten; all twelve green locally (2026-08-13)
+
+Completes the tutorial repair. `pytest -m slow tests/test_tutorial_integration.py` passes
+12/12 — the gate that should have run before the first push.
+
+**T4** taught that grid levels are never checked against `support`. Its demo built levels at
+-50 and 99 against `[0, 2]` and concluded "nothing checks it, at plan time or at run time".
+Now it shows three things instead of one: the rogue grid is rejected at `validate`; the *same*
+grid with `support` removed validates and plans all nine points, because the check can only
+compare against a bound you declared; and sobol still refuses outright without support. The
+closing text separates the **syntactic** guarantee (your design is inside the numbers you
+wrote) from the **scientific** one (those numbers are the regime your model is valid in).
+
+**T3** was the large one — its thesis was "validation is per-section, nothing spans two
+sections". That is now false in exactly one place, so the notebook teaches the boundary rather
+than the absence: *one* root-level rule (`check_design_against_io_schema`) ties `design` to
+`io_schema`, and everything touching `adapter` is still unenforced.
+
+Step 5 moved the typo to where silence still lives — `adapter.input_mapping[0].var` — and the
+resulting lesson is better than the one it replaces:
+
+| | old break (`design.grid` rename) | new break (`adapter` rename) |
+|---|---|---|
+| validate | passed | passes |
+| plan | passed, printing `alpha` — reading it saved you | passes, printing `a`/`b` — **reading it cannot save you**, the design is correct |
+| run | `KeyError: 'a'` from `run_store.py` after the sweep | all 9 points fail with `Missing input variable 'alpha'` |
+| data | **lost entirely**, 0 files | **kept**, 9 failed rows + the message in `sweep_logs.jsonl` |
+
+So the habit T3 teaches moved with the bug: "read `plan`'s keys" is now done for you by the
+validator, and what catches the surviving break is "when a run reports failures, read
+`sweep_logs.jsonl` before re-running". Step 6 became "`support` is a claim, **and now also a
+fence**", keeping the scientific half that no checker can ever hold.
+
+**Two guards fired on me while doing this, both correctly.**
+
+1. `EXPECTED_DIAGNOSTIC_MARKERS` — the harness scans notebook output for failure markers, and
+   the new Step 5 legitimately prints `Run complete with failures` / `0 successful runs`. The
+   old break never printed a summary because it died before writing one. Both markers are now
+   registered, with the reason.
+2. My own new assertion `n_mismatch_sweeps == 1` failed on the second local run, because that
+   store accumulates. Relaxed to `>= 1` with the reasoning inline — the claim is "the sweep
+   survives", and the *content* is pinned separately. An exact count would have passed on a
+   fresh checkout and failed for any student who ran the notebook twice: the same
+   stale-state trap that made my earlier local T5 run misleadingly green.
+
+**Lesson carried forward:** for changes touching spec validation, `make fast` is not a gate —
+only the slow suite executes notebooks, and only a clean checkout is honest.
+
 ## Deep CI went red on the branch — the tutorials taught the gaps I closed (2026-08-12)
 
 Stages 1-3 are green on `make fast` and red on Deep CI. The cause is the inverse of a bug, and

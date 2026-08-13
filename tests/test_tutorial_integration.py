@@ -59,7 +59,20 @@ FAILURE_MARKERS = (
 EXPECTED_DIAGNOSTIC_MARKERS = {
     # T3's break/repair cycles intentionally trigger validation errors
     # — the cell printouts ARE the lesson.
-    "Tutorial_3.ipynb": {"Spec validation failed:"},
+    #
+    # `Run complete with failures` joined the list when Step 5 was retargeted. The step
+    # used to rename a `design.grid` key, which `bayesmm run` turned into a `KeyError`
+    # from the storage layer — the sweep died and wrote nothing, so no summary line was
+    # ever printed. That break is now rejected at validation, so Step 5 demonstrates the
+    # contract that IS still unenforced: an `adapter.input_mapping` var that `io_schema`
+    # never declares. That one runs, fails all nine points with the adapter's message,
+    # and persists the sweep — which is a better outcome and a legible summary line.
+    # The line is the lesson; the self-check asserts its content precisely.
+    "Tutorial_3.ipynb": {
+        "Spec validation failed:",
+        "Run complete with failures",
+        "0 successful runs",
+    },
     # T0 is the diagnostic notebook: `bayesmm doctor` reports the literal
     # `ModuleNotFoundError` text that Python would raise for each missing
     # optional package, as actionable info. Not a failure.
