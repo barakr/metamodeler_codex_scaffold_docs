@@ -1,30 +1,44 @@
-# Exact package versions present when checkpoint/2026-08-13-review-verified (a6f9d7a)
-# was verified green: CI on 3 OSes, all four Deep CI environments, make fast, the full
-# slow tutorial suite 12/12, and both suites again under MM_STRICT_ARTIFACTS=1.
+# ============================================================================
+#  DO NOT `pip install -r` THIS FILE INTO YOUR CONDA ENVIRONMENT.
 #
-# WHAT THIS IS FOR
-#   Reproducing that exact result later, and giving GitHub's dependency graph precise
-#   versions to match CVEs against instead of the open ranges in pyproject.toml.
+#  It lists 181 packages, many of which conda installed (pymc, torch, ...).
+#  Re-installing them with pip on top of a conda env is a reliable way to
+#  break that env. To set up, use:
 #
-# WHAT THIS IS NOT
-#   Not the onboarding path -- environment.yml is, and it is deliberately unpinned so a
-#   new student's install still resolves. Nobody needs this file to work through the
-#   tutorials.
-#   Not multi-platform. These are the versions resolved on darwin-arm64; conda packages in
-#   particular differ across operating systems. See constraints/README.md.
-#   Not a security check. It cannot tell you a pinned version has a CVE -- that is what
-#   Dependabot security alerts are for, and constraints/README.md says how to enable them.
+#      conda env create -f environment.yml
 #
-# USE
-#   pip install -e . -c constraints/darwin-arm64.txt
+#  This file exists for two other reasons:
 #
-# REGENERATE (only from an environment you have just verified green)
-#   python -m pip list --format=freeze | grep -v '^bayesian-metamodeling==' \
-#       > constraints/darwin-arm64.txt   # then re-add this header
+#  1. VULNERABILITY SCANNING. GitHub's dependency graph only reads recognised
+#     manifest filenames -- `requirements.txt`, `pyproject.toml`, `setup.py`.
+#     Without this file, Dependabot would match CVEs only against the seven
+#     open ranges in pyproject.toml, leaving the ~175 transitive packages
+#     unwatched. That was the entire point of turning alerting on.
 #
-# The biomodels extra (libroadrunner, tellurium) is deliberately absent: it is PyPI-only
-# and the most platform-fragile dependency here, so py314_bayesmm does not install it.
+#  2. EXACT REPRODUCTION, as a constraints file (which does NOT install
+#     anything on its own):
 #
+#         pip install -e . -c requirements.txt
+#
+#  PROVENANCE
+#    These are the versions present when checkpoint/2026-08-13-review-verified
+#    was green: CI on 3 OSes, all four Deep CI environments, make fast, the
+#    slow tutorial suite 12/12, and both suites again under
+#    MM_STRICT_ARTIFACTS=1.
+#
+#  PLATFORM
+#    Resolved on darwin-arm64. Conda packages differ across operating systems,
+#    so these exact versions are not installable elsewhere. See
+#    REPRODUCIBILITY.md.
+#
+#  REGENERATE (only from an environment you have just verified green)
+#    python -m pip list --format=freeze | grep -v '^bayesian-metamodeling=='
+#    ...then restore this header. tests/test_constraints_match_manifest.py
+#    checks the result against the ranges pyproject.toml declares.
+#
+#  The local package is excluded on purpose: `pip install -e . -c <this>`
+#  refuses to run if the file pins the package being installed.
+# ============================================================================
 absl-py==2.5.0
 annotated-types==0.8.0
 anyio==4.14.2

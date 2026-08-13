@@ -136,17 +136,57 @@ MM_STRICT_ARTIFACTS=1 pytest -m "not slow and not legacy_artifact"
 Green. That is the claim worth making: nothing *except* the tests that exist to exercise the
 old paths needs the old paths.
 
+## Correction: the pin file was invisible to the scanner (2026-08-13)
+
+S7 shipped the pins as `constraints/darwin-arm64.txt` and claimed that gave GitHub's dependency
+graph exact versions to match CVEs against. **That claim was wrong**, and it was wrong in the
+way this whole review has been about: the mechanism looked present and did nothing.
+
+GitHub's dependency graph only reads *recognised manifest filenames* — `requirements.txt`,
+`pyproject.toml`, `setup.py`, `Pipfile`, `poetry.lock`. A file named `darwin-arm64.txt` in a
+`constraints/` directory is not one of them, so it was never parsed. Dependabot would have
+matched vulnerabilities against the seven open ranges in `pyproject.toml` and **ignored the
+~175 transitive packages** — which were the entire reason for enabling alerting.
+
+| watched | packages |
+|---|---|
+| `pyproject.toml` alone | 7 |
+| plus `requirements.txt` | 182 |
+
+**Fix:** the pins moved to `requirements.txt` at the repository root, and
+`constraints/README.md` became `REPRODUCIBILITY.md`. Same content, a name the scanner reads.
+
+**The new hazard that name creates, and what was done about it.** A root `requirements.txt`
+invites `pip install -r`, which would push 181 packages — many of them conda-provided, including
+torch and pymc — into a conda environment and break it. The file opens with an unmissable
+`DO NOT` block pointing at `conda env create -f environment.yml`, and a test asserts that
+warning is present.
+
+**Two tests now guard the name itself**, because the name *is* the feature: one asserts the file
+is called `requirements.txt` and explains that renaming it silently drops 175 packages out of
+scanning, the other asserts the anti-footgun header survives. Without them a future tidy-up
+that moved the file back into a folder would undo the fix with nothing going red.
+
+**How this was caught:** trying to verify the user's Dependabot clicks had landed. The token
+could not read security settings, which prompted re-reading what the claim actually depended
+on. The verification failed and was useful anyway.
+
 ## S7: pinned environments and where dependency alerts actually come from (2026-08-13)
 
 The supply-chain item, and the one that addresses the concern that prompted the Q1/Q5 split:
 **7 declared packages, 182 installed, 175 arriving as somebody else's dependency, none
 pinned.**
 
-**Delivered.** `constraints/darwin-arm64.txt` records all 181 packages present when
+**Delivered.** `requirements.txt` records all 181 packages present when
 `checkpoint/2026-08-13-review-verified` was verified green, with a header stating exactly what
-"green" meant. `constraints/README.md` explains the two-track split. Onboarding is untouched:
+"green" meant. `REPRODUCIBILITY.md` explains the two-track split. Onboarding is untouched:
 `environment.yml` stays unpinned and is still the documented way in, because a pinned
 onboarding file is a file that stops resolving.
+
+> **Corrected the same day — see the entry above.** This originally landed as
+> `constraints/darwin-arm64.txt`, and claimed that gave the dependency graph exact versions.
+> It did not: GitHub only reads recognised manifest filenames, so that file was never
+> scanned.
 
 **The guard.** `tests/test_constraints_match_manifest.py` (fast suite) asserts every pin
 satisfies the ranges `pyproject.toml` declares. It catches the mundane way a lock becomes a
