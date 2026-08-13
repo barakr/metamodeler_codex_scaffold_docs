@@ -195,5 +195,8 @@ def test_show_registered_run_rejects_path_outside_project(monkeypatch, tmp_path)
     registry_path = tmp_path / "bad_reg.json"
     registry_path.write_text(json.dumps({"bad": "/etc/passwd"}))
     monkeypatch.setattr(run_store_mod, "REGISTRY_PATH", registry_path)
-    with pytest.raises(ValueError, match="outside project"):
+    # Message changed with D3: the anchor is now the explicit store root
+    # (storage/_root.py) rather than an ad-hoc `Path.cwd()` check written here. The
+    # behaviour — refuse to read what a registry names outside the store — did not.
+    with pytest.raises(ValueError, match="outside the store"):
         show_registered_run("bad")

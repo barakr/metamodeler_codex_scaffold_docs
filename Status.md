@@ -36,6 +36,33 @@ Work after this point — `S7` locks, `D8` v1 loader removal, `D2` backends spli
 roots — is recorded in `REVIEW_AND_UPGRADE_PLAN.md` and lands in commits above this tag.
 
 
+## D3: one explicit store root, replacing two implicit ones (2026-08-13)
+
+Every registry and artifact path was a module constant relative to the process working
+directory. Two consequences, both real:
+
+1. running `bayesmm` from a different folder silently used a **different store** — a student
+   running from `tutorials/` would wonder where their runs went, and nothing would say
+   anything;
+2. the "is this registry entry inside the store" rule was written **twice, with different
+   anchors**: `Path.cwd()` in `run_store`, the registry's own directory in `surrogate_store`.
+   Both defensible. Having both is not.
+
+`storage/_root.py` is now the single answer, named by `MM_STORE_ROOT`. **The default is
+unchanged** — the working directory — so no existing store moves. That is deliberate: the fix
+for a surprising location is to make it *sayable*, not to relocate everyone's data.
+
+**Why not anchor on the source tree**, which would have removed the surprise entirely:
+`Path(__file__).parents[3]` is the repo root only in a source checkout. For a `pip install`ed
+package it points into `site-packages`, which is nobody's idea of where sweep results belong.
+The working directory is the right default for a CLI-first tool.
+
+**`surrogate_store` deliberately keeps a stricter rule.** It requires artifacts to sit under
+the *registry's own* directory, not merely somewhere under the store root, because that is the
+tighter invariant `persist_surrogate_artifact` actually maintains — and it is the path that can
+reach a model loader. The docstring now says why it differs instead of leaving a reader to
+guess which of the two rules is the mistake.
+
 ## D8: legacy artifact schemas deprecated, not deleted — and why (2026-08-13)
 
 The plan said "drop v1 artifact support after confirming none survive". I confirmed the first

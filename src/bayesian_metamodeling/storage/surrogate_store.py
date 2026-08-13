@@ -118,19 +118,15 @@ def persist_surrogate_artifact(
 def _check_inside_store(artifact_path: Path) -> Path:
     """Refuse to read a registry entry pointing outside the store that lists it.
 
-    `run_store.show_registered_run` has done something like this since it was written;
-    this path did not, so the same registry-poisoning concern was handled in one place
-    and ignored in the other. The registry is a plain JSON file anyone can edit, and the
-    payload an entry names can lead to `torch.load`, so it is worth refusing on the way
-    in.
+    The registry is a plain JSON file anyone (or an older version of this package) can have
+    written, and the payload an entry names can lead to `torch.load`, so an entry pointing
+    somewhere unexpected is worth refusing rather than following.
 
-    **Anchored on the registry's own directory, not the process cwd.** A registry at
-    `<root>/surrogate_registry.json` may only reference artifacts under `<root>/`, which
-    is the actual invariant — `persist_surrogate_artifact` writes both. Anchoring on
-    `Path.cwd()` instead (as `run_store` does) makes the rule depend on where you
-    happened to launch `bayesmm` from, which is the same cwd-sensitivity recorded as D3
-    in REVIEW_AND_UPGRADE_PLAN.md. When D3 lands and store roots become explicit, both
-    call sites should converge on that root.
+    **Anchored on the registry's own directory** — stricter than the store-wide rule in
+    `storage/_root.py`, and deliberately so. The invariant `persist_surrogate_artifact`
+    maintains is tighter than "somewhere under the store": a registry at
+    `<root>/surrogate_registry.json` only ever names artifacts under `<root>/`. Checking the
+    tighter property is free, and this is the path that can reach a model loader.
     """
     root = _store_root().resolve()
     resolved = artifact_path.resolve()

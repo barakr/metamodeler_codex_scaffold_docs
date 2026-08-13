@@ -12,6 +12,7 @@ from uuid import uuid4
 
 from bayesian_metamodeling.spec import ModelSpec
 from bayesian_metamodeling.storage._filelock import locked_registry
+from bayesian_metamodeling.storage._root import is_inside_store, store_root
 from bayesian_metamodeling.storage.sweep_store import (
     flatten_outputs_for_row,
     write_sweep_logs_jsonl,
@@ -54,10 +55,11 @@ def show_registered_run(run_id: str) -> dict:
     if run_id not in registry:
         raise ValueError(f"Run not found in registry: {run_id}")
     record_path = Path(registry[run_id]).resolve()
-    cwd = Path.cwd().resolve()
-    tmp_root = (cwd / "tmp").resolve()
-    if not (record_path.is_relative_to(cwd) or record_path.is_relative_to(tmp_root)):
-        raise ValueError(f"Registry entry points outside project: {record_path}")
+    # One containment rule, shared with `surrogate_store` (storage/_root.py). This used to be
+    # written here against `Path.cwd()` and there against the registry's own directory — two
+    # defensible answers to one question, which is one too many.
+    if not is_inside_store(record_path):
+        raise ValueError(f"Registry entry points outside the store ({store_root()}): {record_path}")
     return json.loads(record_path.read_text(encoding="utf-8"))
 
 
