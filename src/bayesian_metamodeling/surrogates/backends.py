@@ -38,8 +38,16 @@ Single-output is the special case ``D == 1``. ``backend_config["output_correlati
 selects between ``"diagonal"`` (independent outputs, default — fast) and
 ``"full"`` (joint covariance — captures cross-output correlation).
 
-Payload schema is versioned: new artifacts use ``..._v2`` model_types; old v1
-artifacts (single-output) are still loadable as ``D == 1``.
+Payload schema is versioned and every older version stays loadable:
+
+- ``pymc_gp`` writes ``pymc_bayesian_linear_v2``; v1 (single-output) loads as ``D == 1``.
+- ``sbi_npe`` writes ``sbi_npe_posterior_v3``, which stores the density estimator's
+  ``state_dict`` (tensors only) plus the recipe to rebuild the architecture, and loads with
+  ``weights_only=True``. Nothing in such a file can execute.
+- ``sbi_npe_posterior_v2`` is the **legacy pickled** format. It still loads so that work
+  fitted before the change does not break, but it warns that the artifact is executable, and
+  ``MM_STRICT_ARTIFACTS=1`` turns that into an error — which is how CI proves this repository
+  never depends on the unsafe path.
 """
 
 from __future__ import annotations
@@ -267,6 +275,7 @@ class SbiNPEPosteriorModel:
         output_name: str | None = None,
         output_correlation: str = "full",
         summary_samples: int = 256,
+        density_estimator: str = "maf",
     ) -> None:
         if posteriors is None:
             if posterior is None:
@@ -286,6 +295,10 @@ class SbiNPEPosteriorModel:
         self.y_scale = np.atleast_1d(np.asarray(y_scale, dtype=float))
         self.output_correlation = output_correlation
         self.summary_samples = summary_samples
+        # Recorded so the artifact can be rebuilt from weights alone rather than pickled.
+        # `posterior_nn(model=<this>)` plus the state dict and the two dimensions is the
+        # whole recipe — see `_rebuild_sbi_posterior`.
+        self.density_estimator = density_estimator
 
     @property
     def n_outputs(self) -> int:
@@ -830,6 +843,7 @@ def _fit_sbi_npe(
         y_scale=np.asarray(y_scale, dtype=float),
         output_correlation=output_correlation,
         summary_samples=int(backend_config.get("summary_samples", 256)),
+        density_estimator=density_estimator_name,
     )
 
 
@@ -883,6 +897,85 @@ def _serialize_torch_object(payload: Any) -> str:
     return base64.b64encode(buffer.getvalue()).decode("ascii")
 
 
+STRICT_ARTIFACTS_ENV_VAR = "MM_STRICT_ARTIFACTS"
+
+
+class LegacyPickleArtifactWarning(UserWarning):
+    """A surrogate artifact is in the pre-v3 pickled format.
+
+    Loading it executes code from the file. Kept loadable so that work fitted before the
+    format changed does not simply break — but never silently, and `MM_STRICT_ARTIFACTS=1`
+    turns this into an error so CI can prove the repository itself never depends on it.
+    """
+
+
+def _strict_artifacts() -> bool:
+    return os.environ.get(STRICT_ARTIFACTS_ENV_VAR, "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _serialize_state_dict(state_dict: Any) -> str:
+    """Base64 a tensor-only `state_dict`. Contains no code, by construction."""
+    torch = _require_torch()
+    buffer = io.BytesIO()
+    torch.save(state_dict, buffer)
+    return base64.b64encode(buffer.getvalue()).decode("ascii")
+
+
+def _deserialize_state_dict(serialized: str) -> Any:
+    """Load a tensor-only `state_dict` with unpickling **disabled**.
+
+    `weights_only=True` is the whole point of the v3 format: `torch.load` refuses anything
+    that is not a plain tensor container, so a tampered artifact cannot execute code on the
+    way in. Contrast `_deserialize_torch_object` below, which is the legacy path.
+    """
+    torch = _require_torch()
+    buffer = io.BytesIO(base64.b64decode(serialized.encode("ascii")))
+    return torch.load(buffer, map_location="cpu", weights_only=True)
+
+
+def _rebuild_sbi_posterior(
+    *, state_dict: Any, density_estimator: str, theta_dim: int, x_dim: int
+) -> Any:
+    """Reconstruct a `DirectPosterior` from weights, with no pickled objects involved.
+
+    The recipe is: ask sbi for the same architecture (`posterior_nn(model=...)` is a
+    *builder* that infers layer shapes from example batches), load the saved weights into
+    it, and wrap it in a posterior.
+
+    **On the prior.** `_fit_sbi_npe` passes none, so sbi derives an `ImproperEmpirical` one
+    from the training targets. Measured on sbi 0.26.1: that prior's `log_prob` is `0.0`
+    everywhere — it is improper and flat — and neither `log_prob` nor `sample` changes when
+    it is rebuilt from *wildly different* moments. Only its dimension matters, and a
+    degenerate (zero-variance) placeholder is rejected by sbi's transform check. So a fixed
+    non-degenerate placeholder of the right width reproduces the original exactly, and no
+    training data has to be carried in the artifact to achieve it.
+    """
+    torch = _require_torch()
+    _require_sbi()
+    from sbi.inference.posteriors import DirectPosterior
+    from sbi.neural_nets import posterior_nn
+    from sbi.utils.sbiutils import ImproperEmpirical
+
+    # Deterministic, non-degenerate example batches. Only their *shapes* select the
+    # architecture; every learned value, including the z-scoring buffers, is overwritten by
+    # `load_state_dict` below.
+    rows = 16
+    example_theta = torch.linspace(-1.0, 1.0, rows * theta_dim).reshape(rows, theta_dim)
+    example_x = torch.linspace(-1.0, 1.0, rows * x_dim).reshape(rows, x_dim)
+
+    with _sbi_warnings_filtered():
+        estimator = posterior_nn(model=density_estimator)(example_theta, example_x)
+        estimator.load_state_dict(state_dict)
+        estimator.eval()
+        placeholder_prior = ImproperEmpirical(example_theta)
+        return DirectPosterior(posterior_estimator=estimator, prior=placeholder_prior)
+
+
 def _deserialize_torch_object(serialized: str) -> Any:
     """Load a pickled SBI posterior. **This executes code from the artifact.**
 
@@ -902,6 +995,21 @@ def _deserialize_torch_object(serialized: str) -> Any:
     in REVIEW_AND_UPGRADE_PLAN.md.
     """
     torch = _require_torch()
+
+    message = (
+        "This surrogate artifact uses the legacy pickled format (`sbi_npe_v2`). Loading it "
+        "runs code contained in the file, so only load artifacts you fitted yourself. "
+        "Re-run `bayesmm surrogate fit` to rewrite it in the v3 format, which stores weights "
+        f"only and loads with unpickling disabled. Set {STRICT_ARTIFACTS_ENV_VAR}=1 to make "
+        "this an error instead of a warning."
+    )
+    if _strict_artifacts():
+        raise ValueError(
+            f"Refusing to load a legacy pickled surrogate artifact "
+            f"({STRICT_ARTIFACTS_ENV_VAR}=1). {message}"
+        )
+    warnings.warn(message, LegacyPickleArtifactWarning, stacklevel=3)
+
     buffer = io.BytesIO(base64.b64decode(serialized.encode("ascii")))
     try:
         obj = torch.load(buffer, map_location="cpu", weights_only=False)
@@ -934,10 +1042,15 @@ def save_backend_payload(model: SurrogateModel, payload_path: Path) -> None:
             payload["posterior_sigma"] = model.posterior_sigma.tolist()
     elif isinstance(model, SbiNPEPosteriorModel):
         payload = {
-            "model_type": "sbi_npe_posterior_v2",
+            "model_type": "sbi_npe_posterior_v3",
             "schema_version": 2,
-            "serialization": "torch_save_base64",
-            "posterior_blobs_b64": [_serialize_torch_object(p) for p in model.posteriors],
+            "serialization": "state_dict_base64",
+            "density_estimator": model.density_estimator,
+            "theta_dim": len(model.output_names) if model.output_correlation == "full" else 1,
+            "x_dim": len(model.input_names),
+            "state_dicts_b64": [
+                _serialize_state_dict(p.posterior_estimator.state_dict()) for p in model.posteriors
+            ],
             "input_names": model.input_names,
             "output_names": model.output_names,
             "output_correlation": model.output_correlation,
@@ -1053,7 +1166,38 @@ def load_backend_model(
         else:
             raise ValueError(f"Unsupported payload model_type for pymc_gp: {model_type}")
     elif backend == "sbi_npe":
-        if model_type == "sbi_npe_posterior_v2":
+        if model_type == "sbi_npe_posterior_v3":
+            # Weights only. `_deserialize_state_dict` loads with unpickling disabled, and
+            # the posterior is rebuilt from the recorded architecture — no object in this
+            # artifact can execute anything.
+            _require_sbi()
+            density_estimator = str(payload.get("density_estimator", "maf"))
+            theta_dim = int(payload["theta_dim"])
+            x_dim = int(payload["x_dim"])
+            posteriors = [
+                _rebuild_sbi_posterior(
+                    state_dict=_deserialize_state_dict(blob),
+                    density_estimator=density_estimator,
+                    theta_dim=theta_dim,
+                    x_dim=x_dim,
+                )
+                for blob in payload["state_dicts_b64"]
+            ]
+            model = SbiNPEPosteriorModel(
+                posteriors=posteriors,
+                input_names=list(payload["input_names"]),
+                output_names=list(payload["output_names"]),
+                x_mean=np.asarray(payload["x_mean"], dtype=float),
+                x_scale=np.asarray(payload["x_scale"], dtype=float),
+                y_mean=np.asarray(payload["y_mean"], dtype=float),
+                y_scale=np.asarray(payload["y_scale"], dtype=float),
+                output_correlation=str(payload.get("output_correlation", "full")),
+                summary_samples=int(payload.get("summary_samples", 256)),
+                density_estimator=density_estimator,
+            )
+        elif model_type == "sbi_npe_posterior_v2":
+            # Legacy pickled format. Still loadable so pre-v3 work does not break, but
+            # `_deserialize_torch_object` warns loudly and refuses under MM_STRICT_ARTIFACTS.
             _require_sbi()
             posteriors = [
                 _deserialize_torch_object(blob) for blob in payload["posterior_blobs_b64"]

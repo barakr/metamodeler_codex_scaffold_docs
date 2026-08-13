@@ -1,5 +1,47 @@
 # Status: Metamodeling Automation Framework
 
+## sbi artifacts no longer store a pickled object (2026-08-13)
+
+`S1a`, the security headline of the review, with the backward compatibility the user asked
+for. All suites green, including a strict-mode run.
+
+**The problem.** `sbi_npe` surrogates were saved by pickling the live posterior and loaded
+with `torch.load(weights_only=False)`. Pickle executes code *while deserialising*, so opening
+someone's surrogate was equivalent to running their program. The `hasattr(obj, "sample")`
+check beside it could not help — it inspected the return value of an operation whose danger is
+its side effects.
+
+**v3 stores weights.** The density estimator's `state_dict` (tensors only), plus the recipe to
+rebuild the architecture: the estimator name and the two dimensions. Loading uses
+`weights_only=True`, so `torch.load` refuses anything that is not a plain tensor container.
+A test pins that directly by feeding a pickled object into the v3 slot and requiring a refusal
+— the security property is *tested*, not inferred from the format.
+
+**Backward compatible, deliberately.** v2 artifacts still load, so nothing fitted before this
+breaks. But never silently: they emit `LegacyPickleArtifactWarning` naming the risk and the
+fix, and `MM_STRICT_ARTIFACTS=1` turns it into an error. That is what lets CI prove the
+repository itself never needs the unsafe path — verified by running both the fast and slow
+suites with the flag set.
+
+**The prior question, settled by measurement rather than assumption.** `_fit_sbi_npe` passes
+no prior, so sbi derives an `ImproperEmpirical` one and the rebuild needs *something*. I had
+assumed recording it would shift fitted results, which would have been a real trade-off
+against the "don't move the numbers" decision taken on DOE. Measured on sbi 0.26.1:
+
+- the derived prior is improper and flat — `log_prob` is `0.0` even at theta = 1e6;
+- `log_prob` and `sample` are **bit-identical** when it is rebuilt from wildly different
+  moments, or from an arbitrary two-point sample;
+- only its *dimension* matters, and a degenerate zero-variance placeholder is rejected by
+  sbi's own transform check.
+
+So the artifact carries no training data, and nothing moves. A full fit → save → load
+round-trip reproduces `log_prob` and `sample` exactly (`np.array_equal`, not `allclose`),
+for both single-output and multi-output `diagonal` fits.
+
+**Tests updated rather than weakened (rule 7).** Four files asserted the v2 payload shape;
+they now assert v3, and the two corruption-check tests additionally assert the new
+deprecation warning — so the announcement cannot quietly disappear.
+
 ## A contaminated local tutorial run now fails instead of passing (2026-08-13)
 
 The process fix for how this branch got pushed red. Chosen over "write it down" because the

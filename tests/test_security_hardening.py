@@ -454,6 +454,8 @@ class TestTorchDeserializationCorruptionCheck:
     def test_rejects_object_without_posterior_interface(self, monkeypatch):
         import bayesian_metamodeling.surrogates.backends as backends_mod
 
+        monkeypatch.delenv(backends_mod.STRICT_ARTIFACTS_ENV_VAR, raising=False)
+
         fake_torch = MagicMock()
         fake_torch.load.return_value = {"not": "a posterior"}
         monkeypatch.setattr(backends_mod, "_require_torch", lambda: fake_torch)
@@ -464,11 +466,19 @@ class TestTorchDeserializationCorruptionCheck:
         buffer = io.BytesIO(b"fake_data")
         serialized = base64.b64encode(buffer.getvalue()).decode("ascii")
 
-        with pytest.raises(ValueError, match="does not implement the expected posterior"):
+        # The legacy path also announces itself now (S1a): it warns that the artifact is
+        # executable and names the fix. Asserting that here means the announcement cannot
+        # quietly disappear.
+        with (
+            pytest.warns(backends_mod.LegacyPickleArtifactWarning, match="runs code contained"),
+            pytest.raises(ValueError, match="does not implement the expected posterior"),
+        ):
             backends_mod._deserialize_torch_object(serialized)
 
     def test_accepts_object_with_posterior_interface(self, monkeypatch):
         import bayesian_metamodeling.surrogates.backends as backends_mod
+
+        monkeypatch.delenv(backends_mod.STRICT_ARTIFACTS_ENV_VAR, raising=False)
 
         mock_posterior = MagicMock()
         mock_posterior.sample = MagicMock()
@@ -484,5 +494,6 @@ class TestTorchDeserializationCorruptionCheck:
         buffer = io.BytesIO(b"fake_data")
         serialized = base64.b64encode(buffer.getvalue()).decode("ascii")
 
-        result = backends_mod._deserialize_torch_object(serialized)
+        with pytest.warns(backends_mod.LegacyPickleArtifactWarning):
+            result = backends_mod._deserialize_torch_object(serialized)
         assert result is mock_posterior

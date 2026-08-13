@@ -151,9 +151,9 @@ def test_sbi_npe_multi_output_diagonal_fit_sample_logprob(monkeypatch, tmp_path)
     artifact = fit_surrogate(spec)
 
     payload = json.loads(Path(artifact["backend_payload"]).read_text())
-    assert payload["model_type"] == "sbi_npe_posterior_v2"
+    assert payload["model_type"] == "sbi_npe_posterior_v3"
     assert payload["output_correlation"] == "diagonal"
-    assert len(payload["posterior_blobs_b64"]) == 2
+    assert len(payload["state_dicts_b64"]) == 2
 
     model = load_backend_model("sbi_npe", Path(artifact["backend_payload"]))
     inputs = {"a": np.array([0.2, -0.1]), "b": np.array([0.3, 0.4])}
@@ -192,7 +192,7 @@ def test_sbi_npe_multi_output_full_joint_fit_sample_logprob(monkeypatch, tmp_pat
 
     payload = json.loads(Path(artifact["backend_payload"]).read_text())
     assert payload["output_correlation"] == "full"
-    assert len(payload["posterior_blobs_b64"]) == 1
+    assert len(payload["state_dicts_b64"]) == 1
 
     model = load_backend_model("sbi_npe", Path(artifact["backend_payload"]))
     inputs = {"a": np.array([0.5, -0.5]), "b": np.array([0.3, -0.3])}
