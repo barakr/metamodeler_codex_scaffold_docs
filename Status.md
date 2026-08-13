@@ -36,6 +36,47 @@ Work after this point — `S7` locks, `D8` v1 loader removal, `D2` backends spli
 roots — is recorded in `REVIEW_AND_UPGRADE_PLAN.md` and lands in commits above this tag.
 
 
+## S7: pinned environments and where dependency alerts actually come from (2026-08-13)
+
+The supply-chain item, and the one that addresses the concern that prompted the Q1/Q5 split:
+**7 declared packages, 182 installed, 175 arriving as somebody else's dependency, none
+pinned.**
+
+**Delivered.** `constraints/darwin-arm64.txt` records all 181 packages present when
+`checkpoint/2026-08-13-review-verified` was verified green, with a header stating exactly what
+"green" meant. `constraints/README.md` explains the two-track split. Onboarding is untouched:
+`environment.yml` stays unpinned and is still the documented way in, because a pinned
+onboarding file is a file that stops resolving.
+
+**The guard.** `tests/test_constraints_match_manifest.py` (fast suite) asserts every pin
+satisfies the ranges `pyproject.toml` declares. It catches the mundane way a lock becomes a
+liability: a range is tightened, nobody regenerates, and the file keeps claiming a set the
+project no longer permits. Verified it can fail, by pinning `pydantic==1.9.0` and watching it
+report `violates 'pydantic>=2,<3'`.
+
+**The test caught my own overreach immediately**, which is worth recording. The first version
+required *every* declared dependency to be pinned, and failed on `libroadrunner`/`tellurium` —
+which `py314_bayesmm` deliberately does not install, because libroadrunner is PyPI-only and the
+most platform-fragile dependency here. Core dependencies are now required; optional extras are
+range-checked only when present.
+
+**Two things are deliberately NOT done, and pretending otherwise would be the failure mode this
+whole review is about:**
+
+1. **Cross-platform locks.** Only `darwin-arm64` is pinned. Conda packages differ by OS, so a
+   macOS list is not installable elsewhere. Real locks need `conda-lock`, which is not a
+   dependency of this project and whose maintenance cost (regenerate three platforms on every
+   dependency change) is a decision rather than a detail. The README gives the exact command.
+2. **Enabling the alerts.** Dependabot security updates are a *repository setting*, not a file,
+   so no commit can turn them on. The README names the three checkboxes
+   (Settings → Code security → Dependabot) and states plainly why **version** updates must stay
+   off: on ~180 packages they produce dozens of PRs a month, everyone stops reading them, and
+   the channel becomes worse than no channel. Security-only fires a handful of times a year.
+
+So the honest summary is: the repository now makes vulnerability detection *possible* and
+reproduction *exact on one platform*. Someone with admin has to click three boxes for the first
+half to start working.
+
 ## sbi artifacts no longer store a pickled object (2026-08-13)
 
 `S1a`, the security headline of the review, with the backward compatibility the user asked
