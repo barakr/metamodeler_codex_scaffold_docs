@@ -310,6 +310,80 @@ from a pass. Mechanisms already in place — reuse them rather than inventing mo
 When adding a suite that can degrade, give it one of these. The question to ask
 is: *if every step silently did nothing, would this still be green?*
 
+### The same disease in security code: a guard that cannot hold
+
+The 2026-08-12 design/security review found the identical shape one layer over.
+Not a check that failed to *run* — a check that ran, passed, and **could not do
+what its comment claimed**. Three of them, and one had a green test asserting it
+worked:
+
+| Guard | Claimed | Actually |
+|---|---|---|
+| `_deserialize_torch_object`'s `hasattr` test | "guard against loading arbitrary objects from tampered artifacts" | runs *after* `torch.load(weights_only=False)` has unpickled; pickle executes during load, so it inspects the return value of an operation whose danger is its side effects |
+| the `python_cli` entrypoint check | "validate that path-like entrypoints don't traverse outside repo" | inspected `command[1]` only, only when it contained `/` — so `["/bin/sh","-c",…]` and every Windows-style path passed untouched |
+| `test_rejects_object_without_posterior_interface` | read as a security test | pins a *corruption* check, which is worth having and is not a security control |
+
+**A guard that cannot hold is worse than no guard**, because it invites exactly
+the behaviour it cannot defend — and a passing test on top of it converts a
+reader's caution into confidence. When you write a security comment, the question
+is not "does this check something" but *"if an attacker did the thing this
+sentence promises to stop, would this line stop it?"*
+
+Two habits fall out, both cheap:
+
+- **Name a check for what it catches, not what you wish it caught.** The
+  entrypoint check is now documented as a *typo* check — it genuinely catches "I
+  pointed at the wrong directory", which is worth having under an honest label.
+- **Say the trust boundary out loud.** `README.md` § *Specs are trusted input*
+  exists because `entrypoint` naming a command is the composition mechanism, not
+  a leak. Pretending otherwise is what produced the theatre above.
+
+### Tutorials encode the framework's limitations, so closing one breaks them
+
+Discovered when stage 3 of the same review added the first cross-section spec
+validator. **Four tutorials went red, and none of them had a bug.** They
+*deliberately demonstrated* the gaps that had just been closed — T1 stated "there
+is no cross-block validator in `ModelSpec`" and then proved it; T3's Step 5 was
+titled "A break the validator does **not** catch".
+
+So the coupling to know about: **a tutorial that teaches a limitation is a test of
+that limitation.** Improving the framework invalidates the lesson, and that is a
+success, not a regression — but it is work, and it must be budgeted with the
+change rather than discovered in CI.
+
+Two things make this survivable, and both already exist here:
+
+- **T3's self-check is the model to copy.** It asserted its unenforced contracts
+  were *still* unenforced, and failed with *"now FAILS validation. Good news about
+  the framework, bad news about this notebook: Steps 5-6 … claim these are
+  unchecked. Update them."* It fired exactly as designed. Any tutorial teaching a
+  gap should assert the gap still exists, and say what to do when it stops.
+- **The rewrite is usually better than the original.** Each notebook kept its
+  point by moving to a limitation that *survives* — T1 to `adapter`-vs-`io_schema`,
+  T3's Step 5 to an adapter-side rename. Teaching *where* the validator's authority
+  stops beats teaching that it has none.
+
+**`make fast` cannot see any of this.** Only the slow suite executes notebooks. For
+any change to `spec/` or `designs/`, run
+`pytest -m slow tests/test_tutorial_integration.py` before pushing — and see the
+warning about stale state in *Local tutorial runs are not a faithful check* below.
+
+### Local tutorial runs are not a faithful check
+
+Worse than incomplete — **actively misleading**. The tutorials share state through
+`tmp/tutorials/toy_store`: T1 and T4 write it, T5 and T6 read it. On a machine that
+has run the series before, that store already exists, so a notebook which would fail
+in a clean checkout passes locally.
+
+This really happened during the 2026-08-12 review: `Tutorial_5` failed in Deep CI and
+**passed locally**. It has no defect at all — its surrogate simply fits on the store
+T1 produces, and T1 was crashing. A clean checkout is the only honest run, which is
+what Deep CI provides.
+
+The same trap catches *assertions* about that store. A self-check asserting an exact
+sweep-file count passes on a fresh checkout and fails on a student's second run.
+Assert the invariant (`>= 1` — the sweep survived) and pin the **content** separately.
+
 ### CI signals
 
 Five workflows, deliberately kept separate so a failure in one never reddens
