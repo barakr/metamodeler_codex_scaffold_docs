@@ -918,6 +918,42 @@ def _strict_artifacts() -> bool:
     }
 
 
+#: Schemas that predate the multi-output ``_v2`` payloads. Still loadable — deleting them
+#: would break artifacts fitted before the change, which is the same reason the legacy sbi
+#: pickle stayed loadable — but no longer silent.
+LEGACY_SCHEMA_MODEL_TYPES = {
+    "linear_gaussian": "the original single-output linear+Gaussian payload",
+    "pymc_bayesian_linear": "the pre-v2 single-output pymc_gp payload",
+    "sbi_npe_posterior": "the pre-v2 single-output sbi_npe payload",
+}
+
+
+class LegacyArtifactSchemaWarning(UserWarning):
+    """A surrogate artifact uses a schema older than the current one.
+
+    Not a security matter (unlike `LegacyPickleArtifactWarning`) — these payloads are plain
+    numbers. It is a *maintenance* matter: every old schema is a branch that has to keep
+    working, and one nobody can retire while its use is invisible. Warning makes the
+    population visible; `MM_STRICT_ARTIFACTS=1` makes it an error, which is how CI proves the
+    repository itself no longer depends on any of them.
+    """
+
+
+def _warn_if_legacy_schema(model_type: str, payload_path: Path) -> None:
+    description = LEGACY_SCHEMA_MODEL_TYPES.get(model_type)
+    if description is None:
+        return
+    message = (
+        f"Surrogate artifact at {payload_path} uses the legacy schema '{model_type}' "
+        f"({description}). It still loads, and the numbers are unchanged. Re-run "
+        f"`bayesmm surrogate fit` to rewrite it in the current schema; set "
+        f"{STRICT_ARTIFACTS_ENV_VAR}=1 to make this an error instead of a warning."
+    )
+    if _strict_artifacts():
+        raise ValueError(f"Refusing to load a legacy-schema surrogate artifact. {message}")
+    warnings.warn(message, LegacyArtifactSchemaWarning, stacklevel=3)
+
+
 def _serialize_state_dict(state_dict: Any) -> str:
     """Base64 a tensor-only `state_dict`. Contains no code, by construction."""
     torch = _require_torch()
@@ -1117,7 +1153,19 @@ def load_backend_model(
     expected_outputs: list[str] | None = None,
 ) -> SurrogateModel:
     payload = json.loads(payload_path.read_text(encoding="utf-8"))
+    if "model_type" not in payload:
+        # A payload with no `model_type` used to become a v1 `linear_gaussian` silently.
+        # That is a guess, not a default: it is equally likely to be a truncated file. Say so.
+        warnings.warn(
+            f"Surrogate payload at {payload_path} declares no `model_type`; assuming the "
+            "pre-v2 'linear_gaussian' schema. If this artifact is truncated or was written by "
+            "something else, that guess is wrong. Re-run `bayesmm surrogate fit` to rewrite it "
+            "with an explicit schema.",
+            LegacyArtifactSchemaWarning,
+            stacklevel=2,
+        )
     model_type = payload.get("model_type", "linear_gaussian")
+    _warn_if_legacy_schema(model_type, payload_path)
     payload_inputs = list(payload.get("input_names", []))
     payload_outputs = (
         list(payload.get("output_names", []))

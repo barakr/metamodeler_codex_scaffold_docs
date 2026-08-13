@@ -12,6 +12,18 @@ import pytest
 
 import bayesian_metamodeling.surrogates.backends as backends
 
+# These fixtures use a deprecated artifact schema only as a vehicle for testing
+# something else, so the deprecation warning is noise here — it is asserted properly in
+# tests/test_surrogate_payload_v1_compat.py. The `legacy_artifact` marker keeps them out
+# of the MM_STRICT_ARTIFACTS=1 gate, which exists to prove nothing ELSE needs the old
+# paths; a test that deliberately loads an old artifact would make that gate meaningless.
+pytestmark = [
+    pytest.mark.legacy_artifact,
+    pytest.mark.filterwarnings(
+        "ignore::bayesian_metamodeling.surrogates.backends.LegacyArtifactSchemaWarning"
+    ),
+]
+
 
 class FakeTensor:
     def __init__(self, data: Any) -> None:

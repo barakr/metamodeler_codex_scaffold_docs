@@ -36,6 +36,45 @@ Work after this point — `S7` locks, `D8` v1 loader removal, `D2` backends spli
 roots — is recorded in `REVIEW_AND_UPGRADE_PLAN.md` and lands in commits above this tag.
 
 
+## D8: legacy artifact schemas deprecated, not deleted — and why (2026-08-13)
+
+The plan said "drop v1 artifact support after confirming none survive". I confirmed the first
+half and then deliberately did **not** do the second, because it would contradict a decision
+taken one step earlier.
+
+**The check.** No `linear_gaussian`, `pymc_bayesian_linear` or `sbi_npe_posterior` payload
+exists anywhere in git or in any store on this machine. The v1 classes have **zero** callers in
+`src/` outside `backends.py` itself.
+
+**Why deleting anyway would be wrong.** The `sbi_npe_v2` pickled format was kept loadable
+specifically so students' locally-fitted work would not break. v1 schemas are the same
+situation with less at stake — plain numbers, no security dimension — and I cannot inspect
+either student's machine to confirm they hold none. Deleting a compatibility path on the
+strength of "not on *my* laptop" is exactly the reasoning that made a contaminated local
+tutorial run look green.
+
+**So instead they became visible.** `LegacyArtifactSchemaWarning` fires on load, naming the
+schema and the command that rewrites it, and `MM_STRICT_ARTIFACTS=1` turns it into an error —
+the same mechanism as the pickled format. Deletion is now a one-line change whenever the
+population is known to be zero, and until then the population is *measurable* instead of
+assumed.
+
+**A footgun closed on the way.** `load_backend_model` did `payload.get("model_type",
+"linear_gaussian")` — a payload with no `model_type` silently became a v1 model. That is a
+guess, not a default: a truncated file produces the same input. It now warns that it is
+guessing.
+
+**A new marker, so the strict gate keeps meaning something.** Tests that deliberately load a
+deprecated artifact would make `MM_STRICT_ARTIFACTS=1` fail by design, which would render the
+gate useless. They are marked `legacy_artifact`, and the gate is:
+
+```bash
+MM_STRICT_ARTIFACTS=1 pytest -m "not slow and not legacy_artifact"
+```
+
+Green. That is the claim worth making: nothing *except* the tests that exist to exercise the
+old paths needs the old paths.
+
 ## S7: pinned environments and where dependency alerts actually come from (2026-08-13)
 
 The supply-chain item, and the one that addresses the concern that prompted the Q1/Q5 split:

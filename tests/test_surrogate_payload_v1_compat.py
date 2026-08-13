@@ -5,9 +5,17 @@ from __future__ import annotations
 import json
 
 import numpy as np
+import pytest
 
 import bayesian_metamodeling.surrogates.backends as backends
-from bayesian_metamodeling.surrogates.backends import load_backend_model
+from bayesian_metamodeling.surrogates.backends import (
+    LegacyArtifactSchemaWarning,
+    load_backend_model,
+)
+
+# This whole module exists to prove deprecated artifacts still load, so it is
+# excluded from the MM_STRICT_ARTIFACTS=1 gate by construction.
+pytestmark = pytest.mark.legacy_artifact
 
 
 def test_pymc_v1_payload_loads_as_d1_v2(tmp_path):
@@ -22,7 +30,8 @@ def test_pymc_v1_payload_loads_as_d1_v2(tmp_path):
     payload_path = tmp_path / "v1_pymc.json"
     payload_path.write_text(json.dumps(payload))
 
-    model = load_backend_model("pymc_gp", payload_path)
+    with pytest.warns(LegacyArtifactSchemaWarning, match="legacy schema"):
+        model = load_backend_model("pymc_gp", payload_path)
     inputs = {"a": np.array([0.1, 0.5]), "b": np.array([0.0, -0.2])}
     outputs = {"y": np.array([0.2, 0.3])}
 
@@ -51,7 +60,8 @@ def test_pymc_v1_linear_gaussian_payload_loads(tmp_path):
     payload_path = tmp_path / "v1_linear.json"
     payload_path.write_text(json.dumps(payload))
 
-    model = load_backend_model("pymc_gp", payload_path)
+    with pytest.warns(LegacyArtifactSchemaWarning, match="legacy schema"):
+        model = load_backend_model("pymc_gp", payload_path)
     inputs = {"a": np.array([0.1]), "b": np.array([0.2])}
     samples = model.sample(inputs, n=4, seed=0)
     assert samples.shape == (1, 4)
@@ -85,7 +95,8 @@ def test_sbi_v1_payload_loads_as_d1_v2(tmp_path, monkeypatch):
     payload_path = tmp_path / "v1_sbi.json"
     payload_path.write_text(json.dumps(payload))
 
-    model = load_backend_model("sbi_npe", payload_path)
+    with pytest.warns(LegacyArtifactSchemaWarning, match="legacy schema"):
+        model = load_backend_model("sbi_npe", payload_path)
     assert model.model.output_names == ["y"]
     assert model.model.output_correlation == "full"
     # v1 scalar y_mean/y_scale are promoted to length-1 arrays.
