@@ -1,5 +1,33 @@
 # Status: Metamodeling Automation Framework
 
+## A phantom pip manifest was polluting the dependency graph (2026-08-13)
+
+Found while checking that the merged `requirements.txt` was actually being scanned. The graph
+job was titled `Graph Update: pip in /., /src/bayesian_metamodeling/config` — and there is no
+package published from that directory.
+
+**Cause.** `src/bayesian_metamodeling/config/setup.py` was never a packaging script. It is the
+module behind `bayesmm setup`, which prints install advice and therefore *mentions* `pymc`,
+`sbi`, `arviz` and `jupyter` in its help strings. GitHub reads any file named `setup.py` as a
+pip manifest and scraped those as dependencies.
+
+**Why it mattered enough to fix.** The dependency graph is now the channel this repo relies on
+for vulnerability alerts. Phantom entries are noise in precisely the place where noise is
+expensive, and Dependabot can eventually open an unactionable PR against a file that declares
+nothing. A signal people learn to distrust is worse than no signal — the same argument that
+kept version-updates switched off.
+
+**Fix.** The module is `config/install_advice.py`. Only `config/__init__.py` referenced it;
+`from bayesian_metamodeling.config import setup` is unchanged, so nothing outside the package
+moved. `tests/test_no_false_pip_manifests.py` fails if any `setup.py` reappears under `src/`,
+and verified it fires by recreating the old file.
+
+**Also settled here:** `libroadrunner` displaying `requirements.txt` as its source on the graph
+page is a GitHub attribution quirk, not a repo fact — that package appears nowhere in
+`requirements.txt` and is not installed. The reliable evidence that both manifests are read is
+the count: 24 before the merge, 194 after, against 181 pins.
+
+
 ## KNOWN-GOOD CHECKPOINT — `checkpoint/2026-08-13-review-verified` (a6f9d7a)
 
 **If later work goes wrong, this is the commit to return to.** It is an annotated git tag on
