@@ -37,6 +37,70 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 TUTORIALS = REPO_ROOT / "tutorials"
 
+# --- Stale shared state makes a local run worse than useless -----------------
+#
+# The tutorials pass data to each other through one directory: T1 and T4 *write*
+# `tmp/tutorials/toy_store`, T5 and T6 *read* it. On a machine that has run the
+# series before, that store is already populated — so a notebook which would fail
+# in a clean checkout can pass here, standing on data an earlier session left
+# behind.
+#
+# This is not hypothetical. On 2026-08-12 `Tutorial_5` failed in Deep CI and
+# passed locally. It had no defect: its surrogate fits on the store `Tutorial_1`
+# produces, and `Tutorial_1` was crashing. A clean checkout had nothing to fit on;
+# this machine had last week's copy. The local run did not merely miss the problem,
+# it reported the opposite.
+#
+# So: refuse to run against a pre-existing store unless the caller says otherwise.
+# Fail rather than skip — a skipped suite and a passing suite look identical in a
+# terminal, which is the defect this repo keeps finding in itself (CLAUDE.md,
+# "Guarding against silent no-ops").
+TUTORIAL_STORE = REPO_ROOT / "tmp" / "tutorials"
+ALLOW_DIRTY_ENV_VAR = "MM_ALLOW_DIRTY_TUTORIAL_STORE"
+
+
+def _dirty_store_reason() -> str | None:
+    """Return a message if a leftover tutorial store would taint this run."""
+    if os.environ.get(ALLOW_DIRTY_ENV_VAR, "").strip().lower() in {"1", "true", "yes", "on"}:
+        return None
+    if not TUTORIAL_STORE.exists():
+        return None
+    leftovers = sorted(p.name for p in TUTORIAL_STORE.iterdir() if p.is_dir())
+    if not leftovers:
+        return None
+    # Display the path relative to the repo when it is inside it (the real case), and
+    # absolutely otherwise (tests point this at a tmp dir). `relative_to` raises rather
+    # than falling back, so ask first.
+    try:
+        shown = TUTORIAL_STORE.relative_to(REPO_ROOT)
+    except ValueError:
+        shown = TUTORIAL_STORE
+    return (
+        f"{shown} already contains data from an earlier run "
+        f"({', '.join(leftovers[:6])}{'…' if len(leftovers) > 6 else ''}).\n"
+        "\n"
+        "The tutorials hand data to each other through this directory, so a notebook that "
+        "would FAIL in a clean checkout can PASS against these leftovers — which is what "
+        "happened to Tutorial_5 on 2026-08-12. A run against a dirty store cannot tell you "
+        "whether the series works.\n"
+        "\n"
+        "Either clear it and re-run:\n"
+        f"    rm -rf {shown}\n"
+        "\n"
+        f"or set {ALLOW_DIRTY_ENV_VAR}=1 to accept a result that proves less than it looks "
+        "like it does. CI always runs on a clean checkout and never needs the override."
+    )
+
+
+# Snapshot at IMPORT time, which is before any notebook has run.
+#
+# Checking this per-test would be self-defeating: `Tutorial_1` legitimately *creates*
+# `tmp/tutorials/toy_store`, so tutorials 2-12 would then see a populated store and fail
+# — in CI, on a clean checkout, every time. The question is only ever "was the store
+# dirty when this session started", and that has exactly one answer per run.
+_DIRTY_STORE_AT_IMPORT = _dirty_store_reason()
+
+
 # Failure markers — cell-output substrings that mean the tutorial DID
 # something wrong, even if no Python exception was raised. Grep'd from
 # the framework's own error messages + nbformat conventions.
@@ -135,6 +199,9 @@ def test_tutorial_executes_and_self_check_passes(notebook_path: Path, tmp_path: 
     failure: a notebook's execution status must reflect whether the
     notebook achieved its scientific goal, not merely whether it crashed.
     """
+    if _DIRTY_STORE_AT_IMPORT is not None:
+        pytest.fail(_DIRTY_STORE_AT_IMPORT)
+
     nbclient = pytest.importorskip("nbclient")
     nbformat = pytest.importorskip("nbformat")
 

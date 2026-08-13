@@ -384,6 +384,31 @@ The same trap catches *assertions* about that store. A self-check asserting an e
 sweep-file count passes on a fresh checkout and fails on a student's second run.
 Assert the invariant (`>= 1` — the sweep survived) and pin the **content** separately.
 
+**This is now enforced rather than remembered.** `tests/test_tutorial_integration.py`
+refuses to run when `tmp/tutorials/` already holds data, and **fails** rather than
+skips — a skipped suite and a passing one look identical in a terminal. Clear the
+store, or set `MM_ALLOW_DIRTY_TUTORIAL_STORE=1` to accept a weaker result knowingly.
+CI runs on a clean checkout and never needs the override.
+
+The check is an **import-time snapshot**, not a per-test one, and that detail is
+load-bearing: `Tutorial_1` legitimately *creates* the directory being guarded, so a
+per-test check would fail tutorials 2-12 in every CI run. `tests/test_tutorial_store_hygiene.py`
+pins that, plus the fail-not-skip property, in the fast suite — a guard nobody
+exercises is the next thing to rot.
+
+### The gate for changes to `spec/` or `designs/`
+
+`make fast` is **not** sufficient for these. It cannot execute a notebook, and the
+tutorials encode the very contracts these directories define (see two sections up).
+Before pushing such a change:
+
+```bash
+pytest -m slow tests/test_tutorial_integration.py
+```
+
+Skipping this is what put four broken tutorials on a branch on 2026-08-12, with a
+green local gate.
+
 ### CI signals
 
 Five workflows, deliberately kept separate so a failure in one never reddens

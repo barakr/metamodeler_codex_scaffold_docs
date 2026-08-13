@@ -1,5 +1,35 @@
 # Status: Metamodeling Automation Framework
 
+## A contaminated local tutorial run now fails instead of passing (2026-08-13)
+
+The process fix for how this branch got pushed red. Chosen over "write it down" because the
+problem was never that the rule was unknown — it was that the local check gave a **confident
+wrong answer**.
+
+**What it does.** `tests/test_tutorial_integration.py` refuses to run when `tmp/tutorials/`
+already contains data from an earlier session, and **fails** rather than skips. The message
+names what it found, how to clear it, and the override
+(`MM_ALLOW_DIRTY_TUTORIAL_STORE=1`) for anyone who knowingly wants a weaker result. CI runs on
+a clean checkout and never needs it.
+
+**Why this and not a hook.** A pre-push hook running the slow suite would catch the *incomplete*
+half and add minutes to every validation push. It would not touch the half that actually cost the
+time here: `Tutorial_5` **passed locally while failing in CI**, because this machine had a store
+`Tutorial_1` should have produced and hadn't. That is the repo's own defect class — a check that
+cannot fail — and it is fixed by making the contaminated case impossible to mistake for a good
+one. The gate rule is documented in `CLAUDE.md` as well, so both halves are covered.
+
+**A bug in the guard, caught while writing it.** The first version checked per-test. That is
+self-defeating: `Tutorial_1` *creates* the directory being guarded, so tutorials 2-12 would have
+failed in every CI run, on a clean checkout. It is now an import-time snapshot — the question is
+only ever "was the store dirty when this session started". `tests/test_tutorial_store_hygiene.py`
+pins that, and the fail-not-skip property, in the **fast** suite: a guard nobody exercises is the
+next thing to rot. It also caught a second bug of mine, a `relative_to` that raises when the
+store sits outside the repo root.
+
+Verified both directions: the guard fires against this machine's real store, and the full
+tutorial suite still passes 12/12 with the override set.
+
 ## Tutorials 3 and 4 rewritten; all twelve green locally (2026-08-13)
 
 Completes the tutorial repair. `pytest -m slow tests/test_tutorial_integration.py` passes
