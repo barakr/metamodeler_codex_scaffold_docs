@@ -20,11 +20,30 @@
 #
 #         pip install -e . -c requirements.txt
 #
-#  PROVENANCE
-#    These are the versions present when checkpoint/2026-08-13-review-verified
-#    was green: CI on 3 OSes, all four Deep CI environments, make fast, the
-#    slow tutorial suite 12/12, and both suites again under
-#    MM_STRICT_ARTIFACTS=1.
+#  PROVENANCE  -- read this before trusting the versions below
+#    This file began as the exact set present when
+#    checkpoint/2026-08-13-review-verified was green: CI on 3 OSes, all four
+#    Deep CI environments, make fast, the slow tutorial suite 12/12, and both
+#    suites again under MM_STRICT_ARTIFACTS=1.
+#
+#    It is NOT frozen at that snapshot, and must not be. Dependabot opens a pull
+#    request whenever a pinned package has a published vulnerability, and each
+#    merged fix edits one line here. So the honest description is:
+#
+#        "the verified set, plus every security fix applied since"
+#
+#    `git log --follow requirements.txt` is the precise provenance -- the merge
+#    that introduced the file, and one commit per security bump after it.
+#
+#    Applied since the checkpoint:
+#      setuptools 81.0.0 -> 83.0.0   (GHSA-h35f-9h28-mq5c, PR #5)
+#
+#  REGENERATING CAN UNDO A SECURITY FIX -- the one real trap here
+#    Regeneration reads your local environment, which may still hold the OLD,
+#    vulnerable version. Blindly re-freezing would silently revert every bump in
+#    the list above and Dependabot would have to find them all over again.
+#    Update your environment FIRST, then regenerate, then diff against this file
+#    and confirm no version went backwards.
 #
 #  PLATFORM
 #    Resolved on darwin-arm64. Conda packages differ across operating systems,

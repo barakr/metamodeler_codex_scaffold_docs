@@ -27,9 +27,15 @@ onboarding file is one that eventually stops working.
 pip install -e . -c requirements.txt      # -c = constraints; installs nothing by itself
 ```
 
-Those versions are the ones present when `checkpoint/2026-08-13-review-verified` (`a6f9d7a`)
-was green: CI on three operating systems, all four `Deep CI` environments, `make fast`, the
-slow tutorial suite 12/12, and both suites again under `MM_STRICT_ARTIFACTS=1`.
+Those versions **started** as the set present when `checkpoint/2026-08-13-review-verified`
+(`a6f9d7a`) was green: CI on three operating systems, all four `Deep CI` environments,
+`make fast`, the slow tutorial suite 12/12, and both suites again under
+`MM_STRICT_ARTIFACTS=1`.
+
+They do not stay frozen there, and should not. Dependabot opens a pull request whenever a
+pinned package has a published vulnerability, and each merged fix edits one line. So the file
+is **"the verified set, plus every security fix applied since"**, and
+`git log --follow requirements.txt` is the exact provenance.
 
 Worth doing when a figure or number has to be defended a year later. Pointless otherwise.
 
@@ -116,3 +122,16 @@ Only from an environment you have **just verified green**, since the file's whol
 python -m pip list --format=freeze | grep -v '^bayesian-metamodeling=='
 # ...then restore the header, which records what was verified and when
 ```
+
+> **Regenerating can silently undo a security fix.** The freeze reads your *local*
+> environment, which may still hold the old, vulnerable version of something Dependabot has
+> already fixed here. Re-freezing blindly reverts those bumps, and Dependabot has to find them
+> all over again — with a window in between where the repository claims a version it has
+> already been told is unsafe.
+>
+> Update your environment **first**, then regenerate, then diff against the previous file and
+> confirm no version went *backwards*:
+>
+> ```bash
+> git diff requirements.txt        # every change should be a version going UP
+> ```
